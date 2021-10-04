@@ -1,5 +1,6 @@
 APP_NAME="helloimage"
 PLATFORM="macos"
+IMAGE_NAME="structuredart"
 IMAGE_TYPE="bmp"
 
 echo "Building $APP_NAME for $PLATFORM... (this shell script must be run from the app's root directory)"
@@ -13,7 +14,7 @@ mkdir build/$PLATFORM
 mkdir build/$PLATFORM/$APP_NAME.app
 
 echo "copying resources..."
-cp resources/fs_angrymob.$IMAGE_TYPE build/$PLATFORM/$APP_NAME.app/fs_angrymob.$IMAGE_TYPE
+cp resources/$IMAGE_NAME.$IMAGE_TYPE build/$PLATFORM/$APP_NAME.app/$IMAGE_NAME.$IMAGE_TYPE
 
 echo "Compiling $APP_NAME..."
 clang -g $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$PLATFORM/$APP_NAME.app/$APP_NAME src/$PLATFORM/hello$IMAGE_TYPE.c
