@@ -1,39 +1,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 
-/*
-BITMAP (*.bmp) File header
-
-first 2 bytes are character identifiers such as:
-BM
-    Windows 3.1x, 95, NT, ... etc.
-BA
-    OS/2 struct bitmap array
-CI
-    OS/2 struct color icon
-CP
-    OS/2 const color pointer
-IC
-    OS/2 struct icon
-PT
-    OS/2 pointer
-
-next 4 (bytes 3 to 6): 
-    Size of BMP file in bytes.
-
-next 2 (bytes 7 & 8):
-    Reserved; actual value depends on the application
-    that creates the image, if created manually can be 0 
-
-next 2 (bytes 9 & 10):
-    Reserved; actual value depends on the application
-    that creates the image, if created manually can be 0 
-
-next 4 (bytes 11 to 14):
-    The offset, i.e. starting address, of the byte where
-    the bitmap image data (pixel array) can be found.
-*/
-
+// This is expected at the start of every .bmp file
 #pragma pack(push, 1)
 typedef struct BMPHeader {
     char       file_type[2];
@@ -42,6 +10,28 @@ typedef struct BMPHeader {
     uint32_t   bitmap_offset;
 } BMPHeader;
 #pragma pack(pop)
+
+// There are many .bmp variants, but I'm guessing this is
+// used in 99% of cases based on documentation.
+// If you want to read .bmp files in a robust way I guess
+// you must be prepared for all formats, it seems like a
+// daunting task.
+#pragma pack(push, 1)
+typedef struct BitmapInfoHeader {
+    uint32_t   header_size;
+    uint32_t   width;
+    uint32_t   height;
+    uint16_t   color_planes;
+    uint16_t   bits_per_pixel;
+    uint32_t   compression_method;
+    uint32_t   raw_bitmap_size;
+    uint32_t   horizontal_resolution;
+    uint32_t   vertical_resolution;
+    uint32_t   colors_in_palette;
+    uint32_t   num_important_colors_used;
+} BitmapInfoHeader;
+#pragma pack(pop)
+
 
 int main(int argc, const char * argv[]) 
 {
@@ -54,6 +44,7 @@ int main(int argc, const char * argv[])
         "rb");
     
     struct BMPHeader * my_header = malloc(sizeof(BMPHeader));
+    int bytes_read = 0;
     
     if (imgfile == NULL) {
         printf(
@@ -66,13 +57,17 @@ int main(int argc, const char * argv[])
         printf(
             "%s",
             "file was opened succesfully!\n");
-        int bytes_read = fread(
-            /* ptr: */ my_header,
-            /* size of each element to be read: */ 1,
-            /* nmemb (no of members) to read: */ sizeof(BMPHeader),
-            /* stream: */ imgfile);
+        bytes_read = fread(
+            /* ptr: */
+                my_header,
+            /* size of each element to be read: */
+                1,
+            /* nmemb (no of members) to read: */
+                sizeof(BMPHeader),
+            /* stream: */
+                imgfile);
         printf("read %d bytes succesfully\n", bytes_read);
-
+        
         if (bytes_read != 14) {
             printf("%s", "aborting - expected 14 bytes");
             return 1;
@@ -93,6 +88,67 @@ int main(int argc, const char * argv[])
         "reserved characters read: %s\n", my_header->reserved);
     printf(
         "bitmap offset: %u\n", my_header->bitmap_offset);
+    
+    BitmapInfoHeader * bm_header =
+        malloc(sizeof(BitmapInfoHeader));
+    
+    bytes_read = fread(
+        /* ptr: */
+            bm_header,
+        /* size of each element to be read: */
+            1,
+        /* nmemb (no of members) to read: */
+            sizeof(BitmapInfoHeader),
+        /* stream
+            (imgfile pointer is already advanced by
+            previous call to fread): */
+            imgfile);
+    
+    if (bytes_read != 40) {
+       printf(
+            "%s %d\n",
+            "error! expected 40 bytes BitmapInfoHeader, got:",
+            bytes_read);
+        return 1;
+    } else {
+        printf(
+            "Succesfully read %d byte InfoBitmapHeader struct\n",
+            bytes_read);
+        printf(
+            "bm_header->header_size: %d\n",
+            bm_header->header_size);
+        printf(
+            "bm_header->width: %d\n",
+            bm_header->width);
+        printf(
+            "bm_header->height: %d\n",
+            bm_header->height);
+        printf(
+            "bm_header->color_planes: %d\n",
+            bm_header->color_planes);
+        printf(
+            "bm_header->bits_per_pixel: %d\n",
+            bm_header->bits_per_pixel);
+        printf(
+            "bm_header->compression_method: %d\n",
+            bm_header->compression_method);
+        printf(
+            "bm_header->raw_bitmap_size: %d\n",
+            bm_header->raw_bitmap_size);
+        printf(
+            "bm_header->horizontal_resolution: %d\n",
+            bm_header->horizontal_resolution);
+        printf(
+            "bm_header->vertical_resolution: %d\n",
+            bm_header->vertical_resolution);
+        printf(
+            "bm_header->colors_in_palette: %d\n",
+            bm_header->colors_in_palette);
+        printf(
+            "bm_header->num_important_colors_used: %d\n",
+            bm_header->num_important_colors_used);
+    }
+    
     fclose(imgfile);
     
     return 0;

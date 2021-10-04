@@ -1,2 +1,2 @@
 # bash src/linux/build.sh
-bash src/macos/build.sh
+bsh src/macos/build.sh
