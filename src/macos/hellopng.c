@@ -93,16 +93,16 @@ Operator	Effect
 void flip_endian(uint32_t * to_flip) {
     uint32_t flipping = *to_flip;
     
-    uint32_t bit_1 = ((flipping >> 0) & 255);
-    uint32_t bit_2 = ((flipping >> 8) & 255);
-    uint32_t bit_3 = ((flipping >> 16) & 255);
-    uint32_t bit_4 = ((flipping >> 24) & 255);
+    uint32_t byte_1 = ((flipping >> 0) & 255);
+    uint32_t byte_2 = ((flipping >> 8) & 255);
+    uint32_t byte_3 = ((flipping >> 16) & 255);
+    uint32_t byte_4 = ((flipping >> 24) & 255);
     
     flipping =
-        bit_1 << 24 |
-        bit_2 << 16 |
-        bit_3 << 8  |
-        bit_4 << 0;
+        byte_1 << 24 |
+        byte_2 << 16 |
+        byte_3 << 8  |
+        byte_4 << 0;
     
     *to_flip = flipping;
 }
