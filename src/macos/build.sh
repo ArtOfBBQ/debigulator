@@ -1,7 +1,7 @@
 APP_NAME="helloimage"
 PLATFORM="macos"
 IMAGE_NAME="structuredart"
-IMAGE_TYPE="bmp"
+IMAGE_TYPE="png"
 
 echo "Building $APP_NAME for $PLATFORM... (this shell script must be run from the app's root directory)"
 
