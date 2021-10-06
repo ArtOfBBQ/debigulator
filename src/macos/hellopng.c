@@ -78,7 +78,7 @@ int are_equal_strings(char * str1, char * str2, size_t len) {
 }
 
 /*
-PNG files have many 4-bit big endian values
+PNG files have many 4-byte big endian values
 We need to able to flip them to little endian
 
 Bitwise operations reminder:
