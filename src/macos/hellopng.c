@@ -9,7 +9,7 @@ I'm not sure how to deal with this in C,
 I just want an array with the size stored
 */
 typedef struct EntireFile {
-    uint8_t * data;
+    void * data;
     size_t size_left;
 } EntireFile;
 
@@ -24,7 +24,7 @@ typedef struct PNGSignature {
     char png_string[3];               // Reads 'PNG'
     char dos_style_line_ending[2];    // DOS artifact
     char end_of_file_char;            // DOS artifact
-    char unix_style_line_ending;      // Unix & DOS artifact
+    char unix_style_line_ending;      // Unix/DOS artifact
 } PNGSignature;
 
 /*
@@ -53,9 +53,7 @@ filter method (1 byte, value 0);
 and interlace method (1 byte, values 0 "no interlace" or 1 "Adam7 interlace") 
 (13 data bytes total).
 */
-typedef struct IHDRHeader {
-    uint32_t length; // big endian length of HDR
-    char     type[4];
+typedef struct IHDRBody {
     uint32_t width;
     uint32_t height;
     uint8_t  bit_depth;
@@ -63,8 +61,7 @@ typedef struct IHDRHeader {
     uint8_t  compression_method;
     uint8_t  filter_method;
     uint8_t  interlace_method;
-    uint32_t checksum;
-} IHDRHeader;
+} IHDRBody;
 #pragma pack(pop)
 
 
@@ -108,6 +105,22 @@ void flip_endian(uint32_t * to_flip) {
     *to_flip = flipping;
 }
 
+void copy_memory(
+    void * from,
+    void * to,
+    size_t size)
+{
+    uint8_t * fromu8 = (uint8_t *)from;
+    uint8_t * tou8 = (uint8_t *)to;
+    
+    while (size > 0) {
+        *tou8 = *fromu8;
+        fromu8++;
+        tou8++;
+        size--;
+    }
+}
+
 // Grab data from the front of a buffer & advance pointer
 #define consume_struct(type, from) (type *)consume_chunk(from, sizeof(type))
 uint8_t * consume_chunk(
@@ -116,7 +129,13 @@ uint8_t * consume_chunk(
 {
     assert(from->size_left >= size_to_consume);
     
-    uint8_t * return_value = from->data;
+    uint8_t * return_value = malloc(size_to_consume);
+    
+    copy_memory(
+        /* from: */   from->data,
+        /* to: */     return_value,
+        /* size: */   size_to_consume);
+    
     from->data += size_to_consume;
     from->size_left -= size_to_consume;
     
@@ -172,36 +191,9 @@ int main(int argc, const char * argv[])
         return 1;
     }
     
-    printf("reading IHDR header chunk...\n");
-    IHDRHeader * ihdr_header = consume_struct(
-        /* type: */ IHDRHeader,
-        /* entire_file: */ entire_file);
-    flip_endian(&ihdr_header->length);
-    flip_endian(&ihdr_header->width);
-    flip_endian(&ihdr_header->height);
-    
-    printf("ihdr_header->length: %u\n", ihdr_header->length);
-    printf("ihdr_header->type: %s\n", ihdr_header->type);
-    assert(are_equal_strings(ihdr_header->type, "IHDR", 4));
-    printf("ihdr_header->width: %u\n", ihdr_header->width);
-    printf("ihdr_header->height: %u\n", ihdr_header->height);
-    printf(
-        "ihdr_header->bit_depth: %u\n",
-        ihdr_header->bit_depth);
-    printf(
-        "ihdr_header->color_type: %u\n",
-        ihdr_header->color_type);
-    printf(
-        "ihdr_header->compression_method: %u\n",
-        ihdr_header->compression_method);
-    printf(
-        "ihdr_header->filter_method: %u\n",
-        ihdr_header->filter_method);
-    printf(
-        "ihdr_header->interlace_method: %u\n",
-        ihdr_header->interlace_method);
-    
-    while (entire_file->size_left >= sizeof(PNGChunkHeader)) {
+    while (
+        entire_file->size_left >= sizeof(PNGChunkHeader))
+    {
         PNGChunkHeader * chunk_header = consume_struct(
             /* type: */   PNGChunkHeader,
             /* buffer: */ entire_file);
@@ -209,17 +201,79 @@ int main(int argc, const char * argv[])
         flip_endian(&chunk_header->length);
         
         printf(
-            "read %s header of %u bytes\n",
+            "read %s header describing next %u bytes\n",
             chunk_header->type,
             chunk_header->length);
         
-        if ((char)chunk_header->type[0] > 'Z') {
-            printf("header type] was lowercase, skip ahead\n");
-            entire_file->data += chunk_header->length;
-            entire_file->size_left -= chunk_header->length;
-            continue;
+        if (are_equal_strings(
+            chunk_header->type,
+            "IHDR",
+            4))
+        {
+            assert(chunk_header->length == 13);
+            
+            IHDRBody * ihdr_body = consume_struct(
+                /* type: */ IHDRBody,
+                /* entire_file: */ entire_file);
+            
+            flip_endian(&ihdr_body->width);
+            flip_endian(&ihdr_body->height);
+            printf(
+                "ihdr_body->width: %u\n",
+                ihdr_body->width);
+            printf(
+                "ihdr_body->height: %u\n",
+                ihdr_body->height);
         }
-        break;
+        else if (are_equal_strings(
+            chunk_header->type,
+            "PLTE",
+            4))
+        {
+            // handle palette header
+            printf("found PLTE palette header...");
+            break;
+        }
+        else if (are_equal_strings(
+            chunk_header->type,
+            "IDAT",
+            4))
+        {
+            // handle image data header
+            printf("found IDAT image header...");
+            printf("pixel data must be extracted here!!");
+            break;
+        }
+        else if (are_equal_strings(
+            chunk_header->type,
+            "IEND",
+            4))
+        {
+            // handle image end header
+            printf("found IEND image end header...");
+            break;
+        }
+        else if ((char)chunk_header->type[0] > 'Z')
+        {
+            uint32_t skip = chunk_header->length;
+            printf(
+                "skip unhandled lowercase (noncritical) chunk\n");
+            
+            entire_file->data += skip;
+            
+            assert(skip <= entire_file->size_left); 
+            entire_file->size_left -= skip;
+        } else {
+            printf(
+                "ERROR: unhandled critical chunk header: %s\n",
+                chunk_header->type);
+            return 1;
+        }
+        
+        // ignore a 4-byte CRC checksum
+        assert(entire_file->size_left >= 4);
+        entire_file->data += 4;
+        entire_file->size_left -= 4;
     }
     
     return 0;
