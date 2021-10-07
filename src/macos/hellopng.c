@@ -19,26 +19,26 @@ All of these seem like ancient artifacts to me,
 except for bytes 2 to 4, which read 'PNG'
 */
 #pragma pack(push, 1)
-typedef struct PNGHeader {
+typedef struct PNGSignature {
     uint8_t highbit_hint;             // artifact
     char png_string[3];               // Reads 'PNG'
     char dos_style_line_ending[2];    // DOS artifact
     char end_of_file_char;            // DOS artifact
     char unix_style_line_ending;      // Unix & DOS artifact
-} PNGHeader;
+} PNGSignature;
 
 /*
 A PNG Chunk header
-
 Length           (4 bytes)
 Chunk type/name  (4 bytes)
+
+Will be followed by the data
 Chunk data       (length bytes)
 CRC checksum     (4 bytes)
 */
 typedef struct PNGChunkHeader {
-    uint32_t length; // big endian
-    char type[4];
-    uint32_t checksum;
+    uint32_t length;     // big endian
+    char type[4];        // 1st letter upper = critical chunk
 } PNGChunkHeader;
 
 
@@ -54,7 +54,7 @@ and interlace method (1 byte, values 0 "no interlace" or 1 "Adam7 interlace")
 (13 data bytes total).
 */
 typedef struct IHDRHeader {
-    uint32_t length; // big endian
+    uint32_t length; // big endian length of HDR
     char     type[4];
     uint32_t width;
     uint32_t height;
@@ -63,6 +63,7 @@ typedef struct IHDRHeader {
     uint8_t  compression_method;
     uint8_t  filter_method;
     uint8_t  interlace_method;
+    uint32_t checksum;
 } IHDRHeader;
 #pragma pack(pop)
 
@@ -124,14 +125,14 @@ uint8_t * consume_chunk(
 
 int main(int argc, const char * argv[]) 
 {
-    printf("Hello image files!\n");
+    printf("Hello png files!\n");
     
     FILE * imgfile = fopen(
         "structuredart.png",
         "rb");
     fseek(imgfile, 0, SEEK_END);
     size_t fsize = ftell(imgfile);
-    fseek(imgfile, 0, SEEK_SET);  /* same as rewind(f); */
+    fseek(imgfile, 0, SEEK_SET);
     
     uint8_t * buffer = malloc(fsize);
     EntireFile * entire_file = malloc(sizeof(EntireFile));
@@ -145,28 +146,25 @@ int main(int argc, const char * argv[])
             fsize,
         /* stream: */
             imgfile);
+    printf("bytes read: %zu\n", bytes_read);
     fclose(imgfile);
     assert(bytes_read == fsize);
     
     entire_file->data = buffer;
     entire_file->size_left = bytes_read;
     
-    PNGHeader * png_header = consume_struct(
-        /* type: */ PNGHeader,
+    PNGSignature * png_signature = consume_struct(
+        /* type: */ PNGSignature,
         /* from: */ entire_file);
     
     printf(
-        "sizeof(buffer): %zu\n",
-        sizeof(buffer));
-    
-    printf(
-        "Header file's png_string (expecting 'PNG'): %c%c%c\n",
-        png_header->png_string[0],
-        png_header->png_string[1],
-        png_header->png_string[2]);
+        "Signature's png_string (expecting 'PNG'): %c%c%c\n",
+        png_signature->png_string[0],
+        png_signature->png_string[1],
+        png_signature->png_string[2]);
     
     if (!are_equal_strings(
-        /* string 1: */ png_header->png_string,
+        /* string 1: */ png_signature->png_string,
         /* string 2: */ "PNG",
         /* string length: */ 3))
     {
@@ -182,10 +180,9 @@ int main(int argc, const char * argv[])
     flip_endian(&ihdr_header->width);
     flip_endian(&ihdr_header->height);
     
-    printf("read %zu bytes in IHDR header...\n", bytes_read);
-    
     printf("ihdr_header->length: %u\n", ihdr_header->length);
     printf("ihdr_header->type: %s\n", ihdr_header->type);
+    assert(are_equal_strings(ihdr_header->type, "IHDR", 4));
     printf("ihdr_header->width: %u\n", ihdr_header->width);
     printf("ihdr_header->height: %u\n", ihdr_header->height);
     printf(
@@ -204,9 +201,26 @@ int main(int argc, const char * argv[])
         "ihdr_header->interlace_method: %u\n",
         ihdr_header->interlace_method);
     
-    // after the ihdr header must be some data I guess?
-    
-    // now must come a ihdr footer maybe?
+    while (entire_file->size_left >= sizeof(PNGChunkHeader)) {
+        PNGChunkHeader * chunk_header = consume_struct(
+            /* type: */   PNGChunkHeader,
+            /* buffer: */ entire_file);
+        assert(sizeof(chunk_header) == 8);
+        flip_endian(&chunk_header->length);
+        
+        printf(
+            "read %s header of %u bytes\n",
+            chunk_header->type,
+            chunk_header->length);
+        
+        if ((char)chunk_header->type[0] > 'Z') {
+            printf("header type] was lowercase, skip ahead\n");
+            entire_file->data += chunk_header->length;
+            entire_file->size_left -= chunk_header->length;
+            continue;
+        }
+        break;
+    }
     
     return 0;
 }
