@@ -56,10 +56,20 @@ int main(int argc, const char * argv[])
 {
     printf(
         "%s\n",
-        "Hello world of bitmap (.BMP) files!");
+        "Hello .bmp files!");
     
+    if (argc != 2) {
+        printf("Please supply 1 argument (png file name)\n");
+        printf("Got:");
+        for (int i = 0; i < argc; i++) {
+            printf(" %s", argv[i]);
+        }
+        return 1;
+    }
+
+    printf("Analyzing file: %s\n", argv[1]);
     FILE * imgfile = fopen(
-        "structuredart.bmp",
+        argv[1],
         "rb");
     
     BMPHeader * my_header = malloc(sizeof(BMPHeader));

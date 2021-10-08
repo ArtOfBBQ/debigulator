@@ -3,6 +3,9 @@
 #include "stdlib.h"
 #include "assert.h"
 
+typedef int32_t bool32_t;
+#define false 0
+#define true 1
 
 /*
 I'm not sure how to deal with this in C,
@@ -65,7 +68,7 @@ typedef struct IHDRBody {
 #pragma pack(pop)
 
 
-int are_equal_strings(char * str1, char * str2, size_t len) {
+bool32_t are_equal_strings(char * str1, char * str2, size_t len) {
     for (size_t i = 0; i < len; i++) {
         if (str1[i] != str2[i]) {
             return 0;
@@ -144,10 +147,20 @@ uint8_t * consume_chunk(
 
 int main(int argc, const char * argv[]) 
 {
-    printf("Hello png files!\n");
+    printf("Hello .png files!\n");
+    if (argc != 2) {
+        printf("Please supply 1 argument (png file name)\n");
+        printf("Got:");
+        for (int i = 0; i < argc; i++) {
+            printf(" %s", argv[i]);
+        }
+        return 1;
+    }
+
+    printf("Analyzing file: %s\n", argv[1]);
     
     FILE * imgfile = fopen(
-        "structuredart.png",
+        argv[1],
         "rb");
     fseek(imgfile, 0, SEEK_END);
     size_t fsize = ftell(imgfile);
@@ -201,7 +214,7 @@ int main(int argc, const char * argv[])
         flip_endian(&chunk_header->length);
         
         printf(
-            "read %s header describing next %u bytes\n",
+            "[%s] chunk (%u bytes)\n",
             chunk_header->type,
             chunk_header->length);
         
@@ -212,18 +225,60 @@ int main(int argc, const char * argv[])
         {
             assert(chunk_header->length == 13);
             
+            bool32_t supported = true;
+            
             IHDRBody * ihdr_body = consume_struct(
                 /* type: */ IHDRBody,
                 /* entire_file: */ entire_file);
             
             flip_endian(&ihdr_body->width);
             flip_endian(&ihdr_body->height);
+           
+            // (below) These PNG setting assert the RGBA color
+            // space. There are many other formats (greyscale
+            // illustrations etc.) found in .png files that we
+            // are not supporting for now. 
+            if (ihdr_body->bit_depth != 8
+                || ihdr_body->color_type != 6)
+            {
+                printf("unsupported PNG type");
+                assert(1 == 2);
+                return 1;
+            }
+            
+            // uint32_t width;
+            // uint32_t height;
+            // uint8_t  bit_depth;
+            // uint8_t  color_type;
+            // uint8_t  compression_method;
+            // uint8_t  filter_method;
+            // uint8_t  interlace_method;
             printf(
-                "ihdr_body->width: %u\n",
+                "\twidth: %u\n",
                 ihdr_body->width);
             printf(
-                "ihdr_body->height: %u\n",
+                "\theight: %u\n",
                 ihdr_body->height);
+            printf(
+                "\tbit_depth: %u\n",
+                ihdr_body->bit_depth);
+            printf(
+                "\tcolor_type: %u\n",
+                ihdr_body->color_type);
+            if (ihdr_body->color_type != 6) {
+                printf("error - only color type 6 is supported");
+            } else {
+                printf("\t\t(Truecolor with alpha)\n");
+            }
+            printf(
+                "\tcompression_method: %u\n",
+                ihdr_body->compression_method);
+            printf(
+                "\tfilter_method: %u\n",
+                ihdr_body->filter_method);
+            printf(
+                "\tinterlace_method: %u\n",
+                ihdr_body->interlace_method);
         }
         else if (are_equal_strings(
             chunk_header->type,
@@ -231,7 +286,6 @@ int main(int argc, const char * argv[])
             4))
         {
             // handle palette header
-            printf("found PLTE palette header...");
             break;
         }
         else if (are_equal_strings(
@@ -240,8 +294,8 @@ int main(int argc, const char * argv[])
             4))
         {
             // handle image data header
-            printf("found IDAT image header...");
-            printf("pixel data must be extracted here!!");
+            printf("\tfound IDAT image header...\n");
+            printf("\tpixel data must be extracted here!!\n");
             break;
         }
         else if (are_equal_strings(
@@ -250,14 +304,13 @@ int main(int argc, const char * argv[])
             4))
         {
             // handle image end header
-            printf("found IEND image end header...");
             break;
         }
         else if ((char)chunk_header->type[0] > 'Z')
         {
             uint32_t skip = chunk_header->length;
             printf(
-                "skip unhandled lowercase (noncritical) chunk\n");
+                "\tskip unhandled lowercase noncritical chunk\n");
             
             entire_file->data += skip;
             
