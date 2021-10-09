@@ -65,6 +65,18 @@ typedef struct IHDRBody {
     uint8_t  filter_method;
     uint8_t  interlace_method;
 } IHDRBody;
+
+/* IDAT chunks have their own header
+
+*/
+typedef struct IDATHeader {
+    uint8_t zlibmethodflags;
+    uint8_t additionalflags;
+} IDATHeader;
+
+typedef struct IDATFooter {
+    uint32_t checkvalue;
+} IDATFooter;
 #pragma pack(pop)
 
 
@@ -145,6 +157,18 @@ uint8_t * consume_chunk(
     return return_value;
 }
 
+uint8_t *
+allocate_pixels(
+    uint32_t height,
+    uint32_t width,
+    uint32_t bytes_per_pixel)
+{
+    uint8_t * return_value = malloc(
+        height * width * bytes_per_pixel);
+    
+    return return_value; 
+}
+
 int main(int argc, const char * argv[]) 
 {
     printf("Hello .png files!\n");
@@ -203,6 +227,8 @@ int main(int argc, const char * argv[])
         printf("aborting - not a PNG file\n");
         return 1;
     }
+    
+    uint8_t * pixels = 0;
     
     while (
         entire_file->size_left >= sizeof(PNGChunkHeader))
@@ -279,6 +305,20 @@ int main(int argc, const char * argv[])
             printf(
                 "\tinterlace_method: %u\n",
                 ihdr_body->interlace_method);
+
+            if (supported) {
+                // pixels = allocate_pixels(
+                //     /* height: */
+                //         ihdr_body->height,
+                //     /* width: */
+                //         ihdr_body->width,
+                //     /* bytes_per_pixel: */
+                //         4);
+                pixels = malloc(
+                    ihdr_body->height
+                    * ihdr_body->width
+                    * 4);
+            }
         }
         else if (are_equal_strings(
             chunk_header->type,
@@ -295,8 +335,44 @@ int main(int argc, const char * argv[])
         {
             // handle image data header
             printf("\tfound IDAT image header...\n");
-            printf("\tpixel data must be extracted here!!\n");
-            break;
+            printf("\tcompressed pixels extracted here!!\n");
+
+            
+            IDATHeader * idat_header =
+                (IDATHeader *)entire_file->data;
+            printf(
+                "\t\tidat_header->zlibmethodflags: %u\n",
+                idat_header->zlibmethodflags);
+            printf(
+                "\t\tidat_header->additionalflags: %u\n",
+                idat_header->zlibmethodflags);
+            
+            // to mask the rightmost 4 we need 11110000 
+            //                                     8421
+            //                               8+4+2+1=15
+            // to isolate the leftmost 4, we need to
+            // shift right by 4
+            // (I guess the other bits are 0 by default)
+            uint8_t compression_method =
+                idat_header->zlibmethodflags & 15;
+            uint8_t compression_info =
+                idat_header->zlibmethodflags >> 4;
+            printf(
+                "\t\tcompression method: %u\n",
+                compression_method);
+            printf(
+                "\t\tcompression info: %u\n",
+                compression_info);
+            uint8_t FCHECK = 0;
+            uint8_t FDICT = 0;
+            uint8_t FLEVEL = 0;
+            
+            // skip data
+            uint32_t skip = chunk_header->length;
+            printf(
+                "\tskip unhandled lowercase noncritical chunk\n");
+            entire_file->data += skip;
+            entire_file->size_left -= skip;
         }
         else if (are_equal_strings(
             chunk_header->type,
