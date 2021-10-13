@@ -13,6 +13,10 @@ I just want an array with the size stored
 */
 typedef struct EntireFile {
     void * data;
+    
+    uint8_t bits_left;
+    uint8_t bit_buffer;
+    
     size_t size_left;
 } EntireFile;
 
@@ -136,6 +140,45 @@ void copy_memory(
     }
 }
 
+
+/*
+grab data from buffer & advance pointer this is for grabbing
+only bits, use 'consume_struct' for bytes
+
+Data elements are packed into bytes in order of increasing bit
+number within the byte, i.e., starting with the least-significant
+bit of the byte.
+*/
+uint8_t consume_bits(
+    EntireFile * from,
+    uint8_t bits_to_consume)
+{
+    assert(bits_to_consume < 9);
+    
+    uint8_t return_value = 0;
+    
+    while (bits_to_consume > 0) {
+        if (from->bits_left > 0) {
+            return_value = return_value << 1;
+            return_value =
+                return_value
+                | (from->bit_buffer & 1);
+            from->bit_buffer = from->bit_buffer >> 1;
+            from->bits_left -= 1;
+            bits_to_consume -= 1;
+        } else {
+            from->bit_buffer = *((uint8_t *)from->data);
+            from->bits_left = 8;
+            
+            from->size_left -= 1;
+            from->data += 1;
+        }
+    }
+    
+    return return_value;
+}
+
+
 // Grab data from the front of a buffer & advance pointer
 #define consume_struct(type, from) (type *)consume_chunk(from, sizeof(type))
 uint8_t * consume_chunk(
@@ -232,7 +275,7 @@ int main(int argc, const char * argv[])
     
     while (
         entire_file->size_left >= sizeof(PNGChunkHeader))
-    {
+        {
         PNGChunkHeader * chunk_header = consume_struct(
             /* type: */   PNGChunkHeader,
             /* buffer: */ entire_file);
@@ -334,25 +377,21 @@ int main(int argc, const char * argv[])
             4))
         {
             // handle image data header
-            printf("\tfound IDAT image header...\n");
-            printf("\tcompressed pixels extracted here!!\n");
-
-            
+            printf("\tfound IDAT (image data) header...\n");
+           
+ 
+            // (IDATHeader *)entire_file->data;
             IDATHeader * idat_header =
-                (IDATHeader *)entire_file->data;
-            printf(
-                "\t\tidat_header->zlibmethodflags: %u\n",
-                idat_header->zlibmethodflags);
-            printf(
-                "\t\tidat_header->additionalflags: %u\n",
-                idat_header->zlibmethodflags);
+                consume_struct(
+                    /* type: */ IDATHeader,
+                    /* from: */ entire_file);
             
-            // to mask the rightmost 4 we need 11110000 
+            // to mask the rightmost 4 we need 00001111 
             //                                     8421
             //                               8+4+2+1=15
             // to isolate the leftmost 4, we need to
             // shift right by 4
-            // (I guess the other bits are 0 by default)
+            // (I guess the padded bits are 0 by default)
             uint8_t compression_method =
                 idat_header->zlibmethodflags & 15;
             uint8_t compression_info =
@@ -363,9 +402,197 @@ int main(int argc, const char * argv[])
             printf(
                 "\t\tcompression info: %u\n",
                 compression_info);
-            uint8_t FCHECK = 0;
-            uint8_t FDICT = 0;
-            uint8_t FLEVEL = 0;
+           
+            /* 
+            first FIVE bits is FCHECK
+            the 'check bits for CMF and FLG'
+            to mask: 15 + 16 = 31
+            The FCHECK value must be such that CMF and FLG,
+            when viewed as a 16-bit unsigned integer stored in
+            MSB order (CMF*256 + FLG), is a multiple of 31.
+            */
+            uint16_t full_check_value =
+                (uint16_t)idat_header->additionalflags;
+            full_check_value =
+                full_check_value
+                | (idat_header->zlibmethodflags << 8);
+            printf(
+                "\t\tfull 16-bit check val (using FCHECK): %u - ",
+                full_check_value);
+            printf(full_check_value % 31 == 0 ? "OK\n" : "ERR\n");
+            assert(full_check_value != 0);
+            assert(full_check_value % 31 == 0);
+            
+            /* 
+            sixth bit is FDICT, the 'preset dictionary' flag
+            If FDICT is set, a DICT dictionary identifier is
+            present immediately after the FLG byte. The
+            dictionary is a sequence of bytes which are initially 
+            fed to the compressor without producing any compressed
+            output. DICT is the Adler-32 checksum of this sequence
+            of bytes (see the definition of ADLER32 below). 
+            
+            The decompressor can use this identifier to determine
+            which dictionary has been used by the compressor.
+            */
+            uint8_t FDICT =
+                idat_header->additionalflags >> 5 & 1;
+            
+            /*
+            7th & 8th bit is FLEVEL
+            FLEVEL (Compression level)
+            The "deflate" method (CM = 8) sets these flags as
+            follows:
+            
+            0 - compressor used fastest algorithm
+            1 - compressor used fast algorithm
+            2 - compressor used default algorithm
+            3 - compressor used max compression, slowest algo
+            
+            The information in FLEVEL is not needed for
+            decompression; it is there to indicate if
+            recompression might be worthwhile.
+            */
+            uint8_t FLEVEL =
+                idat_header->additionalflags >> 6 & 3;
+            printf("\t\tFDICT: %u\n", FDICT);
+            printf("\t\tFLEVEL: %u\n", FLEVEL);
+
+            assert(FDICT == 0);
+            
+            printf("\t\t\tread compressed data...\n");
+            
+            /*
+            Each block of compressed data begins with 3 header
+            bits containing the following data:
+            
+            1st bit         BFINAL
+            next 2 bits     BTYPE
+            
+            Note that the header bits do not necessarily begin
+            on a byte boundary, since a block does not
+            necessarily occupy an integral number of bytes.
+            
+            BFINAL is set if and only if this is the last
+            block of the data set.
+            
+            BTYPE specifies how the data are compressed,
+            as follows:
+            
+            00 - no compression
+            01 - compressed with fixed Huffman codes
+            10 - compressed with dynamic Huffman codes
+            11 - reserved (error) 
+            */
+            uint8_t BFINAL = consume_bits(
+                /* buffer: */ entire_file,
+                /* size  : */ 1);
+            
+            assert(BFINAL < 2);
+            printf(
+                "\t\t\tBFINAL (flag for final block): %u\n",
+                BFINAL);
+            
+            uint8_t BTYPE = consume_bits(
+                /* buffer: */ entire_file,
+                /* size  : */ 2);
+            
+            char * btype_description;
+            
+            /*
+            In all cases, the decoding algorithm for the actual
+            data is as follows:
+            
+            do
+               read block header from input stream. (did above)
+               if (stored with no compression)
+                  skip any remaining bits in current partially
+                     processed byte
+                  read LEN and NLEN (see next section)
+                  copy LEN bytes of data to output
+               else
+                  if (compressed with dynamic Huffman codes
+                     read representation of code trees (see
+                        subsection below)
+                  loop (until end of block code recognized)
+                     decode literal/length value from input stream
+                     if value < 256
+                        copy value (literal byte) to output stream
+                     otherwise
+                        if value = end of block (256)
+                           break from loop
+                        otherwise (value = 257..285)
+                           decode distance from input stream
+                           
+                           move backwards dist bytes in the output
+                           stream, and copy length bytes from this
+                           position to the output stream.
+                  end loop
+            while not last block
+            */
+             
+            switch (BTYPE) {
+                case (0):
+                    printf("\t\t\tBTYPE 0 - No compression\n");
+                    
+                    // spec says to ditch remaining bits
+                    if (entire_file->bits_left < 8) {
+                        printf(
+                            "\t\t\tditching a byte with %u%s\n",
+                            entire_file->bits_left,
+                            " bits left...");
+                        entire_file->bits_left = 0;
+                        // the data itself was already incr.
+                        // when bits were consumed
+                        // entire_file->data += 1;
+                        // entire_file->bits_left = 8;
+                        // entire_file->bit_buffer =
+                            // *(uint8_t *)entire_file->data;
+                    }
+                    
+                    // read LEN and NLEN (see next section)
+                    uint16_t LEN =
+                        *(int16_t *)entire_file->data; 
+                    entire_file->data += 2;
+                    entire_file->size_left -= 2;
+                    printf(
+                        "\t\t\tcompr. block has LEN: %u bytes\n",
+                        LEN);
+                    uint16_t NLEN =
+                        *(uint16_t *)entire_file->data; 
+                    entire_file->data += 2;
+                    entire_file->size_left -= 2;
+                    printf(
+                        "\t\t\tcompr. block has NLEN: %d bytes\n",
+                        NLEN);
+                    printf(
+                        "\t\t\t1's complement of LEN was: %u\n",
+                        ~LEN);
+                    assert(NLEN == ~LEN);
+                    
+                    // copy LEN bytes of data to output
+                    
+                    break;
+                case (1):
+                    printf("\t\t\tBTYPE 1 - Fixed Huffman\n");
+                    break;
+                case (2):
+                    printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
+                case (3):
+                    printf("\t\t\tBTYPE 3 - reserved (error)\n");
+                    assert(1 == 2);
+                    break;
+                default:
+                    printf(
+                        "\t\t\tERROR: BTYPE of %u%s\n",
+                        BTYPE,
+                        " was not in the Deflate specification");
+            }
+            
+            assert(BTYPE < 3);
+            
+                        
+            break;
             
             // skip data
             uint32_t skip = chunk_header->length;

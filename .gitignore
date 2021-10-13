@@ -1,0 +1,9 @@
+.gitattributes
+
+# sometimes created by Mac Os X's finder
+.DS_Store
+
+# swap files used by vim
+*.swp
+
+build/**
