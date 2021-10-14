@@ -148,6 +148,37 @@ only bits, use 'consume_struct' for bytes
 Data elements are packed into bytes in order of increasing bit
 number within the byte, i.e., starting with the least-significant
 bit of the byte.
+* Data elements other than Huffman codes are packed
+  starting with the least-significant bit of the data
+  element.
+* Huffman codes are packed starting with the most-
+  significant bit of the code.
+
+Jelle: That's so fucked up. Why would you store 2 different
+types of data in a different order just for kicks? :/
+
+In other words, if one were to print out the compressed data as
+a sequence of bytes, starting with the first byte at the
+*right* margin and proceeding to the *left*, with the most-
+significant bit of each byte on the left as usual, one would be
+able to parse the result from right to left, with fixed-width
+elements in the correct MSB-to-LSB order and Huffman codes in
+bit-reversed order (i.e., with the first bit of the code in the
+relative LSB position).
+
+Jelle: IMHO this means this:
+let's say you have the number 00001001 (9)
+
+->
+FOR HUFFMAN CODES
+you consume 2 bits and get: 10 which is 2
+you consume another 2 bits and get: 01 which is 1
+my function does this
+->
+FOR EVERYTHING ELSE
+you consume 2 bits and get: 01 which is 1
+you consume another 2 bits and get: 10 which is 2
+i have no function yet that does this
 */
 uint8_t consume_bits(
     EntireFile * from,
@@ -178,6 +209,35 @@ uint8_t consume_bits(
     return return_value;
 }
 
+uint8_t reverse_bit_order(
+    uint8_t original,
+    uint8_t bit_count)
+{
+    assert(bit_count > 1);
+    assert(bit_count < 9);
+    
+    uint8_t return_value = 0;
+    
+    float middle = (bit_count - 1.0f) / 2.0f;
+    assert(middle > 0);
+    assert(middle <= 3.5f);
+    
+    for (uint8_t i = 0; i < bit_count; i++) {
+        float dist_to_middle = middle - i;
+        assert(dist_to_middle < 4);
+        
+        uint8_t target_pos = i + (dist_to_middle * 2);
+        
+        assert(target_pos >= 0);
+        assert(target_pos < 8);
+        
+        return_value =
+            return_value |
+                (((original >> i) & 1) << target_pos);
+    }
+    
+    return return_value;
+}
 
 // Grab data from the front of a buffer & advance pointer
 #define consume_struct(type, from) (type *)consume_chunk(from, sizeof(type))
@@ -493,9 +553,9 @@ int main(int argc, const char * argv[])
                 "\t\t\tBFINAL (flag for final block): %u\n",
                 BFINAL);
             
-            uint8_t BTYPE = consume_bits(
+            uint8_t BTYPE = reverse_bit_order(consume_bits(
                 /* buffer: */ entire_file,
-                /* size  : */ 2);
+                /* size  : */ 2), 2);
             
             char * btype_description;
             
@@ -575,9 +635,11 @@ int main(int argc, const char * argv[])
                     break;
                 case (1):
                     printf("\t\t\tBTYPE 1 - Fixed Huffman\n");
+                    
                     break;
                 case (2):
                     printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
+                    break;
                 case (3):
                     printf("\t\t\tBTYPE 3 - reserved (error)\n");
                     assert(1 == 2);
