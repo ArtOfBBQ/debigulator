@@ -639,6 +639,96 @@ int main(int argc, const char * argv[])
                     break;
                 case (2):
                     printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
+                    printf("\t\t\tRead code trees...\n");
+            /*
+            The Huffman codes for the two alphabets
+            appear in the block immediately after the
+            header bits and before the actual compressed
+            data, first the literal/length code and then
+            the distance code. Each code is defined by a
+            sequence of code lengths.
+            
+            For even greater compactness, the code
+            length sequences themselves are compressed
+            using a Huffman code. The alphabet for code
+            lengths is as follows:
+        
+            0 - 15: Represent code lengths of 0 - 15
+            
+            16: Copy the previous code length 3 - 6 times.
+               The next 2 bits indicate repeat length
+               (0 = 3, ... , 3 = 6)
+                Example:  Codes 8, 16 (+2 bits 11),
+                    16 (+2 bits 10) will expand to
+                    12 code lengths of 8 (1 + 6 + 5)
+              
+            17: Repeat a code length of 0
+                for 3 - 10 times.
+               (3 bits of length)
+
+            18: Repeat a code length of 0
+                for 11 - 138 times
+               (7 bits of length) 
+                   
+            A code length of 0 indicates that the corresponding
+            symbol in the literal/length or distance alphabet
+            will not occur in the block, and should not
+            participate in the Huffman code construction
+            algorithm given earlier. If only one distance code
+            is used, it is encoded using one bit, not zero bits;
+            in this case there is a single code length of one,
+            with one unused code. One distance code of zero
+            bits means that there are no distance codes used at
+            all (the data is all literals).
+            
+            We can now define the format of the block:
+
+            5 Bits: HLIT (huffman literal)
+            # of Literal/Length codes - 257 (257 - 286)
+            
+            5 Bits: HDIST (huffman distance?)
+            # of Distance codes - 1        (1 - 32)
+            
+            4 Bits: HCLEN (huffman code length)
+            # of Code Length codes - 4     (4 - 19)
+            
+            (HCLEN + 4) x 3 bits: code lengths for the code length
+            
+            alphabet given just above, in the order:
+            16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3,
+            13, 2, 14, 1, 15
+            
+            These code lengths are interpreted as 3-bit integers
+
+            (0-7); as above, a code length of 0 means the
+            
+            corresponding symbol (literal/length or distance code
+            
+            length) is not used.
+            */
+
+                    uint32_t HLIT = consume_bits(
+                        /* from: */ entire_file,
+                        /* size: */ 5) + 257;
+                    printf(
+                        "\t\t\tHLIT : %u (expect 257-286)\n",
+                        HLIT);
+                    assert(HLIT >= 257 && HLIT <= 286);
+                    uint32_t HDIST = consume_bits(
+                        /* from: */ entire_file,
+                        /* size: */ 5) + 1;
+                    assert(HDIST >= 1 && HDIST <= 32);
+                    printf(
+                        "\t\t\tHDIST: %u (expect 1-32)\n",
+                        HDIST);
+                    uint32_t HCLEN = consume_bits(
+                        /* from: */ entire_file,
+                        /* size: */ 4);
+                    printf(
+                        "\t\t\tHCLEN: %u (expect 4-19)\n",
+                        HCLEN);
+                    assert(HCLEN >= 4 && HCLEN <= 19);
+                    
                     break;
                 case (3):
                     printf("\t\t\tBTYPE 3 - reserved (error)\n");
