@@ -83,6 +83,25 @@ typedef struct IDATFooter {
 } IDATFooter;
 #pragma pack(pop)
 
+typedef struct PNGHuffman {
+
+} PNGHuffman;
+
+uint32_t huffman_decode(
+    PNGHuffman * dict,
+    uint32_t raw)
+{
+    return 1;
+};
+
+void compute_huffman(
+    uint32_t size,
+    uint32_t * array,
+    PNGHuffman * dict)
+{
+    
+};
+
 
 bool32_t are_equal_strings(char * str1, char * str2, size_t len) {
     for (size_t i = 0; i < len; i++) {
@@ -630,11 +649,14 @@ int main(int argc, const char * argv[])
                         ~LEN);
                     assert(NLEN == ~LEN);
                     
-                    // copy LEN bytes of data to output
+                    // TODO: copy LEN bytes of data to output
                     
                     break;
                 case (1):
                     printf("\t\t\tBTYPE 1 - Fixed Huffman\n");
+                    printf("\t\t\tPNG format unsupported.");
+                    
+                    return 1;
                     
                     break;
                 case (2):
@@ -707,6 +729,9 @@ int main(int argc, const char * argv[])
             length) is not used.
             */
 
+                    // 5 Bits: HLIT (huffman literal)
+                    // number of Literal/Length codes - 257
+                    // (257 - 286)
                     uint32_t HLIT = consume_bits(
                         /* from: */ entire_file,
                         /* size: */ 5) + 257;
@@ -714,6 +739,11 @@ int main(int argc, const char * argv[])
                         "\t\t\tHLIT : %u (expect 257-286)\n",
                         HLIT);
                     assert(HLIT >= 257 && HLIT <= 286);
+                    
+                    
+                    // 5 Bits: HDIST (huffman distance?)
+                    // # of Distance codes - 1
+                    // (1 - 32)
                     uint32_t HDIST = consume_bits(
                         /* from: */ entire_file,
                         /* size: */ 5) + 1;
@@ -721,6 +751,11 @@ int main(int argc, const char * argv[])
                     printf(
                         "\t\t\tHDIST: %u (expect 1-32)\n",
                         HDIST);
+                    
+                    
+                    // 4 Bits: HCLEN (huffman code length)
+                    // # of Code Length codes - 4
+                    // (4 - 19)
                     uint32_t HCLEN = consume_bits(
                         /* from: */ entire_file,
                         /* size: */ 4);
@@ -728,6 +763,154 @@ int main(int argc, const char * argv[])
                         "\t\t\tHCLEN: %u (expect 4-19)\n",
                         HCLEN);
                     assert(HCLEN >= 4 && HCLEN <= 19);
+                    
+                    // This is a fixed swizzle (order of elements
+                    // in an array) that's agreed upon in the
+                    // specification.
+                    // I think they did this because we usually
+                    // don't need all 19, and they thought
+                    // 15 would be the least likely one to be
+                    // necessary, 1 the second least likely,
+                    // etc.
+                    // When they only pass 7 values, we are
+                    // expected to have initted the other ones
+                    // to 0 (I guess), and that allows them to
+                    // skip mentioning the other 13 ones and
+                    // save 12 x 3 = 36 bits
+                    // So it's basically compressing by
+                    // truncating
+                    // (array size: 19)
+                    // I never would have imagined people go this
+                    // far to save 36 bits of disk space
+                    uint32_t swizzle[] =
+                        {16, 17, 18, 0, 8, 7, 9, 6, 10, 5,
+                         11, 4, 12, 3, 13, 2, 14, 1, 15};
+                    
+                    // read (HCLEN + 4) x 3 bits
+                    // these are code lengths for the code length
+                    uint32_t HCLEN_table[20] = {};
+                    
+                    for (uint32_t i = 0; i < HCLEN; i++) {
+                        printf("\t\t\ti: %u\n", i);
+                        assert(swizzle[i] < 20);
+                        HCLEN_table[swizzle[i]] =
+                            consume_bits(
+                                /* from: */ entire_file,
+                                /* size: */ 3);
+                        printf(
+                            "\t\t\tHCLEN_table[%u]: %u\n",
+                            swizzle[i],
+                            HCLEN_table[swizzle[i]]);
+                    }
+                    
+                    /*
+                    We now have some values in HCLEN_table,
+                    but these are themselves a bit 'compressed':
+                    
+                    0 - 15: Represent code lengths of 0 - 15
+                    16: Copy previous code length 3-6 times.
+                        2 extra bits for repeat length
+                        (0 = 3, ... , 3 = 6)
+                    17: Repeat a code length of 0 for 3 - 10
+                        times.
+                        3 extra bits for length
+                    18: Repeat a code length of 0 for
+                        11 - 138 times
+                        7 extra bits for length
+                    */
+                   
+                    // TODO: how did casey know this is 512 size? 
+                    printf("\t\t\tprep huffman len_table..\n");
+                    uint32_t litlendist_table[512] = {};
+                    
+                    PNGHuffman dict_huffman;
+                    compute_huffman(
+                        /* size: */ HCLEN,
+                        /* array: */ HCLEN_table,
+                        /* dict: */ &dict_huffman);
+                    
+                    printf("\t\t\tgot dict_huffman..\n");
+                    
+                    uint32_t len_i = 0;
+                    uint32_t output_size = HLIT + HDIST;
+                    while (len_i < output_size) {
+                        uint32_t raw_len = consume_bits(
+                            /* from: */ entire_file,
+                            /* size: */ 3);
+                        uint32_t encoded_len = huffman_decode(
+                            /* dict: */ &dict_huffman,
+                            /* raw: */ raw_len);
+                        
+                        if (encoded_len <= 15) {
+                            litlendist_table[len_i] =
+                                encoded_len;
+                            len_i++;
+                        } else if (encoded_len == 16) {
+                            uint32_t extra_bits_repeat =
+                                consume_bits(
+                                    /* from: */ entire_file,
+                                    /* size: */ 2);
+                            uint32_t repeats =
+                                extra_bits_repeat + 3;
+                            for (
+                                int i = 0;
+                                0 < repeats;
+                                i++)
+                            {
+                                // TODO: I think repeat 0
+                                // casey thinks
+                                // repeat encoded_len
+                                litlendist_table[len_i] = 0;
+                                len_i++;
+                            }
+                        } else if (encoded_len == 17) {
+                            uint32_t extra_bits_repeat =
+                                consume_bits(
+                                    /* from: */ entire_file,
+                                    /* size: */ 3);
+                            uint32_t repeats =
+                                extra_bits_repeat + 3;
+                            
+                            for (
+                                int i = 0;
+                                0 < repeats;
+                                i++)
+                            {
+                                // TODO: I think repeat 0
+                                // casey thinks
+                                // repeat encoded_len
+                                litlendist_table[len_i] = 0;
+                                len_i++;
+                            }
+                            
+                        } else if (encoded_len == 18) {
+                            uint32_t extra_bits_repeat =
+                                consume_bits(
+                                    /* from: */ entire_file,
+                                    /* size: */ 7);
+                            uint32_t repeats =
+                                extra_bits_repeat + 11;
+                            
+                            for (
+                                int i = 0;
+                                0 < repeats;
+                                i++)
+                            {
+                                // TODO: I think repeat 0
+                                // casey thinks
+                                // repeat encoded_len
+                                litlendist_table[len_i] = 0;
+                                len_i++;
+                            }
+                        } else {
+                            printf(
+                                "ERROR : encoded_len %u\n",
+                                encoded_len);
+                            return 1;
+                        }
+                    }
+                    printf("\t\t\tfinished reading len_count");
+                    assert(len_i == output_size);
                     
                     break;
                 case (3):
