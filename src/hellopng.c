@@ -101,11 +101,12 @@ HuffmanPair * unpack_huffman(
     uint32_t * array,
     uint32_t array_size)
 {
+    printf("unpack_huffman... of size: %u\n", array_size);
     HuffmanPair * unpacked_dict = malloc(
         sizeof(HuffmanPair) * array_size);
     // initialize dict
     for (int i = 0; i < array_size; i++) {
-        unpacked_dict[i].key = i;
+        unpacked_dict[i].value = i;
         unpacked_dict[i].code_length = array[i];
     }
     
@@ -121,29 +122,45 @@ HuffmanPair * unpack_huffman(
     for (int i = 0; i < array_size; i++) {
         bl_count[array[i]] += 1;
     }
+    
+    printf("number of codes for each code length:\n");
+    for (int i = 0; i < array_size; i++) {
+        if (bl_count[i] > 0) {
+            printf("length %u has %u codes\n", i, bl_count[i]);
+        }
+    }
    
     // 2) Find the numerical value of the smallest code for each
     //    code length:
     uint32_t * smallest_code = malloc(200);
-    uint32_t code = 0;
+    uint32_t last_code = 0;
     bl_count[0] = 0;
-    for (uint32_t bits = 1; bits <= 200; bits++) {
-        code = (code + bl_count[bits-1]) << 1;
-        smallest_code[bits] = code;
+    for (uint32_t bits = 1; bits < 32; bits++) {
+        if (bl_count[bits] > 0) {
+            last_code += 1;
+            while (last_code < (1 << (bits - 1))) {
+                last_code <<= 1;
+            }
+            smallest_code[bits] = last_code;
+            assert(smallest_code[bits] < (1 << bits));
+        } else {
+            smallest_code[bits] = 0;
+        }
     }
-
+    
     // 3) Assign numerical values to all codes, using
     //    consecutive values for all codes of the same length
     //    with the base values determined at step 2. Codes that
     //    are never used (which have a bit length of zero) must
     //    not be assigned a value.
-    for (uint32_t n = 0; n <= array_size; n++) {
+    for (uint32_t n = 0; n < array_size; n++) {
         uint32_t len = unpacked_dict[n].code_length;
         
         if (len != 0) {
             unpacked_dict[n].key = smallest_code[len];
             
             smallest_code[len]++;
+            assert(smallest_code[len] < (1 << len));
         }
     }
     
@@ -849,9 +866,9 @@ int main(int argc, const char * argv[])
                     for (uint32_t i = 0; i < HCLEN; i++) {
                         assert(swizzle[i] < 20);
                         HCLEN_table[swizzle[i]] =
-                            consume_bits(
+                            reverse_bit_order(consume_bits(
                                 /* from: */ entire_file,
-                                /* size: */ 3);
+                                /* size: */ 3), 3);
                         printf(
                             "\t\t\ti:%u -> %s[%u]: %u\n",
                             i,
@@ -885,14 +902,18 @@ int main(int argc, const char * argv[])
                             /* array_size : */ 20);
                     
                     for (int i = 0; i < 20; i++) {
-                        printf(
-                            "\t\t\t%s[%u] key:%u %s:%u val:%u\n",
-                            "codelengths_huffman",
-                            i,
-                            codelengths_huffman[i].key,
-                            "code length",
-                            codelengths_huffman[i].code_length,
-                            codelengths_huffman[i].value);
+                        if (codelengths_huffman[i].code_length
+                                > 0)
+                        {
+                            printf(
+                             "\t\t%s[%u] key:%u %s:%u val:%u\n",
+                             "codelengths_huffman",
+                             i,
+                             codelengths_huffman[i].key,
+                             "code length",
+                             codelengths_huffman[i].code_length,
+                             codelengths_huffman[i].value);
+                        }
                     }
                     
                     // uint32_t len_i = 0;
