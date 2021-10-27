@@ -7,6 +7,8 @@ typedef int32_t bool32_t;
 #define false 0
 #define true 1
 
+#define NUM_UNIQUE_CODELENGTHS 19
+
 /*
 I'm not sure how to deal with this in C,
 I just want an array with the size stored
@@ -15,7 +17,7 @@ typedef struct EntireFile {
     void * data;
     
     uint8_t bits_left;
-    uint8_t bit_buffer;
+    uint32_t bit_buffer;
     
     size_t size_left;
 } EntireFile;
@@ -88,87 +90,6 @@ typedef struct HuffmanPair {
     uint32_t code_length;
     uint32_t value;
 } HuffmanPair;
-
-uint32_t huffman_decode(
-    HuffmanPair * dict,
-    uint32_t raw)
-{
-    //
-    return 1;
-};
-
-HuffmanPair * unpack_huffman(
-    uint32_t * array,
-    uint32_t array_size)
-{
-    printf("unpack_huffman... of size: %u\n", array_size);
-    HuffmanPair * unpacked_dict = malloc(
-        sizeof(HuffmanPair) * array_size);
-    // initialize dict
-    for (int i = 0; i < array_size; i++) {
-        unpacked_dict[i].value = i;
-        unpacked_dict[i].code_length = array[i];
-    }
-    
-    // this is straight from the deflate spec
-    
-    // 1) Count the number of codes for each code length.  Let
-    // bl_count[N] be the number of codes of length N, N >= 1.
-    uint32_t * bl_count = malloc(64);
-    for (int i = 0; i < 64; i++) {
-        bl_count[i] = 0;
-    }
-    
-    for (int i = 0; i < array_size; i++) {
-        bl_count[array[i]] += 1;
-    }
-    
-    printf("number of codes for each code length:\n");
-    for (int i = 0; i < array_size; i++) {
-        if (bl_count[i] > 0) {
-            printf("length %u has %u codes\n", i, bl_count[i]);
-        }
-    }
-   
-    // 2) Find the numerical value of the smallest code for each
-    //    code length:
-    uint32_t * smallest_code = malloc(200);
-    uint32_t last_code = 0;
-    bl_count[0] = 0;
-    for (uint32_t bits = 1; bits < 32; bits++) {
-        if (bl_count[bits] > 0) {
-            last_code += 1;
-            while (last_code < (1 << (bits - 1))) {
-                last_code <<= 1;
-            }
-            smallest_code[bits] = last_code;
-            assert(smallest_code[bits] < (1 << bits));
-        } else {
-            smallest_code[bits] = 0;
-        }
-    }
-    
-    // 3) Assign numerical values to all codes, using
-    //    consecutive values for all codes of the same length
-    //    with the base values determined at step 2. Codes that
-    //    are never used (which have a bit length of zero) must
-    //    not be assigned a value.
-    for (uint32_t n = 0; n < array_size; n++) {
-        uint32_t len = unpacked_dict[n].code_length;
-        
-        if (len != 0) {
-            unpacked_dict[n].key = smallest_code[len];
-            
-            smallest_code[len]++;
-            assert(smallest_code[len] < (1 << len));
-        }
-    }
-    
-    free(bl_count);
-    free(smallest_code);
-    
-    return unpacked_dict;
-}
 
 /*
 PNG files have many 4-byte big endian values
@@ -273,9 +194,9 @@ uint8_t consume_bits(
     EntireFile * from,
     uint8_t bits_to_consume)
 {
-    assert(bits_to_consume < 9);
+    assert(bits_to_consume < 33);
     
-    uint8_t return_value = 0;
+    uint32_t return_value = 0;
     
     while (bits_to_consume > 0) {
         if (from->bits_left > 0) {
@@ -287,11 +208,11 @@ uint8_t consume_bits(
             from->bits_left -= 1;
             bits_to_consume -= 1;
         } else {
-            from->bit_buffer = *((uint8_t *)from->data);
-            from->bits_left = 8;
+            from->bit_buffer = *((uint32_t *)from->data);
+            from->bits_left = 32;
             
-            from->size_left -= 1;
-            from->data += 1;
+            from->size_left -= 4;
+            from->data += 4;
         }
     }
     
@@ -347,6 +268,120 @@ uint8_t * consume_chunk(
     from->size_left -= size_to_consume;
     
     return return_value;
+}
+
+uint32_t huffman_decode(
+    HuffmanPair * dict,
+    uint32_t dictsize,
+    EntireFile * datastream)
+{
+    printf("huffman_decode...\n");
+    uint32_t raw = 0;
+    int found_at = -1;
+    int bitcount = 0;
+    
+    while (found_at == -1 && bitcount < 15) {
+        bitcount += 1;
+        raw = raw
+            |
+            (consume_bits(
+                /* from: */ datastream,
+                /* size: */ 1)
+                    << bitcount);
+        
+        printf("new raw: %u\n", raw);
+        
+        for (int i = 0; i < dictsize; i++) {
+            if (dict[i].key == raw)
+            {
+                found_at = i;
+                break;
+            }
+        }
+    }
+    
+    if (found_at < 0) {
+        printf(
+            "failed to find raw value:%u in dict\n",
+            raw);
+    } else {
+        printf(
+            "found raw: %u to mean value: %u\n",
+            raw,
+            dict[found_at].value);
+    }
+    
+    assert(found_at >= 0);
+    assert(found_at < dictsize);
+    
+    printf("returning %u\n", dict[found_at].value);
+    
+    return dict[found_at].value;
+};
+
+HuffmanPair * unpack_huffman(
+    uint32_t * array,
+    uint32_t array_size)
+{
+    HuffmanPair * unpacked_dict = malloc(
+        sizeof(HuffmanPair) * array_size);
+    // initialize dict
+    for (int i = 0; i < array_size; i++) {
+        unpacked_dict[i].value = i;
+        unpacked_dict[i].code_length = array[i];
+    }
+    
+    // this is straight from the deflate spec
+    
+    // 1) Count the number of codes for each code length.  Let
+    // bl_count[N] be the number of codes of length N, N >= 1.
+    uint32_t * bl_count = malloc(64);
+    for (int i = 0; i < 64; i++) {
+        bl_count[i] = 0;
+    }
+    
+    for (int i = 0; i < array_size; i++) {
+        bl_count[array[i]] += 1;
+    }
+    
+    // 2) Find the numerical value of the smallest code for each
+    //    code length:
+    uint32_t * smallest_code = malloc(200);
+    uint32_t last_code = 0;
+    bl_count[0] = 0;
+    for (uint32_t bits = 1; bits < 32; bits++) {
+        if (bl_count[bits] > 0) {
+            last_code += 1;
+            while (last_code < (1 << (bits - 1))) {
+                last_code <<= 1;
+            }
+            smallest_code[bits] = last_code;
+            assert(smallest_code[bits] < (1 << bits));
+        } else {
+            smallest_code[bits] = 0;
+        }
+    }
+    
+    // 3) Assign numerical values to all codes, using
+    //    consecutive values for all codes of the same length
+    //    with the base values determined at step 2. Codes that
+    //    are never used (which have a bit length of zero) must
+    //    not be assigned a value.
+    for (uint32_t n = 0; n < array_size; n++) {
+        uint32_t len = unpacked_dict[n].code_length;
+        
+        if (len != 0) {
+            unpacked_dict[n].key = smallest_code[len];
+            
+            smallest_code[len]++;
+            assert(smallest_code[len] < (1 << len));
+        }
+    }
+    
+    free(bl_count);
+    free(smallest_code);
+    
+    return unpacked_dict;
 }
 
 uint8_t *
@@ -566,9 +601,10 @@ int main(int argc, const char * argv[])
                 full_check_value
                 | (idat_header->zlibmethodflags << 8);
             printf(
-                "\t\tfull 16-bit check val (using FCHECK): %u - ",
+                "\t\tfull 16-bit check val (use FCHECK): %u - ",
                 full_check_value);
-            printf(full_check_value % 31 == 0 ? "OK\n" : "ERR\n");
+            printf(
+                full_check_value % 31 == 0 ? "OK\n" : "ERR\n");
             assert(full_check_value != 0);
             assert(full_check_value % 31 == 0);
             
@@ -576,10 +612,11 @@ int main(int argc, const char * argv[])
             sixth bit is FDICT, the 'preset dictionary' flag
             If FDICT is set, a DICT dictionary identifier is
             present immediately after the FLG byte. The
-            dictionary is a sequence of bytes which are initially 
-            fed to the compressor without producing any compressed
-            output. DICT is the Adler-32 checksum of this sequence
-            of bytes (see the definition of ADLER32 below). 
+            dictionary is a sequence of bytes which are
+            initially fed to the compressor without producing
+            any compressed output. DICT is the Adler-32
+            checksum of this sequence of bytes (see the
+            definition of ADLER32 below). 
             
             The decompressor can use this identifier to determine
             which dictionary has been used by the compressor.
@@ -664,22 +701,26 @@ int main(int argc, const char * argv[])
                      read representation of code trees (see
                         subsection below)
                   loop (until end of block code recognized)
-                     decode literal/length value from input stream
+                     decode literal/length value from input
+                     stream
+                    
                      if value < 256
-                        copy value (literal byte) to output stream
+                        copy value (literal byte) to output
+                        stream
                      otherwise
                         if value = end of block (256)
                            break from loop
                         otherwise (value = 257..285)
                            decode distance from input stream
                            
-                           move backwards dist bytes in the output
-                           stream, and copy length bytes from this
-                           position to the output stream.
+                           move backwards dist bytes in the
+                           output stream, and copy length bytes
+                           from this position to the output
+                           stream.
                   end loop
             while not last block
             */
-             
+            
             switch (BTYPE) {
                 case (0):
                     printf("\t\t\tBTYPE 0 - No compression\n");
@@ -712,7 +753,7 @@ int main(int argc, const char * argv[])
                     entire_file->data += 2;
                     entire_file->size_left -= 2;
                     printf(
-                        "\t\t\tcompr. block has NLEN: %d bytes\n",
+                        "\t\t\tcompr. blck has NLEN:%d byte\n",
                         NLEN);
                     printf(
                         "\t\t\t1's complement of LEN was: %u\n",
@@ -725,7 +766,8 @@ int main(int argc, const char * argv[])
                 case (1):
                     printf("\t\t\tBTYPE 1 - Fixed Huffman\n");
                     printf("\t\t\tPNG format unsupported.");
-                    
+                   
+                    // TODO: handle fixed huffman 
                     return 1;
                     
                     break;
@@ -753,15 +795,15 @@ int main(int argc, const char * argv[])
                 Example:  Codes 8, 16 (+2 bits 11),
                     16 (+2 bits 10) will expand to
                     12 code lengths of 8 (1 + 6 + 5)
-              
+            
             17: Repeat a code length of 0
                 for 3 - 10 times.
                (3 bits of length)
-
+            
             18: Repeat a code length of 0
                 for 11 - 138 times
                (7 bits of length) 
-                   
+            
             A code length of 0 indicates that the corresponding
             symbol in the literal/length or distance alphabet
             will not occur in the block, and should not
@@ -772,33 +814,7 @@ int main(int argc, const char * argv[])
             with one unused code. One distance code of zero
             bits means that there are no distance codes used at
             all (the data is all literals).
-            
-            We can now define the format of the block:
-
-            5 Bits: HLIT (size of huffman literal dict)
-            # of Literal/Length codes - 257 (257 - 286)
-            
-            5 Bits: HDIST (size of huffman distance dict)
-            # of Distance codes - 1        (1 - 32)
-            
-            4 Bits: HCLEN (size of huffman code length dict)
-            # of Code Length codes - 4     (4 - 19)
-            
-            (HCLEN + 4) x 3 bits: code lengths for the code length
-            
-            alphabet given just above, in the order:
-            16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3,
-            13, 2, 14, 1, 15
-            
-            These code lengths are interpreted as 3-bit integers
-            
-            (0-7); as above, a code length of 0 means the
-            
-            corresponding symbol (literal/length or distance code
-            
-            length) is not used.
             */
-
                     // 5 Bits: HLIT (huffman literal)
                     // number of Literal/Length codes - 257
                     // (257 - 286)
@@ -821,7 +837,6 @@ int main(int argc, const char * argv[])
                     printf(
                         "\t\t\tHDIST: %u (expect 1-32)\n",
                         HDIST);
-                    
                     
                     // 4 Bits: HCLEN (huffman code length)
                     // # of Code Length codes - 4
@@ -860,11 +875,14 @@ int main(int argc, const char * argv[])
                     // these are code lengths for the code length
                     // dictionary,
                     // and they'll come in swizzled order
-                    uint32_t HCLEN_table[20] = {};
+
+                    uint32_t HCLEN_table[
+                        NUM_UNIQUE_CODELENGTHS] = {};
                     
                     printf("\t\t\tReading raw code lengths:\n");
                     for (uint32_t i = 0; i < HCLEN; i++) {
-                        assert(swizzle[i] < 20);
+                        assert(swizzle[i] <
+                            NUM_UNIQUE_CODELENGTHS);
                         HCLEN_table[swizzle[i]] =
                             reverse_bit_order(consume_bits(
                                 /* from: */ entire_file,
@@ -881,127 +899,163 @@ int main(int argc, const char * argv[])
                     We now have some values in HCLEN_table,
                     but these are themselves 'compressed'
                     and need to be unpacked.
-                    
-                    0 - 15: Represent code lengths of 0 - 15
-                    16: Copy previous code length 3-6 times.
-                        2 extra bits for repeat length
-                        (0 = 3, ... , 3 = 6)
-                    17: Repeat a code length of 0 for 3 - 10
-                        times.
-                        3 extra bits for length
-                    18: Repeat a code length of 0 for
-                        11 - 138 times
-                        7 extra bits for length
-                    */
-                    
+                    */ 
                     printf("\t\t\tUnpack code lengths table:\n");
                     
                     HuffmanPair * codelengths_huffman =
                         unpack_huffman(
-                            /* array:     : */ HCLEN_table,
-                            /* array_size : */ 20);
+                            /* array:     : */
+                                HCLEN_table,
+                            /* array_size : */
+                                NUM_UNIQUE_CODELENGTHS);
                     
-                    for (int i = 0; i < 20; i++) {
-                        if (codelengths_huffman[i].code_length
-                                > 0)
-                        {
-                            printf(
-                             "\t\t%s[%u] key:%u %s:%u val:%u\n",
-                             "codelengths_huffman",
-                             i,
-                             codelengths_huffman[i].key,
-                             "code length",
-                             codelengths_huffman[i].code_length,
-                             codelengths_huffman[i].value);
-                        }
+                    for (
+                        int i = 0;
+                        i < NUM_UNIQUE_CODELENGTHS;
+                        i++)
+                    {
+                        printf(
+                            "\t\t%s[%u] key:%u %s:%u val:%u\n",
+                            "codelengths_huffman",
+                            i,
+                            codelengths_huffman[i].key,
+                            "code length",
+                            codelengths_huffman[i].code_length,
+                            codelengths_huffman[i].value);
+                        assert(
+                          codelengths_huffman[i].value >= 0);
+                        assert(
+                          codelengths_huffman[i].value < 19);
                     }
                     
-                    // uint32_t len_i = 0;
-                    // uint32_t output_size = HLIT + HDIST;
-                    // while (len_i < output_size) {
-                    //     uint32_t raw_len = consume_bits(
-                    //         /* from: */ entire_file,
-                    //         /* size: */ 3);
-                    //     uint32_t encoded_len = huffman_decode(
-                    //         /* dict: */ &dict_huffman,
-                    //         /* raw: */ raw_len);
-                    //     
-                    //     if (encoded_len <= 15) {
-                    //         litlendist_table[len_i] =
-                    //             encoded_len;
-                    //         len_i++;
-                    //     } else if (encoded_len == 16) {
-                    //         uint32_t extra_bits_repeat =
-                    //             consume_bits(
-                    //                 /* from: */ entire_file,
-                    //                 /* size: */ 2);
-                    //         uint32_t repeats =
-                    //             extra_bits_repeat + 3;
-                    //         for (
-                    //             int i = 0;
-                    //             0 < repeats;
-                    //             i++)
-                    //         {
-                    //             // 16: Copy the previous code
-                    //             // length 3 - 6 times.
-                    //             litlendist_table[len_i] =
-                    //                 litlendist_table[len_i - 1];
-                    //             len_i++;
-                    //         }
-                    //     } else if (encoded_len == 17) {
-                    //         uint32_t extra_bits_repeat =
-                    //             consume_bits(
-                    //                 /* from: */ entire_file,
-                    //                 /* size: */ 3);
-                    //         uint32_t repeats =
-                    //             extra_bits_repeat + 3;
-                    //         
-                    //         for (
-                    //             int i = 0;
-                    //             0 < repeats;
-                    //             i++)
-                    //         {
-                    //             // TODO: I think repeat 0
-                    //             // casey thinks
-                    //             // repeat encoded_len
-                    //             litlendist_table[len_i] = 0;
-                    //             len_i++;
-                    //         }
-                    //         
-                    //     } else if (encoded_len == 18) {
-                    //         uint32_t extra_bits_repeat =
-                    //             consume_bits(
-                    //                 /* from: */ entire_file,
-                    //                 /* size: */ 7);
-                    //         uint32_t repeats =
-                    //             extra_bits_repeat + 11;
-                    //         
-                    //         for (
-                    //             int i = 0;
-                    //             0 < repeats;
-                    //             i++)
-                    //         {
-                    //             // TODO: I think repeat 0
-                    //             // casey thinks
-                    //             // repeat encoded_len
-                    //             litlendist_table[len_i] = 0;
-                    //             len_i++;
-                    //         }
-                    //     } else {
-                    //         printf(
-                    //             "ERROR : encoded_len %u\n",
-                    //             encoded_len);
-                    //         return 1;
-                    //     }
-                    // }
+                    /*
+                    Now we have an unpacked table with code
+                    lengths from 0 to 18. Each code length
+                    implies a different action, see below.
+                    */
+                    
+                    uint32_t len_i = 0;
+                    uint32_t output_size = HLIT + HDIST;
+                    
+                    uint32_t * litlendist_table = malloc(
+                        sizeof(uint32_t) * output_size);
+                   
+                    uint32_t previous_len = 0;
+                    
+                    while (len_i < output_size) {
+                        uint32_t encoded_len = huffman_decode(
+                            /* dict: */
+                                codelengths_huffman,
+                            /* dictsize: */
+                                NUM_UNIQUE_CODELENGTHS,
+                            /* raw data: */
+                                entire_file);
+                        
+                        if (encoded_len <= 15) {
+                            printf("handle encoded_len < 16\n");
+                            litlendist_table[len_i] =
+                                encoded_len;
+                            len_i++;
+                        } else if (encoded_len == 16) {
+                        /*
+                        !COPIED FROM SPECIFICATION!
+                        16: Copy previous code length 3-6 times.
+                            2 extra bits for repeat length
+                            (0 = 3, ... , 3 = 6)
+                        */
+                            printf("handle encoded_len 16\n");
+                            uint32_t extra_bits_repeat =
+                                consume_bits(
+                                    /* from: */ entire_file,
+                                    /* size: */ 2);
+                            uint32_t repeats =
+                                extra_bits_repeat + 3;
+                            printf(
+                                "%u repeats of previous: %u\n",
+                                repeats,
+                                previous_len);
+                            assert(repeats >= 3);
+                            assert(repeats < 6);
+                            
+                            for (
+                                int i = 0;
+                                0 < repeats;
+                                i++)
+                            {
+                                litlendist_table[len_i] =
+                                    previous_len;
+                                len_i++;
+                            }
+                        } else if (encoded_len == 17) {
+                        /*
+                        !COPIED FROM SPECIFICATION!
+                        17: Repeat a code length of 0 for 3 - 10
+                            times.
+                            3 extra bits for length
+                        */
+                            printf("handle encoded_len 17\n");
+                            uint32_t extra_bits_repeat =
+                                consume_bits(
+                                    /* from: */ entire_file,
+                                    /* size: */ 3);
+                            uint32_t repeats =
+                                extra_bits_repeat + 3;
+                            printf("repeats: %u\n", repeats);
+                            assert(repeats >= 3);
+                            assert(repeats < 11);
+                            
+                            for (
+                                int i = 0;
+                                i < repeats;
+                                i++)
+                            {
+                                litlendist_table[len_i] = 0;
+                                len_i++;
+                            }
+                            
+                        } else if (encoded_len == 18) {
+                        /*
+                        !COPIED FROM SPECIFICATION!
+                        18: Repeat a code length of 0 for
+                            11 - 138 times
+                            7 extra bits for length
+                        */
+                            uint32_t extra_bits_repeat =
+                                consume_bits(
+                                    /* from: */ entire_file,
+                                    /* size: */ 7);
+                            uint32_t repeats =
+                                extra_bits_repeat + 11;
+                            printf("repeats: %u\n", repeats);
+                            assert(repeats >= 11);
+                            assert(repeats < 139);
+                            
+                            for (
+                                int i = 0;
+                                0 < repeats;
+                                i++)
+                            {
+                                litlendist_table[len_i] = 0;
+                                len_i++;
+                            }
+                        } else {
+                            printf(
+                                "ERROR : encoded_len %u\n",
+                                encoded_len);
+                            return 1;
+                        }
+                        
+                        previous_len = encoded_len;
+                    }
+                    
                     printf("\t\t\tfinished reading len_count");
-                    // assert(len_i == output_size);
-                    // for (int i = 0; i < 512; i++) {
-                    //     printf(
-                    //         "\t\t\tlitlendist_table[%u]: %u\n",
-                    //         i,
-                    //         litlendist_table[i]);
-                    // }
+                    assert(len_i == output_size);
+                    for (int i = 0; i < 512; i++) {
+                        printf(
+                            "\t\t\tlitlendist_table[%u]: %u\n",
+                            i,
+                            litlendist_table[i]);
+                    }
                     
                     break;
                 case (3):
@@ -1017,7 +1071,6 @@ int main(int argc, const char * argv[])
             
             assert(BTYPE < 3);
             
-                        
             break;
             
             // skip data
@@ -1039,7 +1092,7 @@ int main(int argc, const char * argv[])
         {
             uint32_t skip = chunk_header->length;
             printf(
-                "\tskip unhandled lowercase noncritical chunk\n");
+                "\tskip unhandled lowercase noncriticl chunk\n");
             
             entire_file->data += skip;
             
