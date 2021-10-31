@@ -17,7 +17,7 @@ typedef struct EntireFile {
     void * data;
     
     uint8_t bits_left;
-    uint32_t bit_buffer;
+    uint8_t bit_buffer;
     
     size_t size_left;
 } EntireFile;
@@ -190,29 +190,95 @@ you consume 2 bits and get: 01 which is 1
 you consume another 2 bits and get: 10 which is 2
 i have no function yet that does this
 */
+
+// TODO: This is casey's version!!
+// (multiple methods commented out)
+// Remove this after studying & debugging
+// #define Consume(File, type) (type *)ConsumeSize(File, sizeof(type))
+// internal void *
+// ConsumeSize(stream *File, u32 Size)
+// {
+//     RefillIfNecessary(File);
+//     
+//     void *Result = Advance(&File->Contents, Size);
+//     if(!Result)
+//     {
+//         File->Underflowed = true;
+//     }
+//     
+//     Assert(!File->Underflowed);
+//     
+//     return(Result);
+// }
+// 
+// internal u32
+// PeekBits(stream *Buf, u32 BitCount)
+// {
+//     Assert(BitCount <= 32);
+//     
+//     u32 Result = 0;
+//     
+//     while((Buf->BitCount < BitCount) &&
+//           !Buf->Underflowed)
+//     {
+//         u32 Byte = *Consume(Buf, u8);
+//         Buf->BitBuf |= (Byte << Buf->BitCount);
+//         Buf->BitCount += 8;
+//     }
+//     
+//     Result = Buf->BitBuf & ((1 << BitCount) - 1);
+//     
+//     return(Result);
+// }
+// 
+// internal void
+// DiscardBits(stream *Buf, u32 BitCount)
+// {
+//     Buf->BitCount -= BitCount;
+//     Buf->BitBuf >>= BitCount;
+// }
+// 
+// internal u32
+// ConsumeBits(stream *Buf, u32 BitCount)
+// {
+//     u32 Result = PeekBits(Buf, BitCount);
+//     DiscardBits(Buf, BitCount);
+//     
+//     return(Result);
+// }
+// 
+// internal void
+// FlushByte(stream *Buf)
+// {
+//     u32 FlushCount = (Buf->BitCount % 8);
+//     ConsumeBits(Buf, FlushCount);
+// }
+
 uint8_t consume_bits(
     EntireFile * from,
     uint8_t bits_to_consume)
 {
-    assert(bits_to_consume < 33);
+    assert(bits_to_consume > 0);
+    assert(bits_to_consume < 9);
     
-    uint32_t return_value = 0;
+    uint8_t return_value = 0;
+    int bits_in_return = 0; 
     
     while (bits_to_consume > 0) {
         if (from->bits_left > 0) {
-            return_value = return_value << 1;
-            return_value =
-                return_value
-                | (from->bit_buffer & 1);
-            from->bit_buffer = from->bit_buffer >> 1;
+            return_value |=
+                ((from->bit_buffer & 1) << bits_in_return);
+            bits_in_return += 1;
+            
+            from->bit_buffer >>= 1;
             from->bits_left -= 1;
             bits_to_consume -= 1;
         } else {
-            from->bit_buffer = *((uint32_t *)from->data);
-            from->bits_left = 32;
+            from->bit_buffer = *((uint8_t *)from->data);
+            from->bits_left = 8;
             
-            from->size_left -= 4;
-            from->data += 4;
+            from->size_left -= 1;
+            from->data += 1;
         }
     }
     
@@ -255,6 +321,7 @@ uint8_t * consume_chunk(
     EntireFile * from,
     size_t size_to_consume)
 {
+    assert(from->bits_left == 0);
     assert(from->size_left >= size_to_consume);
     
     uint8_t * return_value = malloc(size_to_consume);
@@ -275,24 +342,37 @@ uint32_t huffman_decode(
     uint32_t dictsize,
     EntireFile * datastream)
 {
-    printf("huffman_decode...\n");
     uint32_t raw = 0;
     int found_at = -1;
     int bitcount = 0;
     
     while (found_at == -1 && bitcount < 15) {
         bitcount += 1;
-        raw = raw
-            |
-            (consume_bits(
+       
+        /*
+        Spec:
+        "Huffman codes are packed starting with the most-
+            significant bit of the code."
+
+        That means that every time we load a new bit,
+        we have to shift what we already have and add
+        the new bit to the right.
+        */
+        raw = (raw << 1) |
+            consume_bits(
                 /* from: */ datastream,
-                /* size: */ 1)
-                    << bitcount);
-        
-        printf("new raw: %u\n", raw);
+                /* size: */ 1);
+        printf(
+            "searching for %u at bitcount:%u bitbuf:%u\n",
+            raw,
+            bitcount,
+            datastream->bits_left);
         
         for (int i = 0; i < dictsize; i++) {
-            if (dict[i].key == raw)
+            // TODO: don't just compare key, compare
+            // the sequence of bits exactly
+            if (dict[i].key == raw
+                && bitcount == dict[i].code_length)
             {
                 found_at = i;
                 break;
@@ -304,6 +384,7 @@ uint32_t huffman_decode(
         printf(
             "failed to find raw value:%u in dict\n",
             raw);
+        assert(1 == 2);
     } else {
         printf(
             "found raw: %u to mean value: %u\n",
@@ -314,7 +395,7 @@ uint32_t huffman_decode(
     assert(found_at >= 0);
     assert(found_at < dictsize);
     
-    printf("returning %u\n", dict[found_at].value);
+    assert(dict[found_at].value < 286);
     
     return dict[found_at].value;
 };
@@ -325,18 +406,23 @@ HuffmanPair * unpack_huffman(
 {
     HuffmanPair * unpacked_dict = malloc(
         sizeof(HuffmanPair) * array_size);
+    
     // initialize dict
     for (int i = 0; i < array_size; i++) {
         unpacked_dict[i].value = i;
         unpacked_dict[i].code_length = array[i];
+        // printf(
+        //     "unpacked_dict[%u].code_length set to: %u\n",
+        //     i,
+        //     unpacked_dict[i].code_length);
     }
     
     // this is straight from the deflate spec
     
     // 1) Count the number of codes for each code length.  Let
     // bl_count[N] be the number of codes of length N, N >= 1.
-    uint32_t * bl_count = malloc(64);
-    for (int i = 0; i < 64; i++) {
+    uint32_t * bl_count = malloc(array_size);
+    for (int i = 0; i < array_size; i++) {
         bl_count[i] = 0;
     }
     
@@ -344,37 +430,63 @@ HuffmanPair * unpack_huffman(
         bl_count[array[i]] += 1;
     }
     
-    // 2) Find the numerical value of the smallest code for each
-    //    code length:
+    // Spec: 
+    // 2) "Find the numerical value of the smallest code for each
+    //    code length:"
     uint32_t * smallest_code = malloc(200);
-    uint32_t last_code = 0;
+    uint32_t code = 0;
+    
+    // this code is yanked straight from the spec
     bl_count[0] = 0;
-    for (uint32_t bits = 1; bits < 32; bits++) {
-        if (bl_count[bits] > 0) {
-            last_code += 1;
-            while (last_code < (1 << (bits - 1))) {
-                last_code <<= 1;
+    for (uint32_t bits = 1; bits < 13; bits++) {
+        code = (code + bl_count[bits-1]) << 1;
+        smallest_code[bits] = code;
+        
+        // this algorithm is very tight
+        // smallest_code[bits] may get a value too big
+        // to fit inside bits, but that only happens when
+        // there are no values for that bit size (and many codes
+        // are taken up for smaller bit lengths). It could also
+        // happen when the PNG is corrupted and the code lengths
+        // are wrong (too many small code lengths)
+        if (smallest_code[bits] >= (1 << bits)) {
+            bool32_t actually_used = false;
+            for (int i = 0; i < array_size; i++) {
+                if (unpacked_dict[i].code_length == bits) {
+                    actually_used = true;
+                }
             }
-            smallest_code[bits] = last_code;
-            assert(smallest_code[bits] < (1 << bits));
-        } else {
-            smallest_code[bits] = 0;
+           
+            if (actually_used) {
+                printf(
+                    "ERROR: smallest_code[%u] was %u%s",
+                    bits,
+                    smallest_code[bits],
+                    " - value can't fit in that few bits!\n");
+                assert(1 == 2);
+            }
         }
     }
     
-    // 3) Assign numerical values to all codes, using
+    // Spec: 
+    // 3) "Assign numerical values to all codes, using
     //    consecutive values for all codes of the same length
     //    with the base values determined at step 2. Codes that
     //    are never used (which have a bit length of zero) must
-    //    not be assigned a value.
+    //    not be assigned a value."
     for (uint32_t n = 0; n < array_size; n++) {
         uint32_t len = unpacked_dict[n].code_length;
         
-        if (len != 0) {
+        if (len != 0 && unpacked_dict[n].code_length > 0) {
+            assert(smallest_code[len] < (1 << len));
+            
             unpacked_dict[n].key = smallest_code[len];
+            printf(
+                "set unpacked_dict[%u] key to: %u\n",
+                n,
+                unpacked_dict[n].key);
             
             smallest_code[len]++;
-            assert(smallest_code[len] < (1 << len));
         }
     }
     
@@ -678,10 +790,19 @@ int main(int argc, const char * argv[])
             printf(
                 "\t\t\tBFINAL (flag for final block): %u\n",
                 BFINAL);
-            
-            uint8_t BTYPE = reverse_bit_order(consume_bits(
+           
+            // Jelle: I stumbled my way into using
+            // reverse_bit_order here (because it appears to
+            // solve the problem accidentally) casey does
+            // no such thing 
+            // uint8_t BTYPE = reverse_bit_order(
+            //     consume_bits(
+            //         /* buffer: */ entire_file,
+            //         /* size  : */ 2),
+            //     2);
+            uint8_t BTYPE =  consume_bits(
                 /* buffer: */ entire_file,
-                /* size  : */ 2), 2);
+                /* size  : */ 2);
             
             char * btype_description;
             
@@ -760,7 +881,8 @@ int main(int argc, const char * argv[])
                         ~LEN);
                     assert(NLEN == ~LEN);
                     
-                    // TODO: copy LEN bytes of data to output
+                    // TODO: handle no compression
+                    // copy LEN bytes of data to output
                     
                     break;
                 case (1):
@@ -843,7 +965,7 @@ int main(int argc, const char * argv[])
                     // (4 - 19)
                     uint32_t HCLEN = consume_bits(
                         /* from: */ entire_file,
-                        /* size: */ 4);
+                        /* size: */ 4) + 4;
                     printf(
                         "\t\t\tHCLEN: %u (4-19 vals of 0-6)\n",
                         HCLEN);
@@ -875,7 +997,7 @@ int main(int argc, const char * argv[])
                     // these are code lengths for the code length
                     // dictionary,
                     // and they'll come in swizzled order
-
+                    
                     uint32_t HCLEN_table[
                         NUM_UNIQUE_CODELENGTHS] = {};
                     
@@ -883,10 +1005,19 @@ int main(int argc, const char * argv[])
                     for (uint32_t i = 0; i < HCLEN; i++) {
                         assert(swizzle[i] <
                             NUM_UNIQUE_CODELENGTHS);
+                        // HCLEN_table[swizzle[i]] =
+                        //     reverse_bit_order(
+                        //         consume_bits(
+                        //             /* from: */ entire_file,
+                        //             /* size: */ 3),
+                        //         3);
                         HCLEN_table[swizzle[i]] =
-                            reverse_bit_order(consume_bits(
-                                /* from: */ entire_file,
-                                /* size: */ 3), 3);
+                                consume_bits(
+                                    /* from: */ entire_file,
+                                    /* size: */ 3);
+                        assert(HCLEN_table[swizzle[i]] <= 7);
+                        assert(HCLEN_table[swizzle[i]] >= 0);
+                        
                         printf(
                             "\t\t\ti:%u -> %s[%u]: %u\n",
                             i,
@@ -898,7 +1029,7 @@ int main(int argc, const char * argv[])
                     /*
                     We now have some values in HCLEN_table,
                     but these are themselves 'compressed'
-                    and need to be unpacked.
+                    and need to be unpacked
                     */ 
                     printf("\t\t\tUnpack code lengths table:\n");
                     
@@ -914,6 +1045,13 @@ int main(int argc, const char * argv[])
                         i < NUM_UNIQUE_CODELENGTHS;
                         i++)
                     {
+                        if (
+                            codelengths_huffman[i].code_length
+                                == 0)
+                        {
+                            continue;
+                        }
+                        
                         printf(
                             "\t\t%s[%u] key:%u %s:%u val:%u\n",
                             "codelengths_huffman",
@@ -922,6 +1060,7 @@ int main(int argc, const char * argv[])
                             "code length",
                             codelengths_huffman[i].code_length,
                             codelengths_huffman[i].value);
+                        
                         assert(
                           codelengths_huffman[i].value >= 0);
                         assert(
@@ -932,17 +1071,27 @@ int main(int argc, const char * argv[])
                     Now we have an unpacked table with code
                     lengths from 0 to 18. Each code length
                     implies a different action, see below.
+                    
+                    We need to use this 'code length' table
+                    to create 2 new tables of codes before we
+                    can finally fully unpack:
+                    - HLIT + 257 code lengths for the
+                      literal/length alphabet, encoded using
+                      the code length Huffman code
+                    - HDIST + 1 code lengths for the distance
+                      alphabet, encoded using the code length
+                      Huffman code
                     */
                     
                     uint32_t len_i = 0;
-                    uint32_t output_size = HLIT + HDIST;
+                    uint32_t two_dicts_size = HLIT + HDIST;
                     
                     uint32_t * litlendist_table = malloc(
-                        sizeof(uint32_t) * output_size);
-                   
+                        sizeof(uint32_t) * two_dicts_size);
+                    
                     uint32_t previous_len = 0;
                     
-                    while (len_i < output_size) {
+                    while (len_i < two_dicts_size) {
                         uint32_t encoded_len = huffman_decode(
                             /* dict: */
                                 codelengths_huffman,
@@ -952,7 +1101,6 @@ int main(int argc, const char * argv[])
                                 entire_file);
                         
                         if (encoded_len <= 15) {
-                            printf("handle encoded_len < 16\n");
                             litlendist_table[len_i] =
                                 encoded_len;
                             len_i++;
@@ -963,17 +1111,19 @@ int main(int argc, const char * argv[])
                             2 extra bits for repeat length
                             (0 = 3, ... , 3 = 6)
                         */
-                            printf("handle encoded_len 16\n");
+                            printf("case 16 (repeat prev)...\n");
                             uint32_t extra_bits_repeat =
                                 consume_bits(
                                     /* from: */ entire_file,
                                     /* size: */ 2);
+                            printf(
+                                "extra bits: %u...\n",
+                                extra_bits_repeat);
                             uint32_t repeats =
                                 extra_bits_repeat + 3;
                             printf(
-                                "%u repeats of previous: %u\n",
-                                repeats,
-                                previous_len);
+                                "repeats: %u...\n",
+                                repeats);
                             assert(repeats >= 3);
                             assert(repeats < 6);
                             
@@ -993,14 +1143,13 @@ int main(int argc, const char * argv[])
                             times.
                             3 extra bits for length
                         */
-                            printf("handle encoded_len 17\n");
                             uint32_t extra_bits_repeat =
                                 consume_bits(
                                     /* from: */ entire_file,
                                     /* size: */ 3);
                             uint32_t repeats =
                                 extra_bits_repeat + 3;
-                            printf("repeats: %u\n", repeats);
+                            
                             assert(repeats >= 3);
                             assert(repeats < 11);
                             
@@ -1026,7 +1175,6 @@ int main(int argc, const char * argv[])
                                     /* size: */ 7);
                             uint32_t repeats =
                                 extra_bits_repeat + 11;
-                            printf("repeats: %u\n", repeats);
                             assert(repeats >= 11);
                             assert(repeats < 139);
                             
@@ -1048,9 +1196,16 @@ int main(int argc, const char * argv[])
                         previous_len = encoded_len;
                     }
                     
-                    printf("\t\t\tfinished reading len_count");
-                    assert(len_i == output_size);
-                    for (int i = 0; i < 512; i++) {
+                    printf("\t\t\tfinished reading two dicts");
+                    assert(len_i == two_dicts_size);
+                    for (
+                        int i = 0;
+                        i < NUM_UNIQUE_CODELENGTHS;
+                        i++)
+                    {
+                        if (litlendist_table[i] == 0) {
+                            continue;
+                        }
                         printf(
                             "\t\t\tlitlendist_table[%u]: %u\n",
                             i,
