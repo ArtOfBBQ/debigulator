@@ -362,11 +362,6 @@ uint32_t huffman_decode(
             consume_bits(
                 /* from: */ datastream,
                 /* size: */ 1);
-        printf(
-            "searching for %u at bitcount:%u bitbuf:%u\n",
-            raw,
-            bitcount,
-            datastream->bits_left);
         
         for (int i = 0; i < dictsize; i++) {
             // TODO: don't just compare key, compare
@@ -385,11 +380,6 @@ uint32_t huffman_decode(
             "failed to find raw value:%u in dict\n",
             raw);
         assert(1 == 2);
-    } else {
-        printf(
-            "found raw: %u to mean value: %u\n",
-            raw,
-            dict[found_at].value);
     }
     
     assert(found_at >= 0);
@@ -481,10 +471,6 @@ HuffmanPair * unpack_huffman(
             assert(smallest_code[len] < (1 << len));
             
             unpacked_dict[n].key = smallest_code[len];
-            printf(
-                "set unpacked_dict[%u] key to: %u\n",
-                n,
-                unpacked_dict[n].key);
             
             smallest_code[len]++;
         }
@@ -1017,13 +1003,6 @@ int main(int argc, const char * argv[])
                                     /* size: */ 3);
                         assert(HCLEN_table[swizzle[i]] <= 7);
                         assert(HCLEN_table[swizzle[i]] >= 0);
-                        
-                        printf(
-                            "\t\t\ti:%u -> %s[%u]: %u\n",
-                            i,
-                            "HCLEN_table",
-                            swizzle[i],
-                            HCLEN_table[swizzle[i]]);
                     }
                     
                     /*
@@ -1031,7 +1010,7 @@ int main(int argc, const char * argv[])
                     but these are themselves 'compressed'
                     and need to be unpacked
                     */ 
-                    printf("\t\t\tUnpack code lengths table:\n");
+                    printf("\t\t\tUnpack code lengths table...\n");
                     
                     HuffmanPair * codelengths_huffman =
                         unpack_huffman(
@@ -1051,15 +1030,6 @@ int main(int argc, const char * argv[])
                         {
                             continue;
                         }
-                        
-                        printf(
-                            "\t\t%s[%u] key:%u %s:%u val:%u\n",
-                            "codelengths_huffman",
-                            i,
-                            codelengths_huffman[i].key,
-                            "code length",
-                            codelengths_huffman[i].code_length,
-                            codelengths_huffman[i].value);
                         
                         assert(
                           codelengths_huffman[i].value >= 0);
@@ -1085,6 +1055,9 @@ int main(int argc, const char * argv[])
                     
                     uint32_t len_i = 0;
                     uint32_t two_dicts_size = HLIT + HDIST;
+                    printf(
+                        "\t\t\tunpacking lit/len dicts using %s...\n",
+                        "unpacked code lengths table");
                     
                     uint32_t * litlendist_table = malloc(
                         sizeof(uint32_t) * two_dicts_size);
@@ -1111,25 +1084,19 @@ int main(int argc, const char * argv[])
                             2 extra bits for repeat length
                             (0 = 3, ... , 3 = 6)
                         */
-                            printf("case 16 (repeat prev)...\n");
                             uint32_t extra_bits_repeat =
                                 consume_bits(
                                     /* from: */ entire_file,
                                     /* size: */ 2);
-                            printf(
-                                "extra bits: %u...\n",
-                                extra_bits_repeat);
                             uint32_t repeats =
                                 extra_bits_repeat + 3;
-                            printf(
-                                "repeats: %u...\n",
-                                repeats);
+                            
                             assert(repeats >= 3);
-                            assert(repeats < 6);
+                            assert(repeats <= 6);
                             
                             for (
                                 int i = 0;
-                                0 < repeats;
+                                i < repeats;
                                 i++)
                             {
                                 litlendist_table[len_i] =
@@ -1180,7 +1147,7 @@ int main(int argc, const char * argv[])
                             
                             for (
                                 int i = 0;
-                                0 < repeats;
+                                i < repeats;
                                 i++)
                             {
                                 litlendist_table[len_i] = 0;
@@ -1196,11 +1163,11 @@ int main(int argc, const char * argv[])
                         previous_len = encoded_len;
                     }
                     
-                    printf("\t\t\tfinished reading two dicts");
+                    printf("\t\t\tfinished reading two dicts\n");
                     assert(len_i == two_dicts_size);
                     for (
                         int i = 0;
-                        i < NUM_UNIQUE_CODELENGTHS;
+                        i < two_dicts_size;
                         i++)
                     {
                         if (litlendist_table[i] == 0) {
