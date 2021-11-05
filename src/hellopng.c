@@ -9,10 +9,6 @@ typedef int32_t bool32_t;
 
 #define NUM_UNIQUE_CODELENGTHS 19
 
-/*
-I'm not sure how to deal with this in C,
-I just want an array with the size stored
-*/
 typedef struct EntireFile {
     void * data;
     
@@ -36,22 +32,13 @@ typedef struct PNGSignature {
     char unix_style_line_ending;      // Unix/DOS artifact
 } PNGSignature;
 
-/*
-A PNG Chunk header
-Length           (4 bytes)
-Chunk type/name  (4 bytes)
-
-Will be followed by the data
-Chunk data       (length bytes)
-CRC checksum     (4 bytes)
-*/
 typedef struct PNGChunkHeader {
     uint32_t length;     // big endian
     char type[4];        // 1st letter upper = critical chunk
 } PNGChunkHeader;
 
-
 /*
+Spec:
 IHDR must be the first chunk; it contains (in this order)
 the image's width (4 bytes);
 height (4 bytes);
@@ -72,37 +59,21 @@ typedef struct IHDRBody {
     uint8_t  interlace_method;
 } IHDRBody;
 
-/* IDAT chunks have their own header
-
-*/
 typedef struct IDATHeader {
     uint8_t zlibmethodflags;
     uint8_t additionalflags;
 } IDATHeader;
-
-typedef struct IDATFooter {
-    uint32_t checkvalue;
-} IDATFooter;
 #pragma pack(pop)
 
-typedef struct HuffmanPair {
+typedef struct HuffmanEntry {
     uint32_t key;
     uint32_t code_length;
     uint32_t value;
-} HuffmanPair;
+} HuffmanEntry;
 
 /*
 PNG files have many 4-byte big endian values
 We need to able to flip them to little endian
-
-Bitwise operations reminder:
-Operator	Effect
-&               Bitwise AND operator
-|               Bitwise OR operator
-^               Bitwise exclusive OR operator
-~               Binary One’s Complement Operator
-<<              Left shift 
->>              Right shift
 */
 void flip_endian(uint32_t * to_flip) {
     uint32_t flipping = *to_flip;
@@ -191,69 +162,6 @@ you consume another 2 bits and get: 10 which is 2
 i have no function yet that does this
 */
 
-// TODO: This is casey's version!!
-// (multiple methods commented out)
-// Remove this after studying & debugging
-// #define Consume(File, type) (type *)ConsumeSize(File, sizeof(type))
-// internal void *
-// ConsumeSize(stream *File, u32 Size)
-// {
-//     RefillIfNecessary(File);
-//     
-//     void *Result = Advance(&File->Contents, Size);
-//     if(!Result)
-//     {
-//         File->Underflowed = true;
-//     }
-//     
-//     Assert(!File->Underflowed);
-//     
-//     return(Result);
-// }
-// 
-// internal u32
-// PeekBits(stream *Buf, u32 BitCount)
-// {
-//     Assert(BitCount <= 32);
-//     
-//     u32 Result = 0;
-//     
-//     while((Buf->BitCount < BitCount) &&
-//           !Buf->Underflowed)
-//     {
-//         u32 Byte = *Consume(Buf, u8);
-//         Buf->BitBuf |= (Byte << Buf->BitCount);
-//         Buf->BitCount += 8;
-//     }
-//     
-//     Result = Buf->BitBuf & ((1 << BitCount) - 1);
-//     
-//     return(Result);
-// }
-// 
-// internal void
-// DiscardBits(stream *Buf, u32 BitCount)
-// {
-//     Buf->BitCount -= BitCount;
-//     Buf->BitBuf >>= BitCount;
-// }
-// 
-// internal u32
-// ConsumeBits(stream *Buf, u32 BitCount)
-// {
-//     u32 Result = PeekBits(Buf, BitCount);
-//     DiscardBits(Buf, BitCount);
-//     
-//     return(Result);
-// }
-// 
-// internal void
-// FlushByte(stream *Buf)
-// {
-//     u32 FlushCount = (Buf->BitCount % 8);
-//     ConsumeBits(Buf, FlushCount);
-// }
-
 uint8_t consume_bits(
     EntireFile * from,
     uint8_t bits_to_consume)
@@ -338,7 +246,7 @@ uint8_t * consume_chunk(
 }
 
 uint32_t huffman_decode(
-    HuffmanPair * dict,
+    HuffmanEntry * dict,
     uint32_t dictsize,
     EntireFile * datastream)
 {
@@ -385,17 +293,15 @@ uint32_t huffman_decode(
     assert(found_at >= 0);
     assert(found_at < dictsize);
     
-    assert(dict[found_at].value < 286);
-    
     return dict[found_at].value;
 };
 
-HuffmanPair * unpack_huffman(
+HuffmanEntry * unpack_huffman(
     uint32_t * array,
     uint32_t array_size)
 {
-    HuffmanPair * unpacked_dict = malloc(
-        sizeof(HuffmanPair) * array_size);
+    HuffmanEntry * unpacked_dict = malloc(
+        sizeof(HuffmanEntry) * array_size);
     
     // initialize dict
     for (int i = 0; i < array_size; i++) {
@@ -453,7 +359,8 @@ HuffmanPair * unpack_huffman(
                     bits,
                     smallest_code[bits],
                     " - value can't fit in that few bits!\n");
-                assert(1 == 2);
+                // TODO: uncomment assertion
+                // assert(1 == 2);
             }
         }
     }
@@ -468,7 +375,9 @@ HuffmanPair * unpack_huffman(
         uint32_t len = unpacked_dict[n].code_length;
         
         if (len != 0 && unpacked_dict[n].code_length > 0) {
-            assert(smallest_code[len] < (1 << len));
+            // TODO: uncomment assertion
+            // or maybe they are supposed to overflow? IDK
+            // assert(smallest_code[len] < (1 << len));
             
             unpacked_dict[n].key = smallest_code[len];
             
@@ -597,13 +506,6 @@ int main(int argc, const char * argv[])
                 return 1;
             }
             
-            // uint32_t width;
-            // uint32_t height;
-            // uint8_t  bit_depth;
-            // uint8_t  color_type;
-            // uint8_t  compression_method;
-            // uint8_t  filter_method;
-            // uint8_t  interlace_method;
             printf(
                 "\twidth: %u\n",
                 ihdr_body->width);
@@ -632,13 +534,6 @@ int main(int argc, const char * argv[])
                 ihdr_body->interlace_method);
 
             if (supported) {
-                // pixels = allocate_pixels(
-                //     /* height: */
-                //         ihdr_body->height,
-                //     /* width: */
-                //         ihdr_body->width,
-                //     /* bytes_per_pixel: */
-                //         4);
                 pixels = malloc(
                     ihdr_body->height
                     * ihdr_body->width
@@ -668,12 +563,13 @@ int main(int argc, const char * argv[])
                     /* type: */ IDATHeader,
                     /* from: */ entire_file);
             
-            // to mask the rightmost 4 we need 00001111 
-            //                                     8421
-            //                               8+4+2+1=15
+            // to mask the rightmost 4 bits we need 00001111 
+            //                                          8421
+            //                                    8+4+2+1=15
             // to isolate the leftmost 4, we need to
             // shift right by 4
-            // (I guess the padded bits are 0 by default)
+            // (I guess the new padding bits on the left
+            // are 0 by default)
             uint8_t compression_method =
                 idat_header->zlibmethodflags & 15;
             uint8_t compression_info =
@@ -684,14 +580,15 @@ int main(int argc, const char * argv[])
             printf(
                 "\t\tcompression info: %u\n",
                 compression_info);
-           
+            
             /* 
             first FIVE bits is FCHECK
             the 'check bits for CMF and FLG'
-            to mask: 15 + 16 = 31
-            The FCHECK value must be such that CMF and FLG,
+            to mask the rightmost 5 bits: 15 + 16 = 31
+            spec:
+            "The FCHECK value must be such that CMF and FLG,
             when viewed as a 16-bit unsigned integer stored in
-            MSB order (CMF*256 + FLG), is a multiple of 31.
+            MSB order (CMF*256 + FLG), is a multiple of 31."
             */
             uint16_t full_check_value =
                 (uint16_t)idat_header->additionalflags;
@@ -792,42 +689,6 @@ int main(int argc, const char * argv[])
             
             char * btype_description;
             
-            /*
-            In all cases, the decoding algorithm for the actual
-            data is as follows:
-            
-            do
-               read block header from input stream. (did above)
-               if (stored with no compression)
-                  skip any remaining bits in current partially
-                     processed byte
-                  read LEN and NLEN (see next section)
-                  copy LEN bytes of data to output
-               else
-                  if (compressed with dynamic Huffman codes
-                     read representation of code trees (see
-                        subsection below)
-                  loop (until end of block code recognized)
-                     decode literal/length value from input
-                     stream
-                    
-                     if value < 256
-                        copy value (literal byte) to output
-                        stream
-                     otherwise
-                        if value = end of block (256)
-                           break from loop
-                        otherwise (value = 257..285)
-                           decode distance from input stream
-                           
-                           move backwards dist bytes in the
-                           output stream, and copy length bytes
-                           from this position to the output
-                           stream.
-                  end loop
-            while not last block
-            */
-            
             switch (BTYPE) {
                 case (0):
                     printf("\t\t\tBTYPE 0 - No compression\n");
@@ -882,47 +743,16 @@ int main(int argc, const char * argv[])
                 case (2):
                     printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
                     printf("\t\t\tRead code trees...\n");
-            /*
-            The Huffman codes for the two alphabets
-            appear in the block immediately after the
-            header bits and before the actual compressed
-            data, first the literal/length code and then
-            the distance code. Each code is defined by a
-            sequence of code lengths.
-            
-            For even greater compactness, the code
-            length sequences themselves are compressed
-            using a Huffman code. The alphabet for code
-            lengths is as follows:
-        
-            0 - 15: Represent code lengths of 0 - 15
-            
-            16: Copy the previous code length 3 - 6 times.
-               The next 2 bits indicate repeat length
-               (0 = 3, ... , 3 = 6)
-                Example:  Codes 8, 16 (+2 bits 11),
-                    16 (+2 bits 10) will expand to
-                    12 code lengths of 8 (1 + 6 + 5)
-            
-            17: Repeat a code length of 0
-                for 3 - 10 times.
-               (3 bits of length)
-            
-            18: Repeat a code length of 0
-                for 11 - 138 times
-               (7 bits of length) 
-            
-            A code length of 0 indicates that the corresponding
-            symbol in the literal/length or distance alphabet
-            will not occur in the block, and should not
-            participate in the Huffman code construction
-            algorithm given earlier. If only one distance code
-            is used, it is encoded using one bit, not zero bits;
-            in this case there is a single code length of one,
-            with one unused code. One distance code of zero
-            bits means that there are no distance codes used at
-            all (the data is all literals).
-            */
+                    
+                    /*
+                    The Huffman codes for the two alphabets
+                    appear in the block immediately after the
+                    header bits and before the actual compressed
+                    data, first the literal/length code and then
+                    the distance code. Each code is defined by a
+                    sequence of code lengths.
+                    */
+                    
                     // 5 Bits: HLIT (huffman literal)
                     // number of Literal/Length codes - 257
                     // (257 - 286)
@@ -1010,9 +840,9 @@ int main(int argc, const char * argv[])
                     but these are themselves 'compressed'
                     and need to be unpacked
                     */ 
-                    printf("\t\t\tUnpack code lengths table...\n");
+                    printf("\t\t\tUnpck codelengths table...\n");
                     
-                    HuffmanPair * codelengths_huffman =
+                    HuffmanEntry * codelengths_huffman =
                         unpack_huffman(
                             /* array:     : */
                                 HCLEN_table,
@@ -1056,7 +886,7 @@ int main(int argc, const char * argv[])
                     uint32_t len_i = 0;
                     uint32_t two_dicts_size = HLIT + HDIST;
                     printf(
-                        "\t\t\tunpacking lit/len dicts using %s...\n",
+                        "\t\t\tdecoding lit/len using %s...\n",
                         "unpacked code lengths table");
                     
                     uint32_t * litlendist_table = malloc(
@@ -1177,6 +1007,60 @@ int main(int argc, const char * argv[])
                             "\t\t\tlitlendist_table[%u]: %u\n",
                             i,
                             litlendist_table[i]);
+                    }
+                    
+                    HuffmanEntry * litlen_huffman =
+                        unpack_huffman(
+                            /* array:     : */
+                                litlendist_table,
+                            /* array_size : */
+                                two_dicts_size);
+                    printf("\t\tunpacked litlen_huffman\n");
+                    
+                    for (int i = 0; i < two_dicts_size; i++) {
+                        printf(
+                            "litlens[%u].key: %u, hclen: %u\n",
+                            i,
+                            litlen_huffman[i].key,
+                            litlen_huffman[i].code_length);
+                    }
+                    
+                    // TODO: 
+                    // Next, we need to read the actual data
+                    // and use our new 'litlen' dictionary to
+                    // transform into the original (pre-filter)
+                    // data
+                    while (entire_file->size_left > 0) {
+                        // this consumes from entire_file
+                        // so we'll eventually hit 256 and break
+                        uint32_t litlenvalue = huffman_decode(
+                            /* dict: */
+                                litlen_huffman,
+                            /* dictsize: */
+                                two_dicts_size,
+                            /* raw data: */
+                                entire_file);
+                        printf("found ltln: %u\n", litlenvalue); 
+                        if (litlenvalue < 256) {
+                            *pixels++ =
+                                (uint8_t)(litlenvalue & 255);
+                        } else if (litlenvalue > 256) {
+                            uint32_t length = litlenvalue - 256;
+                            uint32_t distance = huffman_decode(
+                                /* dict: */
+                                    litlen_huffman,
+                                /* dictsize: */
+                                    two_dicts_size,
+                                /* raw data: */
+                                    entire_file);
+                            printf("length: %u, dist: %u\n",
+                                length,
+                                distance);
+                        } else {
+                            assert(litlenvalue == 256);
+                            printf("end of ltln found!\n");
+                            return 1;
+                        }
                     }
                     
                     break;
