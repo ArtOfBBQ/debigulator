@@ -403,6 +403,47 @@ allocate_pixels(
     return return_value; 
 }
 
+
+typedef struct ExtraBitsEntry {
+    uint32_t value;
+    uint32_t length_extra_bits;
+    uint32_t base_length;
+} ExtraBitsEntry;
+
+// This table is defined in the deflate algorithm specification
+// https://www.ietf.org/rfc/rfc1951.txt
+static ExtraBitsEntry ExtraBitsTable[] = {
+    {257, 0, 3}, // value, length_extra_bits, base_length
+    {258, 0, 4},
+    {259, 0, 5},
+    {260, 0, 6},
+    {261, 0, 7},
+    {262, 0, 8},
+    {263, 0, 9},
+    {264, 0, 10},
+    {265, 1, 11},
+    {266, 1, 13},
+    {267, 1, 15}, // index 10
+    {268, 1, 17},
+    {269, 1, 19},
+    {270, 2, 23},
+    {271, 2, 27},
+    {272, 2, 31},
+    {273, 3, 35},
+    {274, 3, 43},
+    {275, 3, 51},
+    {276, 3, 59},
+    {277, 4, 67}, // index 20
+    {278, 4, 83},
+    {279, 4, 99},
+    {280, 4, 115},
+    {281, 5, 131},
+    {282, 5, 163},
+    {283, 5, 195},
+    {284, 5, 227},
+    {285, 0, 258}, // index 28
+};
+
 int main(int argc, const char * argv[]) 
 {
     printf("Hello .png files!\n");
@@ -758,30 +799,35 @@ int main(int argc, const char * argv[])
                     // (257 - 286)
                     uint32_t HLIT = consume_bits(
                         /* from: */ entire_file,
-                        /* size: */ 5) + 257;
+                        /* size: */ 5)
+                            + 257;
                     printf(
                         "\t\t\tHLIT : %u (expect 257-286)\n",
                         HLIT);
                     assert(HLIT >= 257 && HLIT <= 286);
-                    
                     
                     // 5 Bits: HDIST (huffman distance?)
                     // # of Distance codes - 1
                     // (1 - 32)
                     uint32_t HDIST = consume_bits(
                         /* from: */ entire_file,
-                        /* size: */ 5) + 1;
-                    assert(HDIST >= 1 && HDIST <= 32);
+                        /* size: */ 5)
+                            + 1;
+                    
                     printf(
                         "\t\t\tHDIST: %u (expect 1-32)\n",
                         HDIST);
+                    assert(HDIST >= 1 && HDIST <= 32);
+                    
                     
                     // 4 Bits: HCLEN (huffman code length)
                     // # of Code Length codes - 4
                     // (4 - 19)
                     uint32_t HCLEN = consume_bits(
                         /* from: */ entire_file,
-                        /* size: */ 4) + 4;
+                        /* size: */ 4)
+                            + 4;
+                    
                     printf(
                         "\t\t\tHCLEN: %u (4-19 vals of 0-6)\n",
                         HCLEN);
@@ -816,17 +862,10 @@ int main(int argc, const char * argv[])
                     
                     uint32_t HCLEN_table[
                         NUM_UNIQUE_CODELENGTHS] = {};
-                    
-                    printf("\t\t\tReading raw code lengths:\n");
+                    printf("\t\t\tReading raw code lengths:\n"); assert(HCLEN < NUM_UNIQUE_CODELENGTHS);
                     for (uint32_t i = 0; i < HCLEN; i++) {
                         assert(swizzle[i] <
                             NUM_UNIQUE_CODELENGTHS);
-                        // HCLEN_table[swizzle[i]] =
-                        //     reverse_bit_order(
-                        //         consume_bits(
-                        //             /* from: */ entire_file,
-                        //             /* size: */ 3),
-                        //         3);
                         HCLEN_table[swizzle[i]] =
                                 consume_bits(
                                     /* from: */ entire_file,
@@ -841,7 +880,15 @@ int main(int argc, const char * argv[])
                     and need to be unpacked
                     */ 
                     printf("\t\t\tUnpck codelengths table...\n");
-                    
+                   
+                    // TODO: should I do NUM_UNIQUE_CODELGNTHS
+                    // or only HCLEN? 
+                    // HuffmanEntry * codelengths_huffman =
+                    //     unpack_huffman(
+                    //         /* array:     : */
+                    //             HCLEN_table,
+                    //         /* array_size : */
+                    //             NUM_UNIQUE_CODELENGTHS);
                     HuffmanEntry * codelengths_huffman =
                         unpack_huffman(
                             /* array:     : */
@@ -892,8 +939,6 @@ int main(int argc, const char * argv[])
                     uint32_t * litlendist_table = malloc(
                         sizeof(uint32_t) * two_dicts_size);
                     
-                    uint32_t previous_len = 0;
-                    
                     while (len_i < two_dicts_size) {
                         uint32_t encoded_len = huffman_decode(
                             /* dict: */
@@ -930,7 +975,7 @@ int main(int argc, const char * argv[])
                                 i++)
                             {
                                 litlendist_table[len_i] =
-                                    previous_len;
+                                    litlendist_table[len_i - 1];
                                 len_i++;
                             }
                         } else if (encoded_len == 17) {
@@ -989,8 +1034,6 @@ int main(int argc, const char * argv[])
                                 encoded_len);
                             return 1;
                         }
-                        
-                        previous_len = encoded_len;
                     }
                     
                     printf("\t\t\tfinished reading two dicts\n");
@@ -1008,14 +1051,25 @@ int main(int argc, const char * argv[])
                             i,
                             litlendist_table[i]);
                     }
-                    
+                   
+                    // TODO: casey had this as 2 seperate dicts
+                    // find out why  - maybe the codes are 
+                    // supposed to overlap
                     HuffmanEntry * litlen_huffman =
                         unpack_huffman(
                             /* array:     : */
                                 litlendist_table,
                             /* array_size : */
-                                two_dicts_size);
+                                HLIT);
                     printf("\t\tunpacked litlen_huffman\n");
+
+                    HuffmanEntry * dist_huffman =
+                        unpack_huffman(
+                            /* array:     : */
+                                litlendist_table + HLIT,
+                            /* array_size : */
+                                HDIST);
+                    printf("\t\tunpacked dist_huffman\n");
                     
                     for (int i = 0; i < two_dicts_size; i++) {
                         printf(
@@ -1027,9 +1081,15 @@ int main(int argc, const char * argv[])
                     
                     // TODO: 
                     // Next, we need to read the actual data
-                    // and use our new 'litlen' dictionary to
-                    // transform into the original (pre-filter)
-                    // data
+                    // and decode it using the 'litlen'
+                    // dictionary, which should yield a value
+                    // from 0-285
+                    // the values 0-255 are copied as literals
+                    // the value 256 means 'end of block'
+                    // the values 256-285 are length/distances
+                    // and will often need 'extra bits' to
+                    // determine the exact length
+                    // (we have ExtraBitsTable for this)
                     while (entire_file->size_left > 0) {
                         // this consumes from entire_file
                         // so we'll eventually hit 256 and break
@@ -1045,14 +1105,30 @@ int main(int argc, const char * argv[])
                             *pixels++ =
                                 (uint8_t)(litlenvalue & 255);
                         } else if (litlenvalue > 256) {
-                            uint32_t length = litlenvalue - 256;
-                            uint32_t distance = huffman_decode(
-                                /* dict: */
-                                    litlen_huffman,
-                                /* dictsize: */
-                                    two_dicts_size,
-                                /* raw data: */
-                                    entire_file);
+                            assert(litlenvalue < 286);
+                            uint32_t i = litlenvalue - 257;
+                            assert(i < 29);
+                            printf("i: %u, litlenvalue: %u\n",
+                                i,
+                                litlenvalue);
+                            assert(
+                                ExtraBitsTable[i].value
+                                    == litlenvalue);
+                            uint32_t extra_bits =
+                                ExtraBitsTable[i]
+                                    .length_extra_bits;
+                            uint32_t length = ExtraBitsTable[i]
+                                .base_length;
+                            if (extra_bits > 0) {
+                                length += consume_bits(
+                                    /* from: */ entire_file,
+                                    /* size: */ extra_bits);
+                            }
+                            assert(
+                                length >=
+                                ExtraBitsTable[i].base_length);
+                            uint32_t distance = 0;
+                            
                             printf("length: %u, dist: %u\n",
                                 length,
                                 distance);
