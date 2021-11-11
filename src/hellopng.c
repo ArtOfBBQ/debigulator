@@ -13,7 +13,7 @@ typedef struct EntireFile {
     void * data;
     
     uint8_t bits_left;
-    uint8_t bit_buffer;
+    uint32_t bit_buffer;
     
     size_t size_left;
 } EntireFile;
@@ -162,15 +162,15 @@ you consume another 2 bits and get: 10 which is 2
 i have no function yet that does this
 */
 
-uint8_t consume_bits(
+uint32_t consume_bits(
     EntireFile * from,
-    uint8_t bits_to_consume)
+    uint32_t bits_to_consume)
 {
     assert(bits_to_consume > 0);
-    assert(bits_to_consume < 9);
+    assert(bits_to_consume < 33);
     
-    uint8_t return_value = 0;
-    int bits_in_return = 0; 
+    uint32_t return_value = 0;
+    int bits_in_return = 0;
     
     while (bits_to_consume > 0) {
         if (from->bits_left > 0) {
@@ -182,8 +182,11 @@ uint8_t consume_bits(
             from->bits_left -= 1;
             bits_to_consume -= 1;
         } else {
-            from->bit_buffer = *((uint8_t *)from->data);
-            from->bits_left = 8;
+            // TODO: this might be wrong endian
+            // when consuming more than 8 bits
+            from->bit_buffer <<= 8;
+            from->bit_buffer |= *((uint8_t *)from->data);
+            from->bits_left += 8;
             
             from->size_left -= 1;
             from->data += 1;
@@ -250,13 +253,14 @@ uint32_t huffman_decode(
     uint32_t dictsize,
     EntireFile * datastream)
 {
+    printf("huffman_decode for dictsize: %u\n", dictsize);
     uint32_t raw = 0;
     int found_at = -1;
     int bitcount = 0;
     
-    while (found_at == -1 && bitcount < 15) {
+    while (found_at == -1 && bitcount < 14) {
         bitcount += 1;
-       
+        
         /*
         Spec:
         "Huffman codes are packed starting with the most-
@@ -270,6 +274,7 @@ uint32_t huffman_decode(
             consume_bits(
                 /* from: */ datastream,
                 /* size: */ 1);
+        printf("raw: %u\n", raw);
         
         for (int i = 0; i < dictsize; i++) {
             // TODO: don't just compare key, compare
@@ -307,10 +312,6 @@ HuffmanEntry * unpack_huffman(
     for (int i = 0; i < array_size; i++) {
         unpacked_dict[i].value = i;
         unpacked_dict[i].code_length = array[i];
-        // printf(
-        //     "unpacked_dict[%u].code_length set to: %u\n",
-        //     i,
-        //     unpacked_dict[i].code_length);
     }
     
     // this is straight from the deflate spec
@@ -329,12 +330,12 @@ HuffmanEntry * unpack_huffman(
     // Spec: 
     // 2) "Find the numerical value of the smallest code for each
     //    code length:"
-    uint32_t * smallest_code = malloc(400 * sizeof(uint32_t));
+    uint32_t * smallest_code = malloc(600 * sizeof(uint32_t));
     uint32_t code = 0;
     
     // this code is yanked straight from the spec
     bl_count[0] = 0;
-    for (uint32_t bits = 1; bits < 13; bits++) {
+    for (uint32_t bits = 1; bits < 14; bits++) {
         code = (code + bl_count[bits-1]) << 1;
         smallest_code[bits] = code;
         
@@ -406,14 +407,14 @@ allocate_pixels(
 
 typedef struct ExtraBitsEntry {
     uint32_t value;
-    uint32_t length_extra_bits;
-    uint32_t base_length;
+    uint32_t num_extra_bits;
+    uint32_t base_decoded;
 } ExtraBitsEntry;
 
 // This table is defined in the deflate algorithm specification
 // https://www.ietf.org/rfc/rfc1951.txt
 static ExtraBitsEntry length_extra_bits_table[] = {
-    {257, 0, 3}, // value, length_extra_bits, base_length
+    {257, 0, 3}, // value, length_extra_bits, base_decoded
     {258, 0, 4},
     {259, 0, 5},
     {260, 0, 6},
@@ -442,6 +443,39 @@ static ExtraBitsEntry length_extra_bits_table[] = {
     {283, 5, 195},
     {284, 5, 227},
     {285, 0, 258}, // index 28
+};
+
+static ExtraBitsEntry dist_extra_bits_table[] = {
+    {0, 0, 1}, // value, distance_extra_bits, base_decoded
+    {1, 0, 2},
+    {2, 0, 3},
+    {3, 0, 4},
+    {4, 1, 5},
+    {5, 1, 7},
+    {6, 2, 9},
+    {7, 2, 13},
+    {8, 3, 17},
+    {9, 3, 25},
+    {10, 4, 33},
+    {11, 4, 49},
+    {12, 5, 65},
+    {13, 5, 97},
+    {14, 6, 129},
+    {15, 6, 193},
+    {16, 7, 257},
+    {17, 7, 385},
+    {18, 8, 513},
+    {19, 8, 769},
+    {20, 9, 1025},
+    {21, 9, 1537},
+    {22, 10, 2049},
+    {23, 10, 3073},
+    {24, 11, 4097},
+    {25, 11, 6145},
+    {26, 12, 8193},
+    {27, 12, 12289},
+    {28, 13, 16385},
+    {29, 13, 24577},
 };
 
 int main(int argc, const char * argv[]) 
@@ -1088,6 +1122,9 @@ int main(int argc, const char * argv[])
                     // determine the exact length
                     // (we have ExtraBitsTable for this)
                     while (entire_file->size_left > 0) {
+                        printf(
+                            "entire_file->size_left: %zu\n",
+                            entire_file->size_left);
                         // this consumes from entire_file
                         // so we'll eventually hit 256 and break
                         uint32_t litlenvalue = huffman_decode(
@@ -1112,10 +1149,10 @@ int main(int argc, const char * argv[])
                                     == litlenvalue);
                             uint32_t extra_bits =
                                 length_extra_bits_table[i]
-                                    .length_extra_bits;
+                                    .num_extra_bits;
                             uint32_t length =
                                 length_extra_bits_table[i]
-                                    .base_length;
+                                    .base_decoded;
                             if (extra_bits > 0) {
                                 length += consume_bits(
                                     /* from: */ entire_file,
@@ -1124,7 +1161,7 @@ int main(int argc, const char * argv[])
                             assert(
                                 length >=
                                 length_extra_bits_table[i]
-                                    .base_length);
+                                    .base_decoded);
                             printf(
                                 "length: %u\n",
                                 length);
@@ -1146,6 +1183,26 @@ int main(int argc, const char * argv[])
                         printf(
                             "distvalue: %u\n",
                             distvalue);
+                        
+                        assert(distvalue <= 29);
+                        assert(
+                            dist_extra_bits_table[distvalue]
+                                .value
+                                    == distvalue);
+                        uint32_t extra_bits =
+                            dist_extra_bits_table[distvalue]
+                                .num_extra_bits;
+                        uint32_t dist =
+                            dist_extra_bits_table[distvalue]
+                                .base_decoded;
+                        if (extra_bits > 0) {
+                            dist += consume_bits(
+                                /* from: */ entire_file,
+                                /* size: */ extra_bits);
+                        }
+                        printf(
+                            "dist: %u\n",
+                            dist);
                     }
                     
                     break;
