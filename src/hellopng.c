@@ -329,7 +329,7 @@ HuffmanEntry * unpack_huffman(
     // Spec: 
     // 2) "Find the numerical value of the smallest code for each
     //    code length:"
-    uint32_t * smallest_code = malloc(200);
+    uint32_t * smallest_code = malloc(400 * sizeof(uint32_t));
     uint32_t code = 0;
     
     // this code is yanked straight from the spec
@@ -412,7 +412,7 @@ typedef struct ExtraBitsEntry {
 
 // This table is defined in the deflate algorithm specification
 // https://www.ietf.org/rfc/rfc1951.txt
-static ExtraBitsEntry ExtraBitsTable[] = {
+static ExtraBitsEntry length_extra_bits_table[] = {
     {257, 0, 3}, // value, length_extra_bits, base_length
     {258, 0, 4},
     {259, 0, 5},
@@ -1051,10 +1051,7 @@ int main(int argc, const char * argv[])
                             i,
                             litlendist_table[i]);
                     }
-                   
-                    // TODO: casey had this as 2 seperate dicts
-                    // find out why  - maybe the codes are 
-                    // supposed to overlap
+                    
                     HuffmanEntry * litlen_huffman =
                         unpack_huffman(
                             /* array:     : */
@@ -1062,7 +1059,7 @@ int main(int argc, const char * argv[])
                             /* array_size : */
                                 HLIT);
                     printf("\t\tunpacked litlen_huffman\n");
-
+                    
                     HuffmanEntry * dist_huffman =
                         unpack_huffman(
                             /* array:     : */
@@ -1097,28 +1094,28 @@ int main(int argc, const char * argv[])
                             /* dict: */
                                 litlen_huffman,
                             /* dictsize: */
-                                two_dicts_size,
+                                HLIT,
                             /* raw data: */
                                 entire_file);
                         printf("found ltln: %u\n", litlenvalue); 
                         if (litlenvalue < 256) {
                             *pixels++ =
                                 (uint8_t)(litlenvalue & 255);
-                        } else if (litlenvalue > 256) {
-                            assert(litlenvalue < 286);
+                        } else if (litlenvalue > 256) { assert(litlenvalue < 286);
                             uint32_t i = litlenvalue - 257;
                             assert(i < 29);
                             printf("i: %u, litlenvalue: %u\n",
                                 i,
                                 litlenvalue);
                             assert(
-                                ExtraBitsTable[i].value
+                                length_extra_bits_table[i].value
                                     == litlenvalue);
                             uint32_t extra_bits =
-                                ExtraBitsTable[i]
+                                length_extra_bits_table[i]
                                     .length_extra_bits;
-                            uint32_t length = ExtraBitsTable[i]
-                                .base_length;
+                            uint32_t length =
+                                length_extra_bits_table[i]
+                                    .base_length;
                             if (extra_bits > 0) {
                                 length += consume_bits(
                                     /* from: */ entire_file,
@@ -1126,17 +1123,29 @@ int main(int argc, const char * argv[])
                             }
                             assert(
                                 length >=
-                                ExtraBitsTable[i].base_length);
-                            uint32_t distance = 0;
-                            
-                            printf("length: %u, dist: %u\n",
-                                length,
-                                distance);
+                                length_extra_bits_table[i]
+                                    .base_length);
+                            printf(
+                                "length: %u\n",
+                                length);
                         } else {
                             assert(litlenvalue == 256);
                             printf("end of ltln found!\n");
                             return 1;
                         }
+                        
+                        uint32_t distvalue = huffman_decode(
+                            /* dict: */
+                                dist_huffman,
+                            /* dictsize: */
+                                HDIST,
+                            /* raw data: */
+                                entire_file);
+                        
+                        // TODO: get distance extra bits
+                        printf(
+                            "distvalue: %u\n",
+                            distvalue);
                     }
                     
                     break;
