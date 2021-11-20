@@ -371,7 +371,7 @@ void deflate(
     printf(
         "\t\t\tBFINAL (flag for final block): %u\n",
         BFINAL);
-   
+    
     // Jelle: I stumbled my way into using
     // reverse_bit_order here (because it appears to
     // solve the problem accidentally) casey does
@@ -693,6 +693,7 @@ void deflate(
                     assert(1 == 2);
                 }
             }
+            free(codelengths_huffman);
             
             printf("\t\t\tfinished reading two dicts\n");
             assert(len_i == two_dicts_size);
@@ -792,6 +793,10 @@ void deflate(
                         /* size: */ extra_bits);
                 }
             }
+            
+            free(litlen_huffman);
+            free(dist_huffman);
+            free(litlendist_table);
             
             break;
         case (3):
