@@ -305,8 +305,7 @@ int main(int argc, const char * argv[])
         {
             // handle image data header
             printf("\tfound IDAT (image data) header...\n");
-           
- 
+            
             // (IDATHeader *)entire_file->data;
             IDATHeader * idat_header =
                 consume_struct(
@@ -395,7 +394,8 @@ int main(int argc, const char * argv[])
             
             deflate(
                 /* recipient: */ pixels,
-                /* entire_file: */ entire_file);
+                /* entire_file: */ entire_file,
+                /* expected_size_bytes: */ chunk_header->length);
         }
         else if (are_equal_strings(
             chunk_header->type,

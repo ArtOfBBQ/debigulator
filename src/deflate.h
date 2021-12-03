@@ -32,9 +32,6 @@ bit of the byte.
 * Huffman codes are packed starting with the most-
   significant bit of the code.
 
-Jelle: That's so fucked up. Why would you store 2 different
-types of data in a different order just for kicks? :/
-
 In other words, if one were to print out the compressed data as
 a sequence of bytes, starting with the first byte at the
 *right* margin and proceeding to the *left*, with the most-
@@ -339,8 +336,22 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 
 void deflate(
     uint8_t * recipient,
-    EntireFile * entire_file)
+    EntireFile * entire_file,
+    int expected_size_bytes)
 {
+    printf(
+        "\t\trunning DEFLATE algo, expecting %u bytes...\n",
+        expected_size_bytes);
+    void * started_at = entire_file->data;
+    printf(
+        "\t\tentire_file->data at start points to: %p\n",
+        started_at);
+    
+    // i put this 1st assertion in on instinct, dont know if its
+    // actually allowed
+    assert(entire_file->bits_left == 0);
+    assert(entire_file->size_left >= expected_size_bytes);
+    
     /*
     Each block of compressed data begins with 3 header
     bits containing the following data:
@@ -372,15 +383,6 @@ void deflate(
         "\t\t\tBFINAL (flag for final block): %u\n",
         BFINAL);
     
-    // Jelle: I stumbled my way into using
-    // reverse_bit_order here (because it appears to
-    // solve the problem accidentally) casey does
-    // no such thing 
-    // uint8_t BTYPE = reverse_bit_order(
-    //     consume_bits(
-    //         /* buffer: */ entire_file,
-    //         /* size  : */ 2),
-    //     2);
     uint8_t BTYPE =  consume_bits(
         /* buffer: */ entire_file,
         /* size  : */ 2);
@@ -426,15 +428,84 @@ void deflate(
                 ~LEN);
             assert(NLEN == ~LEN);
             
-            // TODO: handle no compression
-            // copy LEN bytes of data to output
+            // TODO: check if copying bytes to output works
+            for (int i = 0; i < LEN; i++) {
+                recipient[0] = ((uint8_t *)entire_file->data)[0];
+                entire_file->data += 1;
+            }
             
             break;
         case (1):
             printf("\t\t\tBTYPE 1 - Fixed Huffman\n");
-            printf("\t\t\tPNG format unsupported.");
             
-            // TODO: handle fixed huffman 
+            /*
+            TODO: handle fixed huffman
+            
+            The Huffman codes for the two alphabets are fixed,
+            and are not represented explicitly in the data.
+            The Huffman code lengths for the literal/length
+            alphabet are:
+            
+            Lit Value    Bits   Codes
+            ---------    ----   -----
+            0   - 143     8     00110000 through 10111111
+            144 - 255     9     110010000 through 111111111
+            256 - 279     7     0000000 through 0010111
+            280 - 287     8     11000000 through 11000111
+            */
+            
+            uint32_t fixed_hclen_table[288] = {};
+            for (int i = 0; i < 144; i++) {
+                fixed_hclen_table[i] = 8;
+            }
+            for (int i = 144; i < 256; i++) {
+                fixed_hclen_table[i] = 9;
+            }
+            for (int i = 256; i < 280; i++) {
+                fixed_hclen_table[i] = 7;
+            }
+            for (int i = 280; i < 288; i++) {
+                fixed_hclen_table[i] = 8;
+            }
+            printf(
+                "fixed huffman fixed_hclen_table[287]: %u\n",
+                fixed_hclen_table[287]);
+            
+            HuffmanEntry * fixed_codelengths_huffman =
+                unpack_huffman(
+                    /* array:     : */
+                        fixed_hclen_table,
+                    /* array_size : */
+                        NUM_UNIQUE_CODELENGTHS);
+
+            printf(
+                "fixed_codelengths_huffman[0].value: %u\n",
+                fixed_codelengths_huffman[0].value);
+            printf(
+                "fixed_codelengths_huffman[0].code_length: %u\n",
+                fixed_codelengths_huffman[0].code_length);
+            printf(
+                "fixed_codelengths_huffman[0].key: %u\n",
+                fixed_codelengths_huffman[0].key);
+            printf(
+                "fixed_codelengths_huffman[1].value: %u\n",
+                fixed_codelengths_huffman[1].value);
+            printf(
+                "fixed_codelengths_huffman[1].code_length: %u\n",
+                fixed_codelengths_huffman[1].code_length);
+            printf(
+                "fixed_codelengths_huffman[1].key: %u\n",
+                fixed_codelengths_huffman[1].key);
+            printf(
+                "fixed_codelengths_huffman[2].value: %u\n",
+                fixed_codelengths_huffman[2].value);
+            printf(
+                "fixed_codelengths_huffman[2].code_length: %u\n",
+                fixed_codelengths_huffman[2].code_length);
+            printf(
+                "fixed_codelengths_huffman[2].key: %u\n",
+                fixed_codelengths_huffman[2].key);
+            
             assert(1 == 2);
             
             break;
@@ -486,7 +557,7 @@ void deflate(
             
             printf(
                 "\t\t\tHCLEN: %u (4-19 vals of 0-6)\n",
-                HCLEN);
+                 HCLEN);
             assert(HCLEN >= 4 && HCLEN <= 19);
             
             // This is a fixed swizzle (order of elements
@@ -536,9 +607,9 @@ void deflate(
             We now have some values in HCLEN_table,
             but these are themselves 'compressed'
             and need to be unpacked
-            */ 
+            */
             printf("\t\t\tUnpck codelengths table...\n");
-           
+            
             // TODO: should I do NUM_UNIQUE_CODELGNTHS
             // or only HCLEN? 
             // HuffmanEntry * codelengths_huffman =
@@ -811,5 +882,10 @@ void deflate(
     }
     
     assert(BTYPE < 3);
+
+    printf(
+        "\t\tend of DEFLATE, read: %lu bytes\n",
+        entire_file->data - started_at);
+    assert(entire_file->data - started_at == expected_size_bytes);
 }
 
