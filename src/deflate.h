@@ -195,6 +195,8 @@ HuffmanEntry * unpack_huffman(
     for (int i = 0; i < array_size; i++) {
         bl_count[array[i]] += 1;
     }
+
+    printf("bl_count[9]: %u\n", bl_count[9]);
     
     // Spec: 
     // 2) "Find the numerical value of the smallest code for each
@@ -222,7 +224,7 @@ HuffmanEntry * unpack_huffman(
                     actually_used = true;
                 }
             }
-           
+            
             if (actually_used) {
                 printf(
                     "ERROR: smallest_code[%u] was %u%s",
@@ -343,6 +345,7 @@ void deflate(
         "\t\trunning DEFLATE algo, expecting %u bytes...\n",
         expected_size_bytes);
     void * started_at = entire_file->data;
+    uint8_t * recipient_at = recipient;
     printf(
         "\t\tentire_file->data at start points to: %p\n",
         started_at);
@@ -430,7 +433,7 @@ void deflate(
             
             // TODO: check if copying bytes to output works
             for (int i = 0; i < LEN; i++) {
-                recipient[0] = ((uint8_t *)entire_file->data)[0];
+                recipient_at[0] = ((uint8_t *)entire_file->data)[0];
                 entire_file->data += 1;
             }
             
@@ -467,47 +470,156 @@ void deflate(
             for (int i = 280; i < 288; i++) {
                 fixed_hclen_table[i] = 8;
             }
-            printf(
-                "fixed huffman fixed_hclen_table[287]: %u\n",
-                fixed_hclen_table[287]);
             
-            HuffmanEntry * fixed_codelengths_huffman =
+            HuffmanEntry * fixed_length_huffman =
                 unpack_huffman(
                     /* array:     : */
                         fixed_hclen_table,
                     /* array_size : */
-                        NUM_UNIQUE_CODELENGTHS);
+                        288);
+            
+            assert(fixed_length_huffman[0].value == 0);
+            assert(
+                fixed_length_huffman[0].code_length == 8);
+            assert(fixed_length_huffman[0].key == 48);
+            assert(fixed_length_huffman[143].value == 143);
+            assert(
+                fixed_length_huffman[143].code_length == 8);
+            assert(fixed_length_huffman[143].key == 191);
+            assert(fixed_length_huffman[144].value == 144);
+            assert(
+                fixed_length_huffman[144].code_length == 9);
+            assert(fixed_length_huffman[144].key == 400);
+            assert(fixed_length_huffman[255].value == 255);
+            assert(
+                fixed_length_huffman[255].code_length == 9);
+            assert(fixed_length_huffman[255].key == 511);
+            assert(fixed_length_huffman[256].value == 256);
+            assert(
+                fixed_length_huffman[256].code_length == 7);
+            assert(fixed_length_huffman[256].key == 0);
+            assert(fixed_length_huffman[279].value == 279);
+            assert(
+                fixed_length_huffman[279].code_length == 7);
+            assert(fixed_length_huffman[279].key == 23);
+            assert(fixed_length_huffman[280].value == 280);
+            assert(
+                fixed_length_huffman[280].code_length == 8);
+            assert(fixed_length_huffman[280].key == 192);
+            assert(fixed_length_huffman[287].value == 287);
+            assert(
+                fixed_length_huffman[287].code_length == 8);
+            assert(fixed_length_huffman[287].key == 199);
+            
+            while (entire_file->size_left > 0) {
+                // this consumes from entire_file
+                // so we'll eventually hit 256 and break
+                uint32_t litlenvalue = huffman_decode(
+                    /* dict: */
+                        fixed_length_huffman,
+                    /* dictsize: */
+                        288,
+                    /* raw data: */
+                        entire_file);
+                printf(
+                    "read litlenvalue from fixed_huffman: %u\n",
+                    litlenvalue);
+                
+                if (litlenvalue < 256) {
+                    printf(
+                        "value < 256, simply copying...\n");
+                    printf(
+                        "litlenvalue was: %u, converted: %u, as char: %c\n",
+                        litlenvalue,
+                        (uint8_t)(litlenvalue & 255),
+                        (char)(litlenvalue & 255));
+                    *recipient_at++ =
+                        (uint8_t)(litlenvalue & 255);
+                } else if (litlenvalue > 256) {
+                    printf("find distance value...\n");
+                    
+                    assert(litlenvalue < 286);
+                    uint32_t i = litlenvalue - 257;
+                    printf("i is %u which should be < 29\n", i);
+                    assert(i < 29);
+                    assert(
+                        length_extra_bits_table[i].value
+                            == litlenvalue);
+                    uint32_t extra_bits =
+                        length_extra_bits_table[i]
+                            .num_extra_bits;
+                    printf("length extra bits: %u\n", extra_bits);
+                    uint32_t length =
+                        length_extra_bits_table[i]
+                            .base_decoded;
+                    
+                    printf("base length: %u\n", length);
+                    if (extra_bits > 0) {
+                        length += consume_bits(
+                            /* from: */ entire_file,
+                            /* size: */ extra_bits);
+                        printf(
+                            "length after add extra bits: %u\n",
+                            length);
+                    }
+                    assert(
+                        length >=
+                        length_extra_bits_table[i]
+                            .base_decoded);
+                    
+                    uint32_t distvalue = consume_bits(
+                        /* from: */ entire_file,
+                        /* size: */ 5);
+                    printf(
+                        "raw distvalue: %u\n",
+                        distvalue);
+                    
+                    assert(distvalue <= 29);
+                    assert(
+                        dist_extra_bits_table[distvalue].value
+                            == distvalue);
+                    uint32_t dist_extra_bits =
+                        dist_extra_bits_table[distvalue]
+                            .num_extra_bits;
+                    printf(
+                        "dist_extra_bits: %u\n",
+                        dist_extra_bits);
+                    uint32_t dist =
+                        dist_extra_bits_table[distvalue]
+                            .base_decoded;
+                    printf(
+                        "distance decoded base value: %u\n",
+                        dist);
+                    assert(dist_extra_bits_table[distvalue].value
+                        == distvalue);
+                    if (dist_extra_bits > 0) {
+                        uint32_t extra_bits_decoded =
+                            consume_bits(
+                                /* from: */ entire_file,
+                                /* size: */ dist_extra_bits);
+                        printf(
+                            "extra_bits_decoded will add: %u\n",
+                            extra_bits_decoded);
+                        
+                        dist += extra_bits_decoded;
+                    }
+                    printf(
+                        "dist after extra bits add: %u\n",
+                        dist);
+                } else {
+                    assert(litlenvalue == 256);
+                    printf("\t\tend of ltln found!\n");
+                    // TODO: figure out what to do
+                    // with any remaining bits
+                    entire_file->bits_left = 0;
+                    break;
+                }
+            }
+            
+            free(fixed_length_huffman);
 
-            printf(
-                "fixed_codelengths_huffman[0].value: %u\n",
-                fixed_codelengths_huffman[0].value);
-            printf(
-                "fixed_codelengths_huffman[0].code_length: %u\n",
-                fixed_codelengths_huffman[0].code_length);
-            printf(
-                "fixed_codelengths_huffman[0].key: %u\n",
-                fixed_codelengths_huffman[0].key);
-            printf(
-                "fixed_codelengths_huffman[1].value: %u\n",
-                fixed_codelengths_huffman[1].value);
-            printf(
-                "fixed_codelengths_huffman[1].code_length: %u\n",
-                fixed_codelengths_huffman[1].code_length);
-            printf(
-                "fixed_codelengths_huffman[1].key: %u\n",
-                fixed_codelengths_huffman[1].key);
-            printf(
-                "fixed_codelengths_huffman[2].value: %u\n",
-                fixed_codelengths_huffman[2].value);
-            printf(
-                "fixed_codelengths_huffman[2].code_length: %u\n",
-                fixed_codelengths_huffman[2].code_length);
-            printf(
-                "fixed_codelengths_huffman[2].key: %u\n",
-                fixed_codelengths_huffman[2].key);
-            
-            assert(1 == 2);
-            
+            printf("final recipient: %s\n", (char *)recipient);
+            printf("expected: abaabbbabaababbaababaaaabaaabbbbbaa\n");
             break;
         case (2):
             printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
@@ -805,7 +917,7 @@ void deflate(
                     /* raw data: */
                         entire_file);
                 if (litlenvalue < 256) {
-                    *recipient++ =
+                    *recipient_at++ =
                         (uint8_t)(litlenvalue & 255);
                 } else if (litlenvalue > 256) {
                     
