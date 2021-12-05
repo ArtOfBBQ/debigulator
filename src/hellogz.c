@@ -253,7 +253,10 @@ int main(int argc, const char * argv[])
         /* recipient: */ recipient,
         /* entire_file: */ entire_file,
         /* expected_size_bytes: */ entire_file->size_left - 8);
-
+   
+    printf(
+        "gzip file de-compressed contents were: %s\n",
+        recipient); 
     printf("end of gz file...\n");
     
     return 0;

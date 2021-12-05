@@ -521,46 +521,30 @@ void deflate(
                         288,
                     /* raw data: */
                         entire_file);
-                printf(
-                    "read litlenvalue from fixed_huffman: %u\n",
-                    litlenvalue);
                 
                 if (litlenvalue < 256) {
-                    printf(
-                        "value < 256, simply copying...\n");
-                    printf(
-                        "litlenvalue was: %u, converted: %u, as char: %c\n",
-                        litlenvalue,
-                        (uint8_t)(litlenvalue & 255),
-                        (char)(litlenvalue & 255));
+                    // literal value, not a length
                     *recipient_at++ =
                         (uint8_t)(litlenvalue & 255);
                 } else if (litlenvalue > 256) {
-                    printf("find distance value...\n");
-                    
+                    // length, (therefore also need distance)
                     assert(litlenvalue < 286);
                     uint32_t i = litlenvalue - 257;
-                    printf("i is %u which should be < 29\n", i);
-                    assert(i < 29);
                     assert(
                         length_extra_bits_table[i].value
                             == litlenvalue);
                     uint32_t extra_bits =
                         length_extra_bits_table[i]
                             .num_extra_bits;
-                    printf("length extra bits: %u\n", extra_bits);
-                    uint32_t length =
+                    uint32_t base_length =
                         length_extra_bits_table[i]
                             .base_decoded;
+                    uint32_t length = base_length;
                     
-                    printf("base length: %u\n", length);
                     if (extra_bits > 0) {
-                        length += consume_bits(
+                        length = base_length + consume_bits(
                             /* from: */ entire_file,
                             /* size: */ extra_bits);
-                        printf(
-                            "length after add extra bits: %u\n",
-                            length);
                     }
                     assert(
                         length >=
@@ -568,8 +552,7 @@ void deflate(
                             .base_decoded);
                     
                     // distances are stored in reverse order of
-                    // huffman codes because otherwise it would be
-                    // too easy...
+                    // huffman codes for some reason
                     uint32_t distvalue = reverse_bit_order(
                         consume_bits(
                             /* from: */ entire_file,
@@ -583,25 +566,26 @@ void deflate(
                     uint32_t dist_extra_bits =
                         dist_extra_bits_table[distvalue]
                             .num_extra_bits;
-                    uint32_t dist =
+                    uint32_t base_dist =
                         dist_extra_bits_table[distvalue]
                             .base_decoded;
+                    uint32_t total_dist;
+                    
                     assert(dist_extra_bits_table[distvalue].value
                         == distvalue);
-                    if (dist_extra_bits > 0) {
-                        uint32_t extra_bits_decoded =
+                    uint32_t extra_bits_decoded =
+                        dist_extra_bits > 0 ?
                             consume_bits(
                                 /* from: */ entire_file,
-                                /* size: */ dist_extra_bits);
-                        dist += extra_bits_decoded;
-                    }
-                    printf(
-                        "dist after extra bits add: %u\n",
-                        dist);
-
+                                /* size: */ dist_extra_bits)
+                            : 0;
+                    
+                    total_dist = base_dist + extra_bits_decoded;
+                    
                     // go back dist bytes, then copy length bytes
-                    assert(recipient_at - dist >= recipient);
-                    uint8_t * back_dist_bytes = recipient_at - dist;
+                    assert(recipient_at - total_dist >= recipient);
+                    uint8_t * back_dist_bytes =
+                        recipient_at - total_dist;
                     for (int i = 0; i < length; i++) {
                         *recipient_at = *back_dist_bytes;
                         recipient_at++;
@@ -615,14 +599,10 @@ void deflate(
                     entire_file->bits_left = 0;
                     break;
                 }
-
-                printf("recipient so far: %s\n", recipient);
             }
             
             free(fixed_length_huffman);
-
-            printf("final recipient: %s\n", (char *)recipient);
-            printf("expected: abaabbbabaababbaababaaaabaaabbbbbaa\n");
+            
             break;
         case (2):
             printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
@@ -1001,6 +981,6 @@ void deflate(
     printf(
         "\t\tend of DEFLATE, read: %lu bytes\n",
         entire_file->data - started_at);
-    assert(entire_file->data - started_at == expected_size_bytes);
+    assert(entire_file->data - started_at + 1 == expected_size_bytes);
 }
 
