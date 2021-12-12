@@ -53,29 +53,29 @@ uint32_t mask_rightmost_bits(
     return input & mask;
 }
 
-uint8_t reverse_bit_order(
-    const uint8_t original,
-    const uint8_t bit_count)
+uint32_t reverse_bit_order(
+    const uint32_t original,
+    const unsigned int bit_count)
 {
     assert(bit_count > 0);
-    assert(bit_count < 9);
-
+    assert(bit_count < 33);
+    
     if (bit_count == 1) { return original; }
     
-    uint8_t return_value = 0;
+    uint32_t return_value = 0;
     
     float middle = (bit_count - 1.0f) / 2.0f;
     assert(middle > 0);
-    assert(middle <= 3.5f);
+    assert(middle <= 16.0f);
     
-    for (uint8_t i = 0; i < bit_count; i++) {
+    for (uint32_t i = 0; i < bit_count; i++) {
         float dist_to_middle = middle - i;
-        assert(dist_to_middle < 4);
+        assert(dist_to_middle < 16.0f);
         
         uint8_t target_pos = i + (dist_to_middle * 2);
         
         assert(target_pos >= 0);
-        assert(target_pos < 8);
+        assert(target_pos < 33);
         
         return_value =
             return_value |
@@ -231,9 +231,9 @@ uint32_t huffman_decode(
     const uint32_t dictsize,
     EntireFile * datastream)
 {
-    uint32_t raw = 0;
     int found_at = -1;
     int bitcount = 0;
+    uint32_t raw = 0;
     
     while (found_at == -1 && bitcount < 24) {
         bitcount += 1;
@@ -242,16 +242,12 @@ uint32_t huffman_decode(
         Spec:
         "Huffman codes are packed starting with the most-
             significant bit of the code."
-
-        That means that every time we load a new bit,
-        we have to shift what we already have and add
-        the new bit to the right.
         */
-        uint8_t new_bit = consume_bits(
-            /* from: */ datastream,
-            /* size: */ 1);
-        
-        raw = (raw << 1) | new_bit;
+        raw = reverse_bit_order(
+            peek_bits(
+                /* from: */ datastream,
+                /* size: */ bitcount),
+            bitcount);
         
         for (int i = 0; i < dictsize; i++) {
             if (dict[i].key == raw
@@ -273,6 +269,7 @@ uint32_t huffman_decode(
         assert(1 == 2);
     }
     
+    discard_bits(datastream, bitcount);
     assert(found_at >= 0);
     assert(found_at < dictsize);
     
@@ -864,12 +861,6 @@ void deflate(
                       codelengths_huffman[i].key >= 0);
                     assert(
                       codelengths_huffman[i].value >= 0);
-                    printf(
-                        "codelengths_huffman[%u].value: %u, key: %u, code_length:%u\n",
-                        i,
-                        codelengths_huffman[i].value,
-                        codelengths_huffman[i].key,
-                        codelengths_huffman[i].code_length);
                     assert(
                       codelengths_huffman[i].value < 19);
                 }
@@ -1002,11 +993,6 @@ void deflate(
             printf("\t\t\tfinished reading two dicts\n");
             assert(len_i == two_dicts_size);
             
-            // TODO: remove this debugging code
-            for (int i = 0; i < two_dicts_size; i++) {
-                assert(litlendist_table[i] < 99999);
-            }
-            
             HuffmanEntry * litlen_huffman =
                 unpack_huffman(
                     /* array:     : */
@@ -1046,6 +1032,7 @@ void deflate(
             // the values 256-285 are length/distances
             // and will often need 'extra bits' to
             // determine the exact length
+            printf("***** DECOMPRESSING - REPEATED CHUNKS IN [BRACKETS]\n");
             while (entire_file->size_left > 0) {
                 // this consumes from entire_file
                 // so we'll eventually hit 256 and break
@@ -1057,15 +1044,11 @@ void deflate(
                     /* raw data: */
                         entire_file);
                 if (litlenvalue < 256) {
-                    printf("adding literal: %c\n",
+                    printf("%c",
                         (char)(litlenvalue & 255));
                     *recipient_at++ =
                         (uint8_t)(litlenvalue & 255);
                 } else if (litlenvalue > 256) {
-                    printf(
-                        "found raw litlenvalue: %u\n",
-                        litlenvalue);
-                    
                     assert(litlenvalue < 286);
                     uint32_t i = litlenvalue - 257;
                     assert(i < 29);
@@ -1086,7 +1069,6 @@ void deflate(
                         : 0;
                     uint32_t total_length =
                         base_length + extra_length;
-                    printf("total_length: %u\n", total_length);
                     
                     uint32_t distvalue = huffman_decode(
                         /* dict: */
@@ -1097,9 +1079,6 @@ void deflate(
                             entire_file);
                     
                     assert(distvalue <= 29);
-                    printf(
-                        "decoded distvalue: %u\n",
-                        distvalue);
                     assert(
                         dist_extra_bits_table[distvalue]
                             .value
@@ -1110,11 +1089,7 @@ void deflate(
                     uint32_t base_dist =
                         dist_extra_bits_table[distvalue]
                             .base_decoded;
-                    printf("base_dist: %u\n", base_dist);
                     uint32_t total_dist;
-                    printf(
-                        "dist_extra_bits: %u\n",
-                        dist_extra_bits);
                     uint32_t dist_extra_bits_decoded =
                         dist_extra_bits > 0 ?
                             consume_bits(
@@ -1128,16 +1103,18 @@ void deflate(
                     if (
                         recipient_at - total_dist >= recipient)
                     {
+                        printf("[");
                         uint8_t * back_dist_bytes =
                             recipient_at - total_dist;
                         for (int i = 0; i < total_length; i++) {
                             *recipient_at = *back_dist_bytes;
                             printf(
-                                "adding from len/dist: %c\n",
+                                "%c",
                                 (char)*back_dist_bytes);
                             recipient_at++;
                             back_dist_bytes++;
                         }
+                        printf("]");
                     } else {
                         printf("error! distance too far back\n");
                         printf("total_dist: %u\n", total_dist);
@@ -1176,7 +1153,8 @@ void deflate(
                         printf(
                             "distvalue reversed (6 bit): %u\n",
                             reverse_bit_order(distvalue, 6));
-
+                        return;
+                        
                         for (unsigned int _ = 0; _ < HDIST; _++) {
                             printf("dist_huffman[%u].key: %u, value: %u, codelen: %u\n",
                                 _,
@@ -1184,13 +1162,10 @@ void deflate(
                                 dist_huffman[_].value,
                                 dist_huffman[_].code_length);
                         }
-                        
-                        printf("final recipient:\n");
-                        printf("%s", recipient);
                     }
                 } else {
                     assert(litlenvalue == 256);
-                    printf("\t\tend of ltln found!\n");
+                    printf("*****\n");
                     // TODO: figure out what to do
                     // with any remaining bits
                     entire_file->bits_left = 0;
@@ -1218,8 +1193,9 @@ void deflate(
     assert(BTYPE < 3);
 
     printf(
-        "\t\tend of DEFLATE, read: %lu bytes\n",
-        entire_file->data - started_at);
+        "\t\tend of DEFLATE, read: %lu bytes (decompressed size: %u bytes)\n",
+        entire_file->data - started_at,
+        recipient_at - recipient);
     assert(entire_file->data - started_at + 1 == expected_size_bytes);
 }
 

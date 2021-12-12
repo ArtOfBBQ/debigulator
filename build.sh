@@ -1,5 +1,5 @@
 APP_NAME="hellogzip"
-IMAGE_NAME="gzipsample"
+IMAGE_NAME="predictable"
 IMAGE_TYPE="gz"
 
 echo "Building $APP_NAME... (this shell script must be run from the app's root directory)"

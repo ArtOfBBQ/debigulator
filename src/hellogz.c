@@ -244,9 +244,9 @@ int main(int argc, const char * argv[])
         /* entire_file: */ entire_file,
         /* expected_size_bytes: */ entire_file->size_left - 8);
     
-    printf(
-        "gzip file de-compressed contents were: %s\n",
-        recipient); 
+    // printf(
+    //     "gzip file de-compressed contents were: %s\n",
+    //     recipient); 
     
     GZFooter * gzip_footer = consume_struct(
         /* type: */ GZFooter,
