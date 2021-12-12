@@ -10,8 +10,7 @@
 #pragma pack(push, 1)
 
 /*
-Each member has the following structure:
-
+The specification says a gzip file must start with:
 +---+---+---+---+---+---+---+---+---+---+
 |ID1|ID2|CM |FLG|     MTIME     |XFL|OS | (more-->)
 +---+---+---+---+---+---+---+---+---+---+
@@ -27,35 +26,15 @@ typedef struct GZHeader {
 } GZHeader;
 
 /*
-(if FLG.FEXTRA set)
-
-+---+---+=================================+
-| XLEN  |...XLEN bytes of "extra field"...| (more-->)
-+---+---+=================================+
-
-
-(if FLG.FCOMMENT set)
-
-+===================================+
-|...file comment, zero-terminated...| (more-->)
-+===================================+
-
-(if FLG.FHCRC set)
-
-+---+---+
-| CRC16 |
-+---+---+
-
-+=======================+
-|...compressed blocks...| (more-->)
-+=======================+
-
-0   1   2   3   4   5   6   7
+The specification says a gzip file must end with:
 +---+---+---+---+---+---+---+---+
 |     CRC32     |     ISIZE     |
 +---+---+---+---+---+---+---+---+
 */
-
+typedef struct GZFooter {
+    uint32_t CRC32;
+    uint32_t ISIZE;
+} GZFooter;
 #pragma pack(pop)
 
 
@@ -122,8 +101,19 @@ char * consume_till_zero_terminate(
     return filename;
 }
 
-int main(int argc, const char * argv[]) 
+
+int main(int argc, const char * argv[])
 {
+    // printf("testing peek_bits()...\n");
+    // uint32_t num = 8;
+    // uint32_t num2 = 2;
+    // printf("num is :%u, binary: ", num);
+    // print_as_binary(num);
+    // printf("\n");
+    // printf("num2 is :%u, binary: ", num2);
+    // print_as_binary(num2);
+    // printf("\n");
+    
     printf("Hello .gz files!\n");
     
     if (argc != 2) {
@@ -137,18 +127,18 @@ int main(int argc, const char * argv[])
     
     printf("Inspecting file: %s\n", argv[1]);
     
-    FILE * imgfile = fopen(
+    FILE * gzipfile = fopen(
         argv[1],
         "rb");
-    fseek(imgfile, 0, SEEK_END);
-    size_t fsize = ftell(imgfile);
-    fseek(imgfile, 0, SEEK_SET);
-
-
+    fseek(gzipfile, 0, SEEK_END);
+    size_t fsize = ftell(gzipfile);
+    fseek(gzipfile, 0, SEEK_SET);
+    
     printf("creating buffer..\n");
     
     uint8_t * buffer = malloc(fsize);
-    EntireFile * entire_file = malloc(sizeof(EntireFile));
+    EntireFile * entire_file =
+        malloc(sizeof(EntireFile));
     
     size_t bytes_read = fread(
         /* ptr: */
@@ -158,9 +148,9 @@ int main(int argc, const char * argv[])
         /* nmemb (no of members) to read: */
             fsize,
         /* stream: */
-            imgfile);
+            gzipfile);
     printf("bytes read: %zu\n", bytes_read);
-    fclose(imgfile);
+    fclose(gzipfile);
     assert(bytes_read == fsize);
     
     entire_file->data = buffer;
@@ -171,16 +161,16 @@ int main(int argc, const char * argv[])
     GZHeader * gzip_header = consume_struct(
         /* type  : */ GZHeader,
         /* buffer: */ entire_file);
-
+    
     printf("checking if valid gzip file..\n");
     assert(gzip_header->id1 == 31);
     assert(gzip_header->id2 == 139);
-
+    
     if (gzip_header->CM != 8) {
         printf("unsupported gzip - no DEFLATE compression~\n");
         return 1;
     }
-
+    
     printf("OK - passed file has gzip identifications\n");
 
     /*
@@ -241,7 +231,7 @@ int main(int argc, const char * argv[])
         
         printf("a comment was included: %s\n", comment);
     }
-
+    
     printf("compressed blocks should start here...\n");
     printf("file size left: %zu\n", entire_file->size_left);
     printf(
@@ -253,11 +243,26 @@ int main(int argc, const char * argv[])
         /* recipient: */ recipient,
         /* entire_file: */ entire_file,
         /* expected_size_bytes: */ entire_file->size_left - 8);
-   
+    
     printf(
         "gzip file de-compressed contents were: %s\n",
         recipient); 
+    
+    GZFooter * gzip_footer = consume_struct(
+        /* type: */ GZFooter,
+        /* buffer: */ entire_file);
+
+    printf("CRC32 value from footer: %u\n", gzip_footer->CRC32);
+    printf("ISIZE value from footer: %u\n", gzip_footer->ISIZE);
+    
+    printf(
+        "size left in buffer (excess bytes): %u\n",
+        (int)entire_file->size_left);
+    
     printf("end of gz file...\n");
+    
+    free(gzip_header);
+    free(gzip_footer);
     
     return 0;
 }

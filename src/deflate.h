@@ -8,7 +8,7 @@ typedef struct EntireFile {
     void * data;
     
     uint8_t bits_left;
-    uint32_t bit_buffer;
+    uint8_t bit_buffer;
     
     size_t size_left;
 } EntireFile;
@@ -17,7 +17,73 @@ typedef struct HuffmanEntry {
     uint32_t key;
     uint32_t code_length;
     uint32_t value;
+    int used;
 } HuffmanEntry;
+
+void print_as_binary(const uint32_t input) {
+    printf("[");
+    uint32_t div = 256 * 2 * 2 * 2 * 2 * 2 * 2 * 2;
+    uint32_t rem = input;
+    while (true) {
+        if (div == 128) {printf(" ");}
+        if (rem >= div) {
+            printf("1");
+            rem -= div;
+        } else {
+            printf("0");
+        }
+        
+        if (div == 1) { break; }
+        div /= 2;
+    }
+    printf("]");
+}
+
+uint32_t mask_rightmost_bits(
+    const uint32_t input,
+    const int bits_to_mask)
+{
+    int mask = 0;
+    int next_increment = 1;
+    for (int _ = 0; _ < bits_to_mask; _++) {
+        mask += next_increment;
+        next_increment *= 2;
+    }
+    
+    return input & mask;
+}
+
+uint8_t reverse_bit_order(
+    const uint8_t original,
+    const uint8_t bit_count)
+{
+    assert(bit_count > 0);
+    assert(bit_count < 9);
+
+    if (bit_count == 1) { return original; }
+    
+    uint8_t return_value = 0;
+    
+    float middle = (bit_count - 1.0f) / 2.0f;
+    assert(middle > 0);
+    assert(middle <= 3.5f);
+    
+    for (uint8_t i = 0; i < bit_count; i++) {
+        float dist_to_middle = middle - i;
+        assert(dist_to_middle < 4);
+        
+        uint8_t target_pos = i + (dist_to_middle * 2);
+        
+        assert(target_pos >= 0);
+        assert(target_pos < 8);
+        
+        return_value =
+            return_value |
+                (((original >> i) & 1) << target_pos);
+    }
+    
+    return return_value;
+}
 
 /*
 grab data from buffer & advance pointer this is for grabbing
@@ -43,92 +109,133 @@ relative LSB position).
 
 Jelle: IMHO this means this:
 let's say you have the number 00001001 (9)
-
-->
-FOR HUFFMAN CODES
-you consume 2 bits and get: 10 which is 2
-you consume another 2 bits and get: 01 which is 1
-my function does this
-->
-FOR EVERYTHING ELSE
-you consume 2 bits and get: 01 which is 1
-you consume another 2 bits and get: 10 which is 2
-i have no function yet that does this
 */
-uint32_t consume_bits(
+uint32_t peek_bits(
     EntireFile * from,
-    uint32_t bits_to_consume)
+    const uint32_t amount)
 {
-    assert(bits_to_consume > 0);
-    assert(bits_to_consume < 33);
+    assert(amount > 0);
+    assert(amount < 33);
+    assert(from->bits_left < 9);
     
     uint32_t return_value = 0;
+    uint32_t bits_to_peek = amount;
+    
     int bits_in_return = 0;
     
-    while (bits_to_consume > 0) {
-        if (from->bits_left > 0) {
-            return_value |=
-                ((from->bit_buffer & 1) << bits_in_return);
-            bits_in_return += 1;
-            
-            from->bit_buffer >>= 1;
-            from->bits_left -= 1;
-            bits_to_consume -= 1;
-        } else {
-            // TODO: this might be wrong endian
-            // when consuming more than 8 bits
-            from->bit_buffer <<= 8;
-            from->bit_buffer |= *((uint8_t *)from->data);
-            from->bits_left += 8;
-            
-            from->size_left -= 1;
-            from->data += 1;
-        }
+    if (from->bits_left > 0) {
+        int num_to_read_from_buf =
+            bits_to_peek > from->bits_left ?
+                from->bits_left
+                : bits_to_peek;
+        
+        return_value =
+            mask_rightmost_bits(
+                /* input: */
+                    from->bit_buffer,
+                /* amount: */
+                    num_to_read_from_buf);
+        
+        bits_to_peek -= num_to_read_from_buf;
+        bits_in_return += num_to_read_from_buf;
+    }
+    
+    uint8_t * peek_at = from->data;
+    while (bits_to_peek >= 8) {
+        // the new byte will be 'more significant', so the
+        // return value can stay the same but the new byte
+        // 's values should be bitshifted left to be bigger
+        uint32_t new_byte = *peek_at;
+        return_value |= (new_byte <<= bits_in_return);
+        peek_at++;
+        bits_to_peek -= 8;
+        bits_in_return += 8;
+    }
+    
+    assert(bits_to_peek < 8);
+    if (bits_to_peek > 0) {
+       // Add bits from the final byte
+       // here again, if there were bits in the return
+       // the new byte is 'more significant'
+       // so again the return value stays the same and
+       // the new partial byte gets bitshifted left
+       uint32_t partial_new_byte = 
+            mask_rightmost_bits(
+                /* input: */ *peek_at,
+                /* amount: */ bits_to_peek);
+       return_value |= (partial_new_byte <<= bits_in_return);
     }
     
     return return_value;
 }
 
-uint8_t reverse_bit_order(
-    uint8_t original,
-    uint8_t bit_count)
+uint32_t discard_bits(
+    EntireFile * from,
+    const unsigned int amount)
 {
-    assert(bit_count > 1);
-    assert(bit_count < 9);
+    assert(from->bits_left < 9);
+    assert(amount > 0);
+    unsigned int discards_left = amount;
     
-    uint8_t return_value = 0;
-    
-    float middle = (bit_count - 1.0f) / 2.0f;
-    assert(middle > 0);
-    assert(middle <= 3.5f);
-    
-    for (uint8_t i = 0; i < bit_count; i++) {
-        float dist_to_middle = middle - i;
-        assert(dist_to_middle < 4);
-        
-        uint8_t target_pos = i + (dist_to_middle * 2);
-        
-        assert(target_pos >= 0);
-        assert(target_pos < 8);
-        
-        return_value =
-            return_value |
-                (((original >> i) & 1) << target_pos);
+    if (from->bits_left > 0) {
+        int bits_to_discard =
+            from->bits_left > discards_left ?
+                discards_left
+                : from->bits_left;
+        from->bit_buffer >>= bits_to_discard;
+        from->bits_left -= bits_to_discard;
+        discards_left -= bits_to_discard;
     }
     
-    return return_value;
+    while (discards_left >= 8) {
+        assert(from->bits_left == 0);
+        from->data += 1;
+        from->size_left -= 1;
+        discards_left -= 8;
+    }
+    
+    assert(discards_left < 9);
+    if (discards_left > 0) {
+        assert(from->bits_left == 0);
+        from->bit_buffer = *(uint8_t *)from->data;
+        from->data += 1;
+        from->size_left -= 1;
+        from->bits_left = (8 - discards_left);
+        from->bit_buffer >>= discards_left;
+    }
+    
+    assert(from->bits_left < 9);
+}
+
+uint32_t consume_bits(
+    EntireFile * from,
+    const uint32_t amount)
+{
+    assert(amount > 0);
+    assert(amount < 33);
+    
+    uint32_t bits_to_consume = amount;
+    
+    uint32_t return_val = peek_bits(
+        from,
+        bits_to_consume);
+    discard_bits(
+        from,
+        bits_to_consume);
+    
+    return return_val;
 }
 
 uint32_t huffman_decode(
     HuffmanEntry * dict,
-    uint32_t dictsize,
+    const uint32_t dictsize,
     EntireFile * datastream)
 {
     uint32_t raw = 0;
     int found_at = -1;
     int bitcount = 0;
     
-    while (found_at == -1 && bitcount < 14) {
+    while (found_at == -1 && bitcount < 24) {
         bitcount += 1;
         
         /*
@@ -140,17 +247,18 @@ uint32_t huffman_decode(
         we have to shift what we already have and add
         the new bit to the right.
         */
-        raw = (raw << 1) |
-            consume_bits(
-                /* from: */ datastream,
-                /* size: */ 1);
+        uint8_t new_bit = consume_bits(
+            /* from: */ datastream,
+            /* size: */ 1);
+        
+        raw = (raw << 1) | new_bit;
         
         for (int i = 0; i < dictsize; i++) {
-            // TODO: don't just compare key, compare
-            // the sequence of bits exactly
             if (dict[i].key == raw
+                && dict[i].used == true
                 && bitcount == dict[i].code_length)
             {
+                uint32_t matched_key = dict[i].key;
                 found_at = i;
                 break;
             }
@@ -159,8 +267,9 @@ uint32_t huffman_decode(
     
     if (found_at < 0) {
         printf(
-            "failed to find raw value:%u in dict\n",
-            raw);
+            "failed to find raw value:%u for codelength: %u in dict\n",
+            raw,
+            bitcount);
         assert(1 == 2);
     }
     
@@ -172,7 +281,7 @@ uint32_t huffman_decode(
 
 HuffmanEntry * unpack_huffman(
     uint32_t * array,
-    uint32_t array_size)
+    const uint32_t array_size)
 {
     HuffmanEntry * unpacked_dict = malloc(
         sizeof(HuffmanEntry) * array_size);
@@ -181,32 +290,58 @@ HuffmanEntry * unpack_huffman(
     for (int i = 0; i < array_size; i++) {
         unpacked_dict[i].value = i;
         unpacked_dict[i].code_length = array[i];
+        unpacked_dict[i].key = 1234543;
+        unpacked_dict[i].used = false;
     }
-    
-    // this is straight from the deflate spec
     
     // 1) Count the number of codes for each code length.  Let
     // bl_count[N] be the number of codes of length N, N >= 1.
-    uint32_t * bl_count = malloc(array_size);
+    uint32_t * bl_count = malloc(
+        array_size * sizeof(uint32_t));
+    unsigned int unique_code_lengths = 0;
+    unsigned int min_code_length = 123454321;
+    unsigned int max_code_length = 0;
     for (int i = 0; i < array_size; i++) {
         bl_count[i] = 0;
     }
     
     for (int i = 0; i < array_size; i++) {
+        if (bl_count[array[i]] == 0) {
+            unique_code_lengths += 1;
+        }
+        if (array[i] > max_code_length) {
+            max_code_length = array[i];
+        }
+        if (array[i] < min_code_length && array[i] > 0) {
+            min_code_length = array[i];
+        }
         bl_count[array[i]] += 1;
     }
-
-    printf("bl_count[9]: %u\n", bl_count[9]);
     
     // Spec: 
     // 2) "Find the numerical value of the smallest code for each
     //    code length:"
-    uint32_t * smallest_code = malloc(600 * sizeof(uint32_t));
-    uint32_t code = 0;
+    uint32_t * smallest_code =
+        malloc(array_size * sizeof(uint32_t));
     
-    // this code is yanked straight from the spec
+    /*
+        this code is yanked straight from the spec
+        code = 0;
+        bl_count[0] = 0;
+        for (bits = 1; bits <= MAX_BITS; bits++) {
+            code = (code + bl_count[bits-1]) << 1;
+            next_code[bits] = code;
+        }
+    */
+    unsigned int code = 0;
     bl_count[0] = 0;
-    for (uint32_t bits = 1; bits < 14; bits++) {
+    
+    assert(max_code_length < array_size);
+    for (
+        int bits = 1;
+        bits <= max_code_length; 
+        bits++)
+    {
         code = (code + bl_count[bits-1]) << 1;
         smallest_code[bits] = code;
         
@@ -231,7 +366,6 @@ HuffmanEntry * unpack_huffman(
                     bits,
                     smallest_code[bits],
                     " - value can't fit in that few bits!\n");
-                // TODO: uncomment assertion
                 assert(1 == 2);
             }
         }
@@ -245,18 +379,15 @@ HuffmanEntry * unpack_huffman(
     //    not be assigned a value."
     for (uint32_t n = 0; n < array_size; n++) {
         uint32_t len = unpacked_dict[n].code_length;
-        
-        if (len != 0 && unpacked_dict[n].code_length > 0) {
-            // TODO: uncomment assertion
-            // or maybe they are supposed to overflow? IDK
-            // assert(smallest_code[len] < (1 << len));
-            
+       
+        if (len >= min_code_length) {
             unpacked_dict[n].key = smallest_code[len];
+            unpacked_dict[n].used = true;
             
             smallest_code[len]++;
         }
     }
-    
+   
     free(bl_count);
     free(smallest_code);
     
@@ -316,7 +447,7 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
     {9, 3, 25},
     {10, 4, 33},
     {11, 4, 49},
-    {12, 5, 65},
+    {12, 5, 65}, // we want 88? 88 - 65 = 23. 12 + 10111
     {13, 5, 97},
     {14, 6, 129},
     {15, 6, 193},
@@ -350,8 +481,6 @@ void deflate(
         "\t\tentire_file->data at start points to: %p\n",
         started_at);
     
-    // i put this 1st assertion in on instinct, dont know if its
-    // actually allowed
     assert(entire_file->bits_left == 0);
     assert(entire_file->size_left >= expected_size_bytes);
     
@@ -380,7 +509,6 @@ void deflate(
     uint8_t BFINAL = consume_bits(
         /* buffer: */ entire_file,
         /* size  : */ 1);
-    
     assert(BFINAL < 2);
     printf(
         "\t\t\tBFINAL (flag for final block): %u\n",
@@ -470,7 +598,7 @@ void deflate(
             for (int i = 280; i < 288; i++) {
                 fixed_hclen_table[i] = 8;
             }
-            
+ 
             HuffmanEntry * fixed_length_huffman =
                 unpack_huffman(
                     /* array:     : */
@@ -511,6 +639,8 @@ void deflate(
                 fixed_length_huffman[287].code_length == 8);
             assert(fixed_length_huffman[287].key == 199);
             
+            printf("\t\t\tcreated fixed length huffman dictionary.\n");
+             
             while (entire_file->size_left > 0) {
                 // this consumes from entire_file
                 // so we'll eventually hit 256 and break
@@ -539,24 +669,27 @@ void deflate(
                     uint32_t base_length =
                         length_extra_bits_table[i]
                             .base_decoded;
-                    uint32_t length = base_length;
-                    
-                    if (extra_bits > 0) {
-                        length = base_length + consume_bits(
-                            /* from: */ entire_file,
-                            /* size: */ extra_bits);
-                    }
+                    uint32_t extra_length =
+                        extra_bits > 0 ?
+                            consume_bits(
+                                /* from: */ entire_file,
+                                /* size: */ extra_bits)
+                        : 0;
+                    uint32_t total_length =
+                        base_length + extra_length;
                     assert(
-                        length >=
+                        total_length >=
                         length_extra_bits_table[i]
                             .base_decoded);
                     
                     // distances are stored in reverse order of
                     // huffman codes for some reason
-                    uint32_t distvalue = reverse_bit_order(
+                    uint32_t raw_dist_value =
                         consume_bits(
                             /* from: */ entire_file,
-                            /* size: */ 5),
+                            /* size: */ 5);
+                    uint32_t distvalue = reverse_bit_order(
+                        raw_dist_value,
                         5);
                     
                     assert(distvalue <= 29);
@@ -571,26 +704,31 @@ void deflate(
                             .base_decoded;
                     uint32_t total_dist;
                     
-                    assert(dist_extra_bits_table[distvalue].value
-                        == distvalue);
-                    uint32_t extra_bits_decoded =
+                    uint32_t dist_extra_bits_decoded =
                         dist_extra_bits > 0 ?
                             consume_bits(
                                 /* from: */ entire_file,
                                 /* size: */ dist_extra_bits)
                             : 0;
                     
-                    total_dist = base_dist + extra_bits_decoded;
+                    total_dist =
+                        base_dist + dist_extra_bits_decoded;
                     
                     // go back dist bytes, then copy length bytes
-                    assert(recipient_at - total_dist >= recipient);
+                    printf(
+                        "\t\t\trepeating %u bytes from %u bytes ago...",
+                        total_length,
+                        total_dist);
+                    assert(
+                        recipient_at - total_dist >= recipient);
                     uint8_t * back_dist_bytes =
                         recipient_at - total_dist;
-                    for (int i = 0; i < length; i++) {
+                    for (int _ = 0; _ < total_length; _++) {
                         *recipient_at = *back_dist_bytes;
                         recipient_at++;
                         back_dist_bytes++;
                     }
+                    printf("\n");
                 } else {
                     assert(litlenvalue == 256);
                     printf("\t\tend of ltln found!\n");
@@ -653,7 +791,9 @@ void deflate(
             printf(
                 "\t\t\tHCLEN: %u (4-19 vals of 0-6)\n",
                  HCLEN);
-            assert(HCLEN >= 4 && HCLEN <= 19);
+            assert(
+                HCLEN >= 4
+                && HCLEN <= 19);
             
             // This is a fixed swizzle (order of elements
             // in an array) that's agreed upon in the
@@ -707,12 +847,6 @@ void deflate(
             
             // TODO: should I do NUM_UNIQUE_CODELGNTHS
             // or only HCLEN? 
-            // HuffmanEntry * codelengths_huffman =
-            //     unpack_huffman(
-            //         /* array:     : */
-            //             HCLEN_table,
-            //         /* array_size : */
-            //             NUM_UNIQUE_CODELENGTHS);
             HuffmanEntry * codelengths_huffman =
                 unpack_huffman(
                     /* array:     : */
@@ -725,17 +859,20 @@ void deflate(
                 i < NUM_UNIQUE_CODELENGTHS;
                 i++)
             {
-                if (
-                    codelengths_huffman[i].code_length
-                        == 0)
-                {
-                    continue;
+                if (codelengths_huffman[i].used == true) {
+                    assert(
+                      codelengths_huffman[i].key >= 0);
+                    assert(
+                      codelengths_huffman[i].value >= 0);
+                    printf(
+                        "codelengths_huffman[%u].value: %u, key: %u, code_length:%u\n",
+                        i,
+                        codelengths_huffman[i].value,
+                        codelengths_huffman[i].key,
+                        codelengths_huffman[i].code_length);
+                    assert(
+                      codelengths_huffman[i].value < 19);
                 }
-                
-                assert(
-                  codelengths_huffman[i].value >= 0);
-                assert(
-                  codelengths_huffman[i].value < 19);
             }
             
             /*
@@ -762,6 +899,10 @@ void deflate(
             
             uint32_t * litlendist_table = malloc(
                 sizeof(uint32_t) * two_dicts_size);
+            // TODO: remove this debugging code
+            for (int i = 0; i < two_dicts_size; i++) {
+                litlendist_table[i] = 99999;
+            }
             
             while (len_i < two_dicts_size) {
                 uint32_t encoded_len = huffman_decode(
@@ -777,12 +918,11 @@ void deflate(
                         encoded_len;
                     len_i++;
                 } else if (encoded_len == 16) {
-                /*
-                !COPIED FROM SPECIFICATION!
-                16: Copy previous code length 3-6 times.
-                    2 extra bits for repeat length
-                    (0 = 3, ... , 3 = 6)
-                */
+                    /*
+                    16: Copy previous code length 3-6 times.
+                        2 extra bits for repeat length
+                        (0 = 3, ... , 3 = 6)
+                    */
                     uint32_t extra_bits_repeat =
                         consume_bits(
                             /* from: */ entire_file,
@@ -792,6 +932,7 @@ void deflate(
                     
                     assert(repeats >= 3);
                     assert(repeats <= 6);
+                    assert(len_i > 0);
                     
                     for (
                         int i = 0;
@@ -803,12 +944,11 @@ void deflate(
                         len_i++;
                     }
                 } else if (encoded_len == 17) {
-                /*
-                !COPIED FROM SPECIFICATION!
-                17: Repeat a code length of 0 for 3 - 10
-                    times.
-                    3 extra bits for length
-                */
+                    /*
+                    17: Repeat a code length of 0 for 3 - 10
+                        times.
+                        3 extra bits for length
+                    */
                     uint32_t extra_bits_repeat =
                         consume_bits(
                             /* from: */ entire_file,
@@ -829,12 +969,11 @@ void deflate(
                     }
                     
                 } else if (encoded_len == 18) {
-                /*
-                !COPIED FROM SPECIFICATION!
-                18: Repeat a code length of 0 for
-                    11 - 138 times
-                    7 extra bits for length
-                */
+                    /*
+                    18: Repeat a code length of 0 for
+                        11 - 138 times
+                        7 extra bits for length
+                    */
                     uint32_t extra_bits_repeat =
                         consume_bits(
                             /* from: */ entire_file,
@@ -859,10 +998,14 @@ void deflate(
                     assert(1 == 2);
                 }
             }
-            free(codelengths_huffman);
             
             printf("\t\t\tfinished reading two dicts\n");
             assert(len_i == two_dicts_size);
+            
+            // TODO: remove this debugging code
+            for (int i = 0; i < two_dicts_size; i++) {
+                assert(litlendist_table[i] < 99999);
+            }
             
             HuffmanEntry * litlen_huffman =
                 unpack_huffman(
@@ -870,6 +1013,13 @@ void deflate(
                         litlendist_table,
                     /* array_size : */
                         HLIT);
+            for (int i = 0; i < HLIT; i++) {
+                if (litlen_huffman[i].used == true) {
+                    assert(litlen_huffman[i].value == i);
+                    assert(litlen_huffman[i].key < 99999);
+                    assert(litlen_huffman[i].code_length < 15);
+                }
+            }
             printf("\t\tunpacked litlen_huffman\n");
             
             HuffmanEntry * dist_huffman =
@@ -878,6 +1028,13 @@ void deflate(
                         litlendist_table + HLIT,
                     /* array_size : */
                         HDIST);
+            for (int i = 0; i < HDIST; i++) {
+                if (dist_huffman[i].used == true) {
+                    assert(dist_huffman[i].value == i);
+                    assert(dist_huffman[i].key < 99999);
+                    assert(dist_huffman[i].code_length < 15);
+                }
+            }
             printf("\t\tunpacked dist_huffman\n");
             
             // Next, we need to read the actual data
@@ -900,9 +1057,14 @@ void deflate(
                     /* raw data: */
                         entire_file);
                 if (litlenvalue < 256) {
+                    printf("adding literal: %c\n",
+                        (char)(litlenvalue & 255));
                     *recipient_at++ =
                         (uint8_t)(litlenvalue & 255);
                 } else if (litlenvalue > 256) {
+                    printf(
+                        "found raw litlenvalue: %u\n",
+                        litlenvalue);
                     
                     assert(litlenvalue < 286);
                     uint32_t i = litlenvalue - 257;
@@ -913,18 +1075,119 @@ void deflate(
                     uint32_t extra_bits =
                         length_extra_bits_table[i]
                             .num_extra_bits;
-                    uint32_t length =
+                    uint32_t base_length =
                         length_extra_bits_table[i]
                             .base_decoded;
-                    if (extra_bits > 0) {
-                        length += consume_bits(
-                            /* from: */ entire_file,
-                            /* size: */ extra_bits);
-                    }
+                    uint32_t extra_length =
+                        extra_bits > 0 ?
+                            consume_bits(
+                                /* from: */ entire_file,
+                                /* size: */ extra_bits)
+                        : 0;
+                    uint32_t total_length =
+                        base_length + extra_length;
+                    printf("total_length: %u\n", total_length);
+                    
+                    uint32_t distvalue = huffman_decode(
+                        /* dict: */
+                            dist_huffman,
+                        /* dictsize: */
+                            HDIST,
+                        /* raw data: */
+                            entire_file);
+                    
+                    assert(distvalue <= 29);
+                    printf(
+                        "decoded distvalue: %u\n",
+                        distvalue);
                     assert(
-                        length >=
-                        length_extra_bits_table[i]
-                            .base_decoded);
+                        dist_extra_bits_table[distvalue]
+                            .value
+                                == distvalue);
+                    uint32_t dist_extra_bits =
+                        dist_extra_bits_table[distvalue]
+                            .num_extra_bits;
+                    uint32_t base_dist =
+                        dist_extra_bits_table[distvalue]
+                            .base_decoded;
+                    printf("base_dist: %u\n", base_dist);
+                    uint32_t total_dist;
+                    printf(
+                        "dist_extra_bits: %u\n",
+                        dist_extra_bits);
+                    uint32_t dist_extra_bits_decoded =
+                        dist_extra_bits > 0 ?
+                            consume_bits(
+                                /* from: */ entire_file,
+                                /* size: */ dist_extra_bits)
+                            : 0;
+                    total_dist =
+                        base_dist + dist_extra_bits_decoded;
+                    
+                    // go back dist bytes, then copy length bytes
+                    if (
+                        recipient_at - total_dist >= recipient)
+                    {
+                        uint8_t * back_dist_bytes =
+                            recipient_at - total_dist;
+                        for (int i = 0; i < total_length; i++) {
+                            *recipient_at = *back_dist_bytes;
+                            printf(
+                                "adding from len/dist: %c\n",
+                                (char)*back_dist_bytes);
+                            recipient_at++;
+                            back_dist_bytes++;
+                        }
+                    } else {
+                        printf("error! distance too far back\n");
+                        printf("total_dist: %u\n", total_dist);
+                        printf(
+                            "recipient_at: %p\n",
+                            recipient_at);
+                        printf(
+                            "recipient (origin): %p\n",
+                            recipient);
+                        printf(
+                            "max distance was: %u\n",
+                            (uint32_t)(recipient_at
+                                - recipient));
+                        printf("decoded distvalue: %u\n",
+                            distvalue);
+                        printf("distvalue as binary :");
+                        unsigned int temp = distvalue;
+                        for (int i = 65536; i > 0; i /= 2) {
+                            if (temp >= i) {
+                                temp -= i;
+                                printf("1");
+                            } else {
+                                printf("0");
+                            }
+                        }
+                        printf("\n");
+                        printf(
+                            "distvalue reversed (3 bit): %u\n",
+                            reverse_bit_order(distvalue, 4));
+                        printf(
+                            "distvalue reversed (4 bit): %u\n",
+                            reverse_bit_order(distvalue, 4));
+                        printf(
+                            "distvalue reversed (5 bit): %u\n",
+                            reverse_bit_order(distvalue, 5));
+                        printf(
+                            "distvalue reversed (6 bit): %u\n",
+                            reverse_bit_order(distvalue, 6));
+
+                        for (unsigned int _ = 0; _ < HDIST; _++) {
+                            printf("dist_huffman[%u].key: %u, value: %u, codelen: %u\n",
+                                _,
+                                dist_huffman[_].key,
+                                dist_huffman[_].value,
+                                dist_huffman[_].code_length);
+                        }
+                        
+                        printf("final recipient:\n");
+                        printf("%s", recipient);
+                    }
                 } else {
                     assert(litlenvalue == 256);
                     printf("\t\tend of ltln found!\n");
@@ -933,36 +1196,12 @@ void deflate(
                     entire_file->bits_left = 0;
                     break;
                 }
-                
-                uint32_t distvalue = huffman_decode(
-                    /* dict: */
-                        dist_huffman,
-                    /* dictsize: */
-                        HDIST,
-                    /* raw data: */
-                        entire_file);
-                
-                assert(distvalue <= 29);
-                assert(
-                    dist_extra_bits_table[distvalue]
-                        .value
-                            == distvalue);
-                uint32_t extra_bits =
-                    dist_extra_bits_table[distvalue]
-                        .num_extra_bits;
-                uint32_t dist =
-                    dist_extra_bits_table[distvalue]
-                        .base_decoded;
-                if (extra_bits > 0) {
-                    dist += consume_bits(
-                        /* from: */ entire_file,
-                        /* size: */ extra_bits);
-                }
             }
             
+            free(codelengths_huffman);
+            free(litlendist_table);
             free(litlen_huffman);
             free(dist_huffman);
-            free(litlendist_table);
             
             break;
         case (3):
