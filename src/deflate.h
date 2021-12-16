@@ -169,7 +169,7 @@ uint32_t peek_bits(
     return return_value;
 }
 
-uint32_t discard_bits(
+void discard_bits(
     EntireFile * from,
     const unsigned int amount)
 {
@@ -412,7 +412,7 @@ static ExtraBitsEntry length_extra_bits_table[] = {
     {266, 1, 13},
     {267, 1, 15}, // index 10
     {268, 1, 17},
-    {269, 1, 19},
+    {269, 2, 19},
     {270, 2, 23},
     {271, 2, 27},
     {272, 2, 31},
@@ -467,19 +467,22 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 void deflate(
     uint8_t * recipient,
     EntireFile * entire_file,
-    int expected_size_bytes)
+    unsigned int compressed_size_bytes,
+    char * known_output,
+    unsigned int expected_file_size)
 {
     printf(
-        "\t\trunning DEFLATE algo, expecting %u bytes...\n",
-        expected_size_bytes);
+        "\t\trunning DEFLATE algo, expecting %u bytes of compressed data...\n",
+        compressed_size_bytes);
     void * started_at = entire_file->data;
     uint8_t * recipient_at = recipient;
+    uint8_t * validation_at = (uint8_t *)known_output;
     printf(
-        "\t\tentire_file->data at start points to: %p\n",
+        "\t\tentire_file->data at start points to: %pjn",
         started_at);
     
     assert(entire_file->bits_left == 0);
-    assert(entire_file->size_left >= expected_size_bytes);
+    assert(entire_file->size_left >= compressed_size_bytes);
     
     /*
     Each block of compressed data begins with 3 header
@@ -556,7 +559,6 @@ void deflate(
                 ~LEN);
             assert(NLEN == ~LEN);
             
-            // TODO: check if copying bytes to output works
             for (int i = 0; i < LEN; i++) {
                 recipient_at[0] = ((uint8_t *)entire_file->data)[0];
                 entire_file->data += 1;
@@ -651,8 +653,12 @@ void deflate(
                 
                 if (litlenvalue < 256) {
                     // literal value, not a length
-                    *recipient_at++ =
+                    *recipient_at =
                         (uint8_t)(litlenvalue & 255);
+                    assert(*recipient_at == *validation_at);
+                    recipient_at++;
+                    validation_at++;
+                    
                 } else if (litlenvalue > 256) {
                     // length, (therefore also need distance)
                     assert(litlenvalue < 286);
@@ -710,22 +716,22 @@ void deflate(
                     
                     total_dist =
                         base_dist + dist_extra_bits_decoded;
+
+                    assert(
+                        dist_extra_bits_table[distvalue + 1].base_decoded > total_dist);
                     
                     // go back dist bytes, then copy length bytes
-                    printf(
-                        "\t\t\trepeating %u bytes from %u bytes ago...",
-                        total_length,
-                        total_dist);
                     assert(
                         recipient_at - total_dist >= recipient);
                     uint8_t * back_dist_bytes =
                         recipient_at - total_dist;
                     for (int _ = 0; _ < total_length; _++) {
                         *recipient_at = *back_dist_bytes;
+                        assert(*recipient_at == *validation_at);
                         recipient_at++;
+                        validation_at++;
                         back_dist_bytes++;
                     }
-                    printf("\n");
                 } else {
                     assert(litlenvalue == 256);
                     printf("\t\tend of ltln found!\n");
@@ -884,9 +890,6 @@ void deflate(
             
             uint32_t len_i = 0;
             uint32_t two_dicts_size = HLIT + HDIST;
-            printf(
-                "\t\t\tdecoding lit/len using %s...\n",
-                "unpacked code lengths table");
             
             uint32_t * litlendist_table = malloc(
                 sizeof(uint32_t) * two_dicts_size);
@@ -1006,7 +1009,6 @@ void deflate(
                     assert(litlen_huffman[i].code_length < 15);
                 }
             }
-            printf("\t\tunpacked litlen_huffman\n");
             
             HuffmanEntry * dist_huffman =
                 unpack_huffman(
@@ -1014,6 +1016,7 @@ void deflate(
                         litlendist_table + HLIT,
                     /* array_size : */
                         HDIST);
+            
             for (int i = 0; i < HDIST; i++) {
                 if (dist_huffman[i].used == true) {
                     assert(dist_huffman[i].value == i);
@@ -1021,7 +1024,6 @@ void deflate(
                     assert(dist_huffman[i].code_length < 15);
                 }
             }
-            printf("\t\tunpacked dist_huffman\n");
             
             // Next, we need to read the actual data
             // and decode it using the 'litlen'
@@ -1032,10 +1034,11 @@ void deflate(
             // the values 256-285 are length/distances
             // and will often need 'extra bits' to
             // determine the exact length
-            printf("***** DECOMPRESSING - REPEATED CHUNKS IN [BRACKETS]\n");
             while (entire_file->size_left > 0) {
                 // this consumes from entire_file
                 // so we'll eventually hit 256 and break
+                print_as_binary(peek_bits(entire_file, 16));
+                printf(" - ");
                 uint32_t litlenvalue = huffman_decode(
                     /* dict: */
                         litlen_huffman,
@@ -1043,11 +1046,15 @@ void deflate(
                         HLIT,
                     /* raw data: */
                         entire_file);
+                printf(
+                    "decoded litlenvalue: %u\n",
+                    litlenvalue);
                 if (litlenvalue < 256) {
-                    printf("%c",
-                        (char)(litlenvalue & 255));
-                    *recipient_at++ =
+                    *recipient_at =
                         (uint8_t)(litlenvalue & 255);
+                    assert(*recipient_at == *validation_at);
+                    recipient_at++;
+                    validation_at++;
                 } else if (litlenvalue > 256) {
                     assert(litlenvalue < 286);
                     uint32_t i = litlenvalue - 257;
@@ -1058,6 +1065,9 @@ void deflate(
                     uint32_t extra_bits =
                         length_extra_bits_table[i]
                             .num_extra_bits;
+                    printf(
+                        "consuming %u extra bits for length\n",
+                        extra_bits);
                     uint32_t base_length =
                         length_extra_bits_table[i]
                             .base_decoded;
@@ -1078,7 +1088,6 @@ void deflate(
                         /* raw data: */
                             entire_file);
                     
-                    assert(distvalue <= 29);
                     assert(
                         dist_extra_bits_table[distvalue]
                             .value
@@ -1086,6 +1095,9 @@ void deflate(
                     uint32_t dist_extra_bits =
                         dist_extra_bits_table[distvalue]
                             .num_extra_bits;
+                    printf(
+                        "consuming %u extra bits for distance\n",
+                        dist_extra_bits);
                     uint32_t base_dist =
                         dist_extra_bits_table[distvalue]
                             .base_decoded;
@@ -1103,69 +1115,24 @@ void deflate(
                     if (
                         recipient_at - total_dist >= recipient)
                     {
-                        printf("[");
                         uint8_t * back_dist_bytes =
                             recipient_at - total_dist;
                         for (int i = 0; i < total_length; i++) {
                             *recipient_at = *back_dist_bytes;
-                            printf(
-                                "%c",
-                                (char)*back_dist_bytes);
+                            assert(
+                                *recipient_at == *validation_at);
                             recipient_at++;
+                            validation_at++;
+
                             back_dist_bytes++;
                         }
-                        printf("]");
                     } else {
-                        printf("error! distance too far back\n");
-                        printf("total_dist: %u\n", total_dist);
-                        printf(
-                            "recipient_at: %p\n",
-                            recipient_at);
-                        printf(
-                            "recipient (origin): %p\n",
-                            recipient);
-                        printf(
-                            "max distance was: %u\n",
-                            (uint32_t)(recipient_at
-                                - recipient));
-                        printf("decoded distvalue: %u\n",
-                            distvalue);
-                        printf("distvalue as binary :");
-                        unsigned int temp = distvalue;
-                        for (int i = 65536; i > 0; i /= 2) {
-                            if (temp >= i) {
-                                temp -= i;
-                                printf("1");
-                            } else {
-                                printf("0");
-                            }
-                        }
-                        printf("\n");
-                        printf(
-                            "distvalue reversed (3 bit): %u\n",
-                            reverse_bit_order(distvalue, 4));
-                        printf(
-                            "distvalue reversed (4 bit): %u\n",
-                            reverse_bit_order(distvalue, 4));
-                        printf(
-                            "distvalue reversed (5 bit): %u\n",
-                            reverse_bit_order(distvalue, 5));
-                        printf(
-                            "distvalue reversed (6 bit): %u\n",
-                            reverse_bit_order(distvalue, 6));
-                        return;
-                        
-                        for (unsigned int _ = 0; _ < HDIST; _++) {
-                            printf("dist_huffman[%u].key: %u, value: %u, codelen: %u\n",
-                                _,
-                                dist_huffman[_].key,
-                                dist_huffman[_].value,
-                                dist_huffman[_].code_length);
-                        }
+                        printf("ERROR! distance too far back\n");
+                        assert(1 == 2);
                     }
                 } else {
                     assert(litlenvalue == 256);
-                    printf("*****\n");
+                    
                     // TODO: figure out what to do
                     // with any remaining bits
                     entire_file->bits_left = 0;
@@ -1193,9 +1160,11 @@ void deflate(
     assert(BTYPE < 3);
 
     printf(
-        "\t\tend of DEFLATE, read: %lu bytes (decompressed size: %u bytes)\n",
+        "\t\tend of DEFLATE, read: %lu bytes (decompressed size: %lu bytes)\n",
         entire_file->data - started_at,
         recipient_at - recipient);
-    assert(entire_file->data - started_at + 1 == expected_size_bytes);
+    assert(
+        entire_file->data - started_at + 1 ==
+            compressed_size_bytes);
 }
 
