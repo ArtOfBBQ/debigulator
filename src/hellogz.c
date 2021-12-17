@@ -201,9 +201,11 @@ int main(int argc, const char * argv[])
             /* from: */ entire_file,
             /* max_size: */ MAX_ORIGINAL_FILENAME_SIZE);
         
-        printf("original filename was included: %s\n", filename);
+        printf(
+            "original filename was included: %s\n",
+            filename);
     }
-
+    
     /*
     if FLG.FCOMMENT set)
     
@@ -224,10 +226,16 @@ int main(int argc, const char * argv[])
     printf(
         "8 bytes at EOF rsrved, so DEFLATE size is: %zu\n",
         entire_file->size_left - 8);
-   
+
+    // TODO: find a robust way to read the ISIZE field
+    uint8_t * input_size_ptr =
+        entire_file->data + entire_file->size_left - 5;
+    uint32_t input_size = *(uint32_t *)input_size_ptr;
+    printf("input_size may have been: %u\n", input_size);
+    
     // TODO: figure out how much memory to assign before we know
     // uncompressed size 
-    uint8_t * recipient = malloc(entire_file->size_left * 30);
+    uint8_t * recipient = malloc(input_size);
     
     deflate(
         /* recipient: */ recipient,
@@ -239,7 +247,7 @@ int main(int argc, const char * argv[])
     GZFooter * gzip_footer = consume_struct(
         /* type: */ GZFooter,
         /* buffer: */ entire_file);
-
+    
     printf("CRC32 value from footer: %u\n", gzip_footer->CRC32);
     printf("ISIZE value from footer: %u\n", gzip_footer->ISIZE);
     

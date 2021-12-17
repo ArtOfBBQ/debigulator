@@ -218,7 +218,7 @@ uint32_t huffman_decode(
     
     if (found_at < 0) {
         printf(
-            "failed to find raw value:%u for codelength: %u in dict\n",
+            "failed to find raw :%u for codelen: %u in dict\n",
             raw,
             bitcount);
         assert(1 == 2);
