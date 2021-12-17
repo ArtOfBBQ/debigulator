@@ -104,21 +104,10 @@ char * consume_till_zero_terminate(
 
 int main(int argc, const char * argv[])
 {
-    // printf("testing peek_bits()...\n");
-    // uint32_t num = 8;
-    // uint32_t num2 = 2;
-    // printf("num is :%u, binary: ", num);
-    // print_as_binary(num);
-    // printf("\n");
-    // printf("num2 is :%u, binary: ", num2);
-    // print_as_binary(num2);
-    // printf("\n");
-    
     printf("Hello .gz files!\n");
     
     if (argc != 2) {
-        printf("Please supply 1 argument (png file name)\n");
-        printf("Got:");
+        printf("Please supply 1 argument : the PNG file name.\n");
         for (int i = 0; i < argc; i++) {
             printf(" %s", argv[i]);
         }
@@ -171,8 +160,6 @@ int main(int argc, const char * argv[])
         return 1;
     }
     
-    printf("OK - passed file has gzip identifications\n");
-
     /*
     FLG (FLaGs)
        This flag byte is divided into bits as follows:
@@ -237,16 +224,17 @@ int main(int argc, const char * argv[])
     printf(
         "8 bytes at EOF rsrved, so DEFLATE size is: %zu\n",
         entire_file->size_left - 8);
+   
+    // TODO: figure out how much memory to assign before we know
+    // uncompressed size 
+    uint8_t * recipient = malloc(entire_file->size_left * 30);
     
-    uint8_t * recipient = malloc(entire_file->size_left - 8);
     deflate(
         /* recipient: */ recipient,
         /* entire_file: */ entire_file,
-        /* expected_size_bytes: */ entire_file->size_left - 8);
+        /* compressed_size_bytes: */ entire_file->size_left - 8);
     
-    // printf(
-    //     "gzip file de-compressed contents were: %s\n",
-    //     recipient); 
+    printf("\ndeflate algorithm completed & returned\n");
     
     GZFooter * gzip_footer = consume_struct(
         /* type: */ GZFooter,

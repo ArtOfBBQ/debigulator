@@ -17,27 +17,8 @@ typedef struct HuffmanEntry {
     uint32_t key;
     uint32_t code_length;
     uint32_t value;
-    int used;
+    bool32_t used;
 } HuffmanEntry;
-
-void print_as_binary(const uint32_t input) {
-    printf("[");
-    uint32_t div = 256 * 2 * 2 * 2 * 2 * 2 * 2 * 2;
-    uint32_t rem = input;
-    while (true) {
-        if (div == 128) {printf(" ");}
-        if (rem >= div) {
-            printf("1");
-            rem -= div;
-        } else {
-            printf("0");
-        }
-        
-        if (div == 1) { break; }
-        div /= 2;
-    }
-    printf("]");
-}
 
 uint32_t mask_rightmost_bits(
     const uint32_t input,
@@ -85,31 +66,6 @@ uint32_t reverse_bit_order(
     return return_value;
 }
 
-/*
-grab data from buffer & advance pointer this is for grabbing
-only bits, use 'consume_struct' for bytes
-
-Data elements are packed into bytes in order of increasing bit
-number within the byte, i.e., starting with the least-significant
-bit of the byte.
-* Data elements other than Huffman codes are packed
-  starting with the least-significant bit of the data
-  element.
-* Huffman codes are packed starting with the most-
-  significant bit of the code.
-
-In other words, if one were to print out the compressed data as
-a sequence of bytes, starting with the first byte at the
-*right* margin and proceeding to the *left*, with the most-
-significant bit of each byte on the left as usual, one would be
-able to parse the result from right to left, with fixed-width
-elements in the correct MSB-to-LSB order and Huffman codes in
-bit-reversed order (i.e., with the first bit of the code in the
-relative LSB position).
-
-Jelle: IMHO this means this:
-let's say you have the number 00001001 (9)
-*/
 uint32_t peek_bits(
     EntireFile * from,
     const uint32_t amount)
@@ -254,7 +210,6 @@ uint32_t huffman_decode(
                 && dict[i].used == true
                 && bitcount == dict[i].code_length)
             {
-                uint32_t matched_key = dict[i].key;
                 found_at = i;
                 break;
             }
@@ -467,19 +422,19 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 void deflate(
     uint8_t * recipient,
     EntireFile * entire_file,
-    unsigned int compressed_size_bytes,
-    char * known_output,
-    unsigned int expected_file_size)
+    unsigned int compressed_size_bytes) 
 {
+    assert(recipient != NULL);
+    assert(entire_file != NULL);
+    assert(entire_file->data != NULL);
+    assert(entire_file->size_left > 0);
+    assert(compressed_size_bytes > 0);
+    
     printf(
         "\t\trunning DEFLATE algo, expecting %u bytes of compressed data...\n",
         compressed_size_bytes);
     void * started_at = entire_file->data;
     uint8_t * recipient_at = recipient;
-    uint8_t * validation_at = (uint8_t *)known_output;
-    printf(
-        "\t\tentire_file->data at start points to: %pjn",
-        started_at);
     
     assert(entire_file->bits_left == 0);
     assert(entire_file->size_left >= compressed_size_bytes);
@@ -518,59 +473,64 @@ void deflate(
         /* buffer: */ entire_file,
         /* size  : */ 2);
     
-    char * btype_description;
-    
-    switch (BTYPE) {
-        case (0):
-            printf("\t\t\tBTYPE 0 - No compression\n");
-            
-            // spec says to ditch remaining bits
-            if (entire_file->bits_left < 8) {
-                printf(
-                    "\t\t\tditching a byte with %u%s\n",
-                    entire_file->bits_left,
-                    " bits left...");
-                entire_file->bits_left = 0;
-                // the data itself was already incr.
-                // when bits were consumed
-                // entire_file->data += 1;
-                // entire_file->bits_left = 8;
-                // entire_file->bit_buffer =
-                    // *(uint8_t *)entire_file->data;
-            }
-            
-            // read LEN and NLEN (see next section)
-            uint16_t LEN =
-                *(int16_t *)entire_file->data; 
-            entire_file->data += 2;
-            entire_file->size_left -= 2;
+    if (BTYPE == 0) {
+        printf("\t\t\tBTYPE 0 - No compression\n");
+        
+        // spec says to ditch remaining bits
+        if (entire_file->bits_left < 8) {
             printf(
-                "\t\t\tcompr. block has LEN: %u bytes\n",
-                LEN);
-            uint16_t NLEN =
-                *(uint16_t *)entire_file->data; 
-            entire_file->data += 2;
-            entire_file->size_left -= 2;
-            printf(
-                "\t\t\tcompr. blck has NLEN:%d byte\n",
-                NLEN);
-            printf(
-                "\t\t\t1's complement of LEN was: %u\n",
-                ~LEN);
-            assert(NLEN == ~LEN);
-            
-            for (int i = 0; i < LEN; i++) {
-                recipient_at[0] = ((uint8_t *)entire_file->data)[0];
-                entire_file->data += 1;
-            }
-            
-            break;
-        case (1):
+                "\t\t\tditching a byte with %u%s\n",
+                entire_file->bits_left,
+                " bits left...");
+            entire_file->bits_left = 0;
+        }
+        
+        // read LEN and NLEN (see next section)
+        uint16_t LEN =
+            *(int16_t *)entire_file->data; 
+        entire_file->data += 2;
+        entire_file->size_left -= 2;
+        printf(
+            "\t\t\tcompr. block has LEN: %u bytes\n",
+            LEN);
+        uint16_t NLEN =
+            *(uint16_t *)entire_file->data; 
+        entire_file->data += 2;
+        entire_file->size_left -= 2;
+        // spec says must be 1's complement of LEN
+        assert(NLEN == ~LEN);
+       
+        // TODO: find uncompressed file to test with 
+        for (int _ = 0; _ < LEN; _++) {
+            *recipient_at = *(uint8_t *)entire_file->data;
+            recipient_at++;
+            entire_file->data++;
+            entire_file->size_left -= 1;
+        }
+    } else if (BTYPE > 2) {
+        printf(
+            "\t\t\tERROR - unexpected deflate BTYPE %u\n",
+            BTYPE);
+        assert(1 == 2);
+    } else {
+        assert(BTYPE >= 1 && BTYPE <= 2);
+
+        // used in both dynamic & fixed huffman encoded files
+        HuffmanEntry * literal_length_huffman = NULL;
+
+        // only used in dynamic, keep NULL for fixed 
+        HuffmanEntry * distance_huffman = NULL;
+       
+        // will be overwritten in dynamic, leave 288 for fixed
+        uint32_t HLIT = 288; 
+        // only used in dynamic, keep 0 for fixed
+        uint32_t HDIST = 0;
+        
+        if (BTYPE == 1) {
             printf("\t\t\tBTYPE 1 - Fixed Huffman\n");
+            assert(distance_huffman == NULL);
             
             /*
-            TODO: handle fixed huffman
-            
             The Huffman codes for the two alphabets are fixed,
             and are not represented explicitly in the data.
             The Huffman code lengths for the literal/length
@@ -597,155 +557,50 @@ void deflate(
             for (int i = 280; i < 288; i++) {
                 fixed_hclen_table[i] = 8;
             }
- 
-            HuffmanEntry * fixed_length_huffman =
+            
+            literal_length_huffman =
                 unpack_huffman(
                     /* array:     : */
                         fixed_hclen_table,
                     /* array_size : */
                         288);
             
-            assert(fixed_length_huffman[0].value == 0);
+            assert(literal_length_huffman[0].value == 0);
             assert(
-                fixed_length_huffman[0].code_length == 8);
-            assert(fixed_length_huffman[0].key == 48);
-            assert(fixed_length_huffman[143].value == 143);
+                literal_length_huffman[0].code_length == 8);
+            assert(literal_length_huffman[0].key == 48);
+            assert(literal_length_huffman[143].value == 143);
             assert(
-                fixed_length_huffman[143].code_length == 8);
-            assert(fixed_length_huffman[143].key == 191);
-            assert(fixed_length_huffman[144].value == 144);
+                literal_length_huffman[143].code_length == 8);
+            assert(literal_length_huffman[143].key == 191);
+            assert(literal_length_huffman[144].value == 144);
             assert(
-                fixed_length_huffman[144].code_length == 9);
-            assert(fixed_length_huffman[144].key == 400);
-            assert(fixed_length_huffman[255].value == 255);
+                literal_length_huffman[144].code_length == 9);
+            assert(literal_length_huffman[144].key == 400);
+            assert(literal_length_huffman[255].value == 255);
             assert(
-                fixed_length_huffman[255].code_length == 9);
-            assert(fixed_length_huffman[255].key == 511);
-            assert(fixed_length_huffman[256].value == 256);
+                literal_length_huffman[255].code_length == 9);
+            assert(literal_length_huffman[255].key == 511);
+            assert(literal_length_huffman[256].value == 256);
             assert(
-                fixed_length_huffman[256].code_length == 7);
-            assert(fixed_length_huffman[256].key == 0);
-            assert(fixed_length_huffman[279].value == 279);
+                literal_length_huffman[256].code_length == 7);
+            assert(literal_length_huffman[256].key == 0);
+            assert(literal_length_huffman[279].value == 279);
             assert(
-                fixed_length_huffman[279].code_length == 7);
-            assert(fixed_length_huffman[279].key == 23);
-            assert(fixed_length_huffman[280].value == 280);
+                literal_length_huffman[279].code_length == 7);
+            assert(literal_length_huffman[279].key == 23);
+            assert(literal_length_huffman[280].value == 280);
             assert(
-                fixed_length_huffman[280].code_length == 8);
-            assert(fixed_length_huffman[280].key == 192);
-            assert(fixed_length_huffman[287].value == 287);
+                literal_length_huffman[280].code_length == 8);
+            assert(literal_length_huffman[280].key == 192);
+            assert(literal_length_huffman[287].value == 287);
             assert(
-                fixed_length_huffman[287].code_length == 8);
-            assert(fixed_length_huffman[287].key == 199);
+                literal_length_huffman[287].code_length == 8);
+            assert(literal_length_huffman[287].key == 199);
             
-            printf("\t\t\tcreated fixed length huffman dictionary.\n");
-             
-            while (entire_file->size_left > 0) {
-                // this consumes from entire_file
-                // so we'll eventually hit 256 and break
-                uint32_t litlenvalue = huffman_decode(
-                    /* dict: */
-                        fixed_length_huffman,
-                    /* dictsize: */
-                        288,
-                    /* raw data: */
-                        entire_file);
-                
-                if (litlenvalue < 256) {
-                    // literal value, not a length
-                    *recipient_at =
-                        (uint8_t)(litlenvalue & 255);
-                    assert(*recipient_at == *validation_at);
-                    recipient_at++;
-                    validation_at++;
-                    
-                } else if (litlenvalue > 256) {
-                    // length, (therefore also need distance)
-                    assert(litlenvalue < 286);
-                    uint32_t i = litlenvalue - 257;
-                    assert(
-                        length_extra_bits_table[i].value
-                            == litlenvalue);
-                    uint32_t extra_bits =
-                        length_extra_bits_table[i]
-                            .num_extra_bits;
-                    uint32_t base_length =
-                        length_extra_bits_table[i]
-                            .base_decoded;
-                    uint32_t extra_length =
-                        extra_bits > 0 ?
-                            consume_bits(
-                                /* from: */ entire_file,
-                                /* size: */ extra_bits)
-                        : 0;
-                    uint32_t total_length =
-                        base_length + extra_length;
-                    assert(
-                        total_length >=
-                        length_extra_bits_table[i]
-                            .base_decoded);
-                    
-                    // distances are stored in reverse order of
-                    // huffman codes for some reason
-                    uint32_t raw_dist_value =
-                        consume_bits(
-                            /* from: */ entire_file,
-                            /* size: */ 5);
-                    uint32_t distvalue = reverse_bit_order(
-                        raw_dist_value,
-                        5);
-                    
-                    assert(distvalue <= 29);
-                    assert(
-                        dist_extra_bits_table[distvalue].value
-                            == distvalue);
-                    uint32_t dist_extra_bits =
-                        dist_extra_bits_table[distvalue]
-                            .num_extra_bits;
-                    uint32_t base_dist =
-                        dist_extra_bits_table[distvalue]
-                            .base_decoded;
-                    uint32_t total_dist;
-                    
-                    uint32_t dist_extra_bits_decoded =
-                        dist_extra_bits > 0 ?
-                            consume_bits(
-                                /* from: */ entire_file,
-                                /* size: */ dist_extra_bits)
-                            : 0;
-                    
-                    total_dist =
-                        base_dist + dist_extra_bits_decoded;
-
-                    assert(
-                        dist_extra_bits_table[distvalue + 1].base_decoded > total_dist);
-                    
-                    // go back dist bytes, then copy length bytes
-                    assert(
-                        recipient_at - total_dist >= recipient);
-                    uint8_t * back_dist_bytes =
-                        recipient_at - total_dist;
-                    for (int _ = 0; _ < total_length; _++) {
-                        *recipient_at = *back_dist_bytes;
-                        assert(*recipient_at == *validation_at);
-                        recipient_at++;
-                        validation_at++;
-                        back_dist_bytes++;
-                    }
-                } else {
-                    assert(litlenvalue == 256);
-                    printf("\t\tend of ltln found!\n");
-                    // TODO: figure out what to do
-                    // with any remaining bits
-                    entire_file->bits_left = 0;
-                    break;
-                }
-            }
-            
-            free(fixed_length_huffman);
-            
-            break;
-        case (2):
+            printf("\t\t\tcreated fixed huffman dict.\n");
+        } else {
+            assert(BTYPE == 2);
             printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
             printf("\t\t\tRead code trees...\n");
             
@@ -761,7 +616,7 @@ void deflate(
             // 5 Bits: HLIT (huffman literal)
             // number of Literal/Length codes - 257
             // (257 - 286)
-            uint32_t HLIT = consume_bits(
+            HLIT = consume_bits(
                 /* from: */ entire_file,
                 /* size: */ 5)
                     + 257;
@@ -773,7 +628,7 @@ void deflate(
             // 5 Bits: HDIST (huffman distance?)
             // # of Distance codes - 1
             // (1 - 32)
-            uint32_t HDIST = consume_bits(
+            HDIST = consume_bits(
                 /* from: */ entire_file,
                 /* size: */ 5)
                     + 1;
@@ -801,21 +656,8 @@ void deflate(
             // This is a fixed swizzle (order of elements
             // in an array) that's agreed upon in the
             // specification.
-            // I think they did this because we usually
-            // don't need all 19, and they thought
-            // 15 would be the least likely one to be
-            // necessary, 1 the second least likely,
-            // etc.
-            // When they only pass 7 values, we are
-            // expected to have initted the other ones
-            // to 0 (I guess), and that allows them to
-            // skip mentioning the other 13 ones and
-            // save 12 x 3 = 36 bits
-            // So it's basically compressing by
-            // truncating
-            // (array size: 19)
-            // I never would have imagined people go this
-            // far to save 36 bits of disk space
+            // I never would have imagined people from 1996
+            // went this far to save 36 bits of disk space
             uint32_t swizzle[] =
                 {16, 17, 18, 0, 8, 7, 9, 6, 10, 5,
                  11, 4, 12, 3, 13, 2, 14, 1, 15};
@@ -823,11 +665,11 @@ void deflate(
             // read (HCLEN + 4) x 3 bits
             // these are code lengths for the code length
             // dictionary,
-            // and they'll come in swizzled order
+            // and they'll come in "swizzled" order
             
             uint32_t HCLEN_table[
                 NUM_UNIQUE_CODELENGTHS] = {};
-            printf("\t\t\tReading raw code lengths:\n");
+            printf("\t\t\tReading raw code lengths\n");
             
             assert(HCLEN < NUM_UNIQUE_CODELENGTHS);
             for (uint32_t i = 0; i < HCLEN; i++) {
@@ -846,7 +688,7 @@ void deflate(
             but these are themselves 'compressed'
             and need to be unpacked
             */
-            printf("\t\t\tUnpck codelengths table...\n");
+            printf("\t\t\tUnpack codelengths table...\n");
             
             // TODO: should I do NUM_UNIQUE_CODELGNTHS
             // or only HCLEN? 
@@ -996,172 +838,174 @@ void deflate(
             printf("\t\t\tfinished reading two dicts\n");
             assert(len_i == two_dicts_size);
             
-            HuffmanEntry * litlen_huffman =
+            literal_length_huffman =
                 unpack_huffman(
                     /* array:     : */
                         litlendist_table,
                     /* array_size : */
                         HLIT);
+            
+            printf("\t\t\tunpacked literal/length dictionary\n");
             for (int i = 0; i < HLIT; i++) {
-                if (litlen_huffman[i].used == true) {
-                    assert(litlen_huffman[i].value == i);
-                    assert(litlen_huffman[i].key < 99999);
-                    assert(litlen_huffman[i].code_length < 15);
+                if (literal_length_huffman[i].used == true) {
+                    assert(
+                        literal_length_huffman[i].value == i);
+                    assert(
+                        literal_length_huffman[i].key < 99999);
+                    assert(
+                        literal_length_huffman[i].code_length
+                            < 15);
                 }
             }
             
-            HuffmanEntry * dist_huffman =
+            distance_huffman =
                 unpack_huffman(
                     /* array:     : */
                         litlendist_table + HLIT,
                     /* array_size : */
                         HDIST);
+            printf("\t\t\tunpacked distance dictionary\n");
             
             for (int i = 0; i < HDIST; i++) {
-                if (dist_huffman[i].used == true) {
-                    assert(dist_huffman[i].value == i);
-                    assert(dist_huffman[i].key < 99999);
-                    assert(dist_huffman[i].code_length < 15);
-                }
-            }
-            
-            // Next, we need to read the actual data
-            // and decode it using the 'litlen'
-            // dictionary, which should yield a value
-            // from 0-285
-            // the values 0-255 are copied as literals
-            // the value 256 means 'end of block'
-            // the values 256-285 are length/distances
-            // and will often need 'extra bits' to
-            // determine the exact length
-            while (entire_file->size_left > 0) {
-                // this consumes from entire_file
-                // so we'll eventually hit 256 and break
-                print_as_binary(peek_bits(entire_file, 16));
-                printf(" - ");
-                uint32_t litlenvalue = huffman_decode(
-                    /* dict: */
-                        litlen_huffman,
-                    /* dictsize: */
-                        HLIT,
-                    /* raw data: */
-                        entire_file);
-                printf(
-                    "decoded litlenvalue: %u\n",
-                    litlenvalue);
-                if (litlenvalue < 256) {
-                    *recipient_at =
-                        (uint8_t)(litlenvalue & 255);
-                    assert(*recipient_at == *validation_at);
-                    recipient_at++;
-                    validation_at++;
-                } else if (litlenvalue > 256) {
-                    assert(litlenvalue < 286);
-                    uint32_t i = litlenvalue - 257;
-                    assert(i < 29);
-                    assert(
-                        length_extra_bits_table[i].value
-                            == litlenvalue);
-                    uint32_t extra_bits =
-                        length_extra_bits_table[i]
-                            .num_extra_bits;
-                    printf(
-                        "consuming %u extra bits for length\n",
-                        extra_bits);
-                    uint32_t base_length =
-                        length_extra_bits_table[i]
-                            .base_decoded;
-                    uint32_t extra_length =
-                        extra_bits > 0 ?
-                            consume_bits(
-                                /* from: */ entire_file,
-                                /* size: */ extra_bits)
-                        : 0;
-                    uint32_t total_length =
-                        base_length + extra_length;
-                    
-                    uint32_t distvalue = huffman_decode(
-                        /* dict: */
-                            dist_huffman,
-                        /* dictsize: */
-                            HDIST,
-                        /* raw data: */
-                            entire_file);
-                    
-                    assert(
-                        dist_extra_bits_table[distvalue]
-                            .value
-                                == distvalue);
-                    uint32_t dist_extra_bits =
-                        dist_extra_bits_table[distvalue]
-                            .num_extra_bits;
-                    printf(
-                        "consuming %u extra bits for distance\n",
-                        dist_extra_bits);
-                    uint32_t base_dist =
-                        dist_extra_bits_table[distvalue]
-                            .base_decoded;
-                    uint32_t total_dist;
-                    uint32_t dist_extra_bits_decoded =
-                        dist_extra_bits > 0 ?
-                            consume_bits(
-                                /* from: */ entire_file,
-                                /* size: */ dist_extra_bits)
-                            : 0;
-                    total_dist =
-                        base_dist + dist_extra_bits_decoded;
-                    
-                    // go back dist bytes, then copy length bytes
-                    if (
-                        recipient_at - total_dist >= recipient)
-                    {
-                        uint8_t * back_dist_bytes =
-                            recipient_at - total_dist;
-                        for (int i = 0; i < total_length; i++) {
-                            *recipient_at = *back_dist_bytes;
-                            assert(
-                                *recipient_at == *validation_at);
-                            recipient_at++;
-                            validation_at++;
-
-                            back_dist_bytes++;
-                        }
-                    } else {
-                        printf("ERROR! distance too far back\n");
-                        assert(1 == 2);
-                    }
-                } else {
-                    assert(litlenvalue == 256);
-                    
-                    // TODO: figure out what to do
-                    // with any remaining bits
-                    entire_file->bits_left = 0;
-                    break;
+                if (distance_huffman[i].used == true) {
+                    assert(distance_huffman[i].value == i);
+                    assert(distance_huffman[i].key < 99999);
+                    assert(distance_huffman[i].code_length < 15);
                 }
             }
             
             free(codelengths_huffman);
             free(litlendist_table);
-            free(litlen_huffman);
-            free(dist_huffman);
+        }
+        
+        // the remaining part of the algorithm is mostly
+        // the same whether we're using dynamic huffman tables
+        // or fixed huffman tables - we just use a different
+        // literal-length-dictionary.
+        // The only other difference is in the case of fixed
+        // huffman, when we need a distance value, it's
+        // consumed directly from the stream, whereas for
+        // dynamic huffman  it has to be decoded using the
+        // distance dictionary we prepared
+        if (BTYPE == 2) {
+            assert(distance_huffman != NULL);
+            assert(HDIST > 0);
+            assert(HLIT > 0);
+            assert(HLIT < 300);
+        } else if (BTYPE == 1) {
+            assert(distance_huffman == NULL);
+            assert(HDIST == 0);
+            assert(HLIT == 288);
+        }
+        
+        while (entire_file->size_left > 0) {
+            // this consumes from entire_file
+            // so we'll eventually hit 256 and break
+            uint32_t litlenvalue = huffman_decode(
+                /* dict: */
+                    literal_length_huffman,
+                /* dictsize: */
+                    HLIT,
+                /* raw data: */
+                    entire_file);
             
-            break;
-        case (3):
-            printf("\t\t\tBTYPE 3 - reserved (error)\n");
-            assert(1 == 2);
-            break;
-        default:
-            printf(
-                "\t\t\tERROR: BTYPE of %u%s\n",
-                BTYPE,
-                " was not in the Deflate specification");
+            if (litlenvalue < 256) {
+                // literal value, not a length
+                *recipient_at =
+                    (uint8_t)(litlenvalue & 255);
+                recipient_at++;
+                
+            } else if (litlenvalue > 256) {
+                // length, (therefore also need distance)
+                assert(litlenvalue < 286);
+                uint32_t i = litlenvalue - 257;
+                assert(
+                    length_extra_bits_table[i].value
+                        == litlenvalue);
+                uint32_t extra_bits =
+                    length_extra_bits_table[i]
+                        .num_extra_bits;
+                uint32_t base_length =
+                    length_extra_bits_table[i]
+                        .base_decoded;
+                uint32_t extra_length =
+                    extra_bits > 0 ?
+                        consume_bits(
+                            /* from: */ entire_file,
+                            /* size: */ extra_bits)
+                    : 0;
+                uint32_t total_length =
+                    base_length + extra_length;
+                assert(
+                    total_length >=
+                    length_extra_bits_table[i]
+                        .base_decoded);
+                
+                uint32_t distvalue =
+                    distance_huffman == NULL ?
+                        reverse_bit_order(
+                            consume_bits(
+                                /* from: */ entire_file,
+                                /* size: */ 5),
+                            5)
+                    : huffman_decode(
+                        /* dict: */
+                             distance_huffman,
+                        /* dictsize: */
+                             HDIST,
+                        /* raw data: */
+                             entire_file);
+                
+                assert(distvalue <= 29);
+                assert(
+                    dist_extra_bits_table[distvalue].value
+                        == distvalue);
+                uint32_t dist_extra_bits =
+                    dist_extra_bits_table[distvalue]
+                        .num_extra_bits;
+                uint32_t base_dist =
+                    dist_extra_bits_table[distvalue]
+                        .base_decoded;
+                
+                uint32_t dist_extra_bits_decoded =
+                    dist_extra_bits > 0 ?
+                        consume_bits(
+                            /* from: */ entire_file,
+                            /* size: */ dist_extra_bits)
+                        : 0;
+                
+                uint32_t total_dist =
+                    base_dist + dist_extra_bits_decoded;
+                
+                // go back dist bytes, then copy length bytes
+                assert(
+                    recipient_at - total_dist >= recipient);
+                uint8_t * back_dist_bytes =
+                    recipient_at - total_dist;
+                for (int _ = 0; _ < total_length; _++) {
+                    *recipient_at = *back_dist_bytes;
+                    recipient_at++;
+                    back_dist_bytes++;
+                }
+            } else {
+                assert(litlenvalue == 256);
+                printf("\t\tend of ltln found!\n");
+                // TODO: figure out what to do
+                // with any remaining bits
+                entire_file->bits_left = 0;
+                break;
+            }
+        }
+        
+        free(literal_length_huffman);
+        if (distance_huffman != NULL) { free(distance_huffman); }
     }
     
-    assert(BTYPE < 3);
-
     printf(
-        "\t\tend of DEFLATE, read: %lu bytes (decompressed size: %lu bytes)\n",
-        entire_file->data - started_at,
+        "\t\tend of DEFLATE, read: %lu bytes",
+        entire_file->data - started_at);
+    printf(
+        " (decompressed size: %lu bytes)\n",
         recipient_at - recipient);
     assert(
         entire_file->data - started_at + 1 ==
