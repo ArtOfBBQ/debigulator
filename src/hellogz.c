@@ -76,32 +76,6 @@ uint8_t * consume_chunk(
     return return_value;
 }
 
-char * consume_till_zero_terminate(
-    EntireFile * from,
-    size_t max_size)
-{
-    char * filename = malloc(
-        MAX_ORIGINAL_FILENAME_SIZE * sizeof(char));
-    int filename_size = 0;
-    
-    while (
-        ((uint8_t *)from->data)[0] != 0
-        && from->size_left > 0
-        && filename_size < max_size)
-    {
-        filename[filename_size] =
-            ((char *)from->data)[0];
-        from->size_left -= 1;
-        from->data += 1;
-        filename_size += 1;
-    }
-
-    from->data += 1;
-    
-    return filename;
-}
-
-
 int main(int argc, const char * argv[])
 {
     printf("Hello .gz files!\n");
@@ -227,18 +201,14 @@ int main(int argc, const char * argv[])
         "8 bytes at EOF rsrved, so DEFLATE size is: %zu\n",
         entire_file->size_left - 8);
 
-    // TODO: find a robust way to read the ISIZE field
-    uint8_t * input_size_ptr =
-        entire_file->data + entire_file->size_left - 5;
-    uint32_t input_size = *(uint32_t *)input_size_ptr;
-    printf("input_size may have been: %u\n", input_size);
+    // TODO: figure out how much memory to assign in advance
+    uint32_t decompressed_size = entire_file->size_left * 25;
     
-    // TODO: figure out how much memory to assign before we know
-    // uncompressed size 
-    uint8_t * recipient = malloc(input_size);
+    uint8_t * recipient = malloc(decompressed_size);
     
     deflate(
         /* recipient: */ recipient,
+        /* recipient_size: */ decompressed_size,
         /* entire_file: */ entire_file,
         /* compressed_size_bytes: */ entire_file->size_left - 8);
     
