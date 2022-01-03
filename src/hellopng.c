@@ -647,7 +647,6 @@ int main(int argc, const char * argv[])
         {
             assert(pixels != NULL);
             
-            // (IDATHeader *)entire_file->data;
             IDATHeader * idat_header =
                 consume_struct(
                     /* type: */ IDATHeader,
@@ -731,17 +730,36 @@ int main(int argc, const char * argv[])
             
             assert(FDICT == 0);
             
-            printf("\t\t\tread compressed data...\n");
+            printf("\t\tread compressed data...\n");
             
             printf(
-                "prepped recipient of %u bytes...\n",
+                "\t\tprepped recipient of %u bytes...\n",
                 decompressed_size);
-            
+           
+            void * deflate_started_at = entire_file->data; 
             deflate(
-                /* recipient: */ pixels,
-                /* recipient_size: */ decompressed_size,
-                /* entire_file: */ entire_file,
-                /* compr_size_bytes: */ chunk_header->length);
+                /* recipient: */
+                    pixels,
+                /* recipient_size: */
+                    decompressed_size,
+                /* entire_file: */
+                    entire_file,
+                /* compr_size_bytes: */
+                    chunk_header->length - sizeof(IDATHeader));
+
+            unsigned int bytes_read =
+                entire_file->data - deflate_started_at;
+            int unread_bytes =
+                (chunk_header->length - sizeof(IDATHeader)) - bytes_read;
+            assert(unread_bytes >= 0);
+
+            if (unread_bytes > 0) {
+                printf(
+                    "\t\tWarning: ditching %u bytes because they were unexpectedly not consumed by DEFLATE...\n",
+                    unread_bytes);
+                entire_file->data += unread_bytes;
+                entire_file->size_left -= unread_bytes;
+            }
         }
         else if (are_equal_strings(
             chunk_header->type,
@@ -751,7 +769,7 @@ int main(int argc, const char * argv[])
             assert(pixels != NULL);
             
             // handle image end header
-            printf("found IEND header");
+            printf("found IEND header\n");
             break;
         }
         else if ((char)chunk_header->type[0] > 'Z')

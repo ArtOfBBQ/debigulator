@@ -499,14 +499,13 @@ void deflate(
             uint16_t LEN =
                 (int16_t)consume_bits(entire_file, 16);
             printf(
-                "\t\t\tcompr. block has LEN: %u bytes\n",
+                "\t\t\tuncompr. block has LEN: %u bytes\n",
                 LEN);
             uint16_t NLEN =
                 (uint16_t)consume_bits(entire_file, 16);
             // spec says must be 1's complement of LEN
-            // assert((uint16_t)LEN == (uint16_t)~NLEN);
+            assert((uint16_t)LEN == (uint16_t)~NLEN);
             
-            // TODO: find uncompressed file to test with 
             for (int _ = 0; _ < LEN; _++) {
                 *recipient_at = *(uint8_t *)entire_file->data;
                 recipient_at++;
@@ -514,7 +513,7 @@ void deflate(
                     (recipient_at - recipient)
                         <= recipient_size);
                 entire_file->data++;
-                entire_file->size_left -= 1;
+                entire_file->size_left--;
             }
         } else if (BTYPE > 2) {
             printf(
