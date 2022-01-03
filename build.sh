@@ -1,6 +1,6 @@
 APP_NAME="hellogzip"
-IMAGE_NAME="undeflatable" ## try gzipsample or deflate_source
-IMAGE_TYPE="gz"
+INPUT_FILE="gimp_8x8complex" ## try gzipsample or deflate_source
+INPUT_EXTENSION="png"
 
 echo "Building $APP_NAME... (this shell script must be run from the app's root directory)"
 
@@ -11,13 +11,13 @@ echo "Creating build folder..."
 mkdir build
 
 echo "copying resources..."
-cp resources/$IMAGE_NAME.$IMAGE_TYPE build/$IMAGE_NAME.$IMAGE_TYPE
+cp resources/$INPUT_FILE.$INPUT_EXTENSION build/$INPUT_FILE.$INPUT_EXTENSION
 
 echo "Compiling $APP_NAME..."
-# clang -g $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$IMAGE_TYPE.c
-clang -fsanitize=undefined -g $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$IMAGE_TYPE.c
+# clang -g $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
+clang -fsanitize=undefined -g $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
 
 
 echo "Running $APP_NAME"
-(cd build && ./$APP_NAME $IMAGE_NAME.$IMAGE_TYPE)
+(cd build && ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
 

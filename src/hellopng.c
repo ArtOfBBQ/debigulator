@@ -423,38 +423,6 @@ uint8_t * consume_chunk(
     return return_value;
 }
 
-char * consume_till_terminate(
-    EntireFile * from,
-    uint32_t max_size,
-    char terminator)
-{
-    assert(max_size < from->size_left);
-    
-    uint32_t string_size = 0;
-    char * seeker = (char *)from->data;
-    while (
-        *seeker != terminator 
-        && string_size < max_size)
-    {
-        string_size++;
-        seeker++;
-    }
-    
-    assert(string_size > 0);
-    
-    char * return_value = malloc(
-        string_size * sizeof(char));
-    
-    for (int i = 0; i < string_size; i++) {
-        assert(from->size_left > 0);
-        return_value[i] = ((char *)from->data)[0];
-        from->data++;
-        from->size_left--;
-    }
-    
-    return return_value;
-}
-
 int main(int argc, const char * argv[]) 
 {
     printf("Hello .png files!\n");
@@ -517,7 +485,7 @@ int main(int argc, const char * argv[])
     // these pointers are initted below
     uint8_t * pixels = NULL;
     uint8_t * pixels_start = NULL;
-    unsigned int decompressed_size = 500000;
+    unsigned int decompressed_size = 5000000;
     
     while (
         entire_file->size_left >= 12)
@@ -746,20 +714,6 @@ int main(int argc, const char * argv[])
                     entire_file,
                 /* compr_size_bytes: */
                     chunk_header->length - sizeof(IDATHeader));
-
-            unsigned int bytes_read =
-                entire_file->data - deflate_started_at;
-            int unread_bytes =
-                (chunk_header->length - sizeof(IDATHeader)) - bytes_read;
-            assert(unread_bytes >= 0);
-
-            if (unread_bytes > 0) {
-                printf(
-                    "\t\tWarning: ditching %u bytes because they were unexpectedly not consumed by DEFLATE...\n",
-                    unread_bytes);
-                entire_file->data += unread_bytes;
-                entire_file->size_left -= unread_bytes;
-            }
         }
         else if (are_equal_strings(
             chunk_header->type,

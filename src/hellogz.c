@@ -170,13 +170,14 @@ int main(int argc, const char * argv[])
     +=========================================+
     */
     if (gzip_header->FLG >> 3 & 1) {
-
-        char * filename = consume_till_zero_terminate(
+        printf("original filename was included, reading...\n");
+        char * filename = consume_till_terminate(
             /* from: */ entire_file,
-            /* max_size: */ MAX_ORIGINAL_FILENAME_SIZE);
+            /* max_size: */ entire_file->size_left,
+            /* terminator: */ (char)0);
         
         printf(
-            "original filename was included: %s\n",
+            "original filename: %s\n",
             filename);
     }
     
@@ -188,11 +189,13 @@ int main(int argc, const char * argv[])
     +===================================+ 
     */
     if (gzip_header->FLG >> 4 & 1) {
-        char * comment = consume_till_zero_terminate(
+        printf("a comment was included, reading...\n");
+        char * comment = consume_till_terminate(
             /* from: */ entire_file,
-            /* max_size: */ MAX_COMMENT_SIZE);
+            /* max_size: */ entire_file->size_left,
+            /* terminator: */ (char)0);
         
-        printf("a comment was included: %s\n", comment);
+        printf("comment: %s\n", comment);
     }
     
     printf("compressed blocks should start here...\n");

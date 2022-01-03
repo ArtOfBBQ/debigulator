@@ -182,6 +182,38 @@ uint32_t consume_bits(
     return return_val;
 }
 
+char * consume_till_terminate(
+    EntireFile * from,
+    uint32_t max_size,
+    char terminator)
+{
+    assert(max_size <= from->size_left);
+    
+    uint32_t string_size = 0;
+    char * seeker = (char *)from->data;
+    while (
+        *seeker != terminator 
+        && string_size < max_size)
+    {
+        string_size++;
+        seeker++;
+    }
+    
+    assert(string_size > 0);
+    
+    char * return_value = malloc(
+        string_size * sizeof(char));
+    
+    for (int i = 0; i <= string_size; i++) {
+        assert(from->size_left > 0);
+        return_value[i] = ((char *)from->data)[0];
+        from->data++;
+        from->size_left--;
+    }
+    
+    return return_value;
+}
+
 uint32_t huffman_decode(
     HuffmanEntry * dict,
     const uint32_t dictsize,
@@ -1021,19 +1053,32 @@ void deflate(
             }
         }
     }
-    
-    printf(
-        "\t\tend of DEFLATE, read: %lu bytes\n",
-        entire_file->data - started_at);
-    printf(
-        "\t\tshould have read: %u bytes\n",
-        compressed_size_bytes);
-    printf(
-        "\t\t(decompressed size: %lu bytes)\n",
-        recipient_at - recipient);
-    printf(
-        "\t\tentire_file->bits_left remaining: %u\n",
-        entire_file->bits_left);
-    assert(entire_file->bits_left == 0);
+   
+    int bytes_read = entire_file->data - started_at; 
+    assert(bytes_read >= 0);
+    if (bytes_read != compressed_size_bytes) {
+        printf(
+            "Warning: expected to read %u bytes but got %u\n",
+            compressed_size_bytes,
+            bytes_read);
+        assert(compressed_size_bytes > bytes_read);
+        int skip = compressed_size_bytes - bytes_read;
+        printf("skipping ahead %u bytes...\n", skip);
+        assert(entire_file->size_left >= skip);
+        entire_file->data += skip;
+        entire_file->size_left -= skip;
+    }
+
+    if (entire_file->bits_left != 0) {
+        printf(
+            "\t\tWarning: partial byte left after DEFLATE\n");
+        printf(
+            "\t\tdiscarding: %u bits\n",
+            entire_file->bits_left);
+        discard_bits(
+            /* from: */ entire_file,
+            /* amount: */ entire_file->bits_left);
+    }
+    printf("\t\tend of DEFLATE\n");
 }
 
