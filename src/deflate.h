@@ -13,6 +13,7 @@ typedef struct EntireFile {
     size_t size_left;
 } EntireFile;
 
+
 typedef struct HuffmanEntry {
     uint32_t key;
     uint32_t code_length;
@@ -161,6 +162,44 @@ void discard_bits(
     }
     
     assert(from->bits_left < 9);
+}
+
+void copy_memory(
+    void * from,
+    void * to,
+    size_t size)
+{
+    uint8_t * fromu8 = (uint8_t *)from;
+    uint8_t * tou8 = (uint8_t *)to;
+    
+    while (size > 0) {
+        *tou8 = *fromu8;
+        fromu8++;
+        tou8++;
+        size--;
+    }
+}
+
+// Grab data from the front of a buffer & advance pointer
+#define consume_struct(type, from) (type *)consume_chunk(from, sizeof(type))
+uint8_t * consume_chunk(
+    EntireFile * from,
+    size_t size_to_consume)
+{
+    assert(from->bits_left == 0);
+    assert(from->size_left >= size_to_consume);
+    
+    uint8_t * return_value = malloc(size_to_consume);
+    
+    copy_memory(
+        /* from: */   from->data,
+        /* to: */     return_value,
+        /* size: */   size_to_consume);
+    
+    from->data += size_to_consume;
+    from->size_left -= size_to_consume;
+    
+    return return_value;
 }
 
 uint32_t consume_bits(
@@ -1053,7 +1092,18 @@ void deflate(
             }
         }
     }
-   
+
+    if (entire_file->bits_left != 0) {
+        printf(
+            "\t\tpartial byte left after DEFLATE\n");
+        printf(
+            "\t\tdiscarding: %u bits\n",
+            entire_file->bits_left);
+        discard_bits(
+            /* from: */ entire_file,
+            /* amount: */ entire_file->bits_left);
+    }
+    
     int bytes_read = entire_file->data - started_at; 
     assert(bytes_read >= 0);
     if (bytes_read != compressed_size_bytes) {
@@ -1068,17 +1118,7 @@ void deflate(
         entire_file->data += skip;
         entire_file->size_left -= skip;
     }
-
-    if (entire_file->bits_left != 0) {
-        printf(
-            "\t\tWarning: partial byte left after DEFLATE\n");
-        printf(
-            "\t\tdiscarding: %u bits\n",
-            entire_file->bits_left);
-        discard_bits(
-            /* from: */ entire_file,
-            /* amount: */ entire_file->bits_left);
-    }
+    
     printf("\t\tend of DEFLATE\n");
 }
 

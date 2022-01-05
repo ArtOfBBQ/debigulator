@@ -348,6 +348,10 @@ typedef struct IDATHeader {
 typedef struct PNGFooter {
     uint32_t CRC;
 } PNGFooter;
+
+typedef struct ZLIBFooter {
+    uint32_t adler_32_checksum;
+} ZLIBFooter;
 #pragma pack(pop)
 
 /*
@@ -371,22 +375,6 @@ void flip_endian(uint32_t * to_flip) {
     *to_flip = flipping;
 }
 
-void copy_memory(
-    void * from,
-    void * to,
-    size_t size)
-{
-    uint8_t * fromu8 = (uint8_t *)from;
-    uint8_t * tou8 = (uint8_t *)to;
-    
-    while (size > 0) {
-        *tou8 = *fromu8;
-        fromu8++;
-        tou8++;
-        size--;
-    }
-}
-
 bool32_t are_equal_strings(
     char * str1,
     char * str2,
@@ -401,27 +389,6 @@ bool32_t are_equal_strings(
     return 1;
 }
 
-// Grab data from the front of a buffer & advance pointer
-#define consume_struct(type, from) (type *)consume_chunk(from, sizeof(type))
-uint8_t * consume_chunk(
-    EntireFile * from,
-    size_t size_to_consume)
-{
-    assert(from->bits_left == 0);
-    assert(from->size_left >= size_to_consume);
-    
-    uint8_t * return_value = malloc(size_to_consume);
-    
-    copy_memory(
-        /* from: */   from->data,
-        /* to: */     return_value,
-        /* size: */   size_to_consume);
-    
-    from->data += size_to_consume;
-    from->size_left -= size_to_consume;
-    
-    return return_value;
-}
 
 int main(int argc, const char * argv[]) 
 {
@@ -713,7 +680,15 @@ int main(int argc, const char * argv[])
                 /* entire_file: */
                     entire_file,
                 /* compr_size_bytes: */
-                    chunk_header->length - sizeof(IDATHeader));
+                    chunk_header->length
+                        - sizeof(IDATHeader)
+                        - sizeof(ZLIBFooter));
+            
+            ZLIBFooter * zlib_footer =
+                consume_struct(ZLIBFooter, entire_file);
+            printf(
+                "\t\tadler-32 zlib (deflate) checksum: %u\n",
+                zlib_footer->adler_32_checksum);
         }
         else if (are_equal_strings(
             chunk_header->type,
