@@ -339,10 +339,10 @@ typedef struct IHDRBody {
 chunks with type IDAT are crucial
 they contain the compressed image data
 */
-typedef struct IDATHeader {
+typedef struct ZLIBHeader {
     uint8_t zlibmethodflags;
     uint8_t additionalflags;
-} IDATHeader;
+} ZLIBHeader;
 
 
 typedef struct PNGFooter {
@@ -412,7 +412,7 @@ int main(int argc, const char * argv[])
     fseek(imgfile, 0, SEEK_SET);
     
     uint8_t * buffer = malloc(fsize);
-    EntireFile * entire_file = malloc(sizeof(EntireFile));
+    DataStream * entire_file = malloc(sizeof(DataStream));
     
     size_t bytes_read = fread(
         /* ptr: */
@@ -450,15 +450,21 @@ int main(int argc, const char * argv[])
     }
     
     // these pointers are initted below
+    uint8_t * compressed_data = NULL;
+    uint8_t * compressed_data_begin = NULL;
+    uint32_t compressed_data_stream_size = 0;
     uint8_t * pixels = NULL;
     uint8_t * pixels_start = NULL;
-    unsigned int decompressed_size = 5000000;
+    unsigned int decompressed_size = 0;
+    
+    bool32_t found_first_IDAT = false;
+    bool32_t found_IHDR = false;
     
     while (
         entire_file->size_left >= 12)
     {
         printf(
-            "size left in file: %lu bytes, reading another chunk..\n",
+            "%lu bytes left in file, read another PNG chunk..\n",
             entire_file->size_left);
         unsigned long running_crc = 0xffffffffL;
         PNGChunkHeader * chunk_header = consume_struct(
@@ -466,6 +472,39 @@ int main(int argc, const char * argv[])
             /* buffer: */ entire_file);
         assert(sizeof(chunk_header) == 8);
         flip_endian(&chunk_header->length);
+
+        if (!are_equal_strings(
+            chunk_header->type,
+            "IDAT",
+            4)
+            && found_first_IDAT)
+        {
+            printf("next chunk is not IDAT, ");
+            printf("so all compressed data was collected.\n");
+            
+            DataStream * compressed_data_stream =
+                malloc(sizeof(DataStream));
+            compressed_data_stream->data = compressed_data_begin;
+            compressed_data_stream->size_left =
+                compressed_data_stream_size;
+            printf(
+                "created concatenated datastream of %lu bytes\n",
+                compressed_data_stream->size_left);
+            printf(
+                "won't DEFLATE last 4 bytes because they're an ADLER-32 checksum...\n");
+            
+            deflate(
+                /* recipient: */
+                    pixels,
+                /* recipient_size: */
+                    decompressed_size,
+                /* datastream: */
+                    compressed_data_stream,
+                /* compr_size_bytes: */
+                    compressed_data_stream_size - 4);
+            free(compressed_data_begin);
+            free(compressed_data_stream);
+        }
         
         running_crc = update_crc(
             /* crc: */ running_crc,
@@ -494,11 +533,17 @@ int main(int argc, const char * argv[])
             "IHDR",
             4))
         {
+            found_IHDR = true;
             IHDRBody * ihdr_body = consume_struct(
                 /* type: */ IHDRBody,
                 /* entire_file: */ entire_file);
             flip_endian(&ihdr_body->width);
-            flip_endian(&ihdr_body->height); 
+            flip_endian(&ihdr_body->height);
+
+            decompressed_size =
+                ihdr_body->width
+                    * ihdr_body->height
+                    * 5;
             
             // (below) These PNG setting assert the RGBA
             // color space.
@@ -537,7 +582,8 @@ int main(int argc, const char * argv[])
             printf(
                 "\tfilter_method: %u\n",
                 ihdr_body->filter_method);
-            assert(ihdr_body->filter_method == 0);
+            assert(
+                ihdr_body->filter_method == 0);
             printf(
                 "\tinterlace_method: %u\n",
                 ihdr_body->interlace_method);
@@ -546,6 +592,8 @@ int main(int argc, const char * argv[])
             assert(entire_file->bits_left == 0);
             
             pixels = malloc(decompressed_size);
+            compressed_data = malloc(decompressed_size);
+            compressed_data_begin = compressed_data;
             pixels_start = pixels;
         } else if (are_equal_strings(
             chunk_header->type,
@@ -580,115 +628,126 @@ int main(int argc, const char * argv[])
             "IDAT",
             4))
         {
+            assert(found_IHDR);
             assert(pixels != NULL);
+            assert(compressed_data != NULL);
+            uint32_t chunk_data_length =
+                chunk_header->length;
             
-            IDATHeader * idat_header =
-                consume_struct(
-                    /* type: */ IDATHeader,
-                    /* from: */ entire_file);
-            
-            // to mask the rightmost 4 bits we need 00001111 
-            //                                          8421
-            //                                    8+4+2+1=15
-            // to isolate the leftmost 4, we need to
-            // shift right by 4
-            // (I guess the new padding bits on the left
-            // are 0 by default)
-            uint8_t compression_method =
-                idat_header->zlibmethodflags & 15;
-            uint8_t compression_info =
-                idat_header->zlibmethodflags >> 4;
-            printf(
-                "\t\tcompression method: %u\n",
-                compression_method);
-            printf(
-                "\t\tcompression info: %u\n",
-                compression_info);
-            
-            /* 
-            first FIVE bits is FCHECK
-            the 'check bits for CMF and FLG'
-            to mask the rightmost 5 bits: 15 + 16 = 31
-            spec:
-            "The FCHECK value must be such that CMF and FLG,
-            when viewed as a 16-bit unsigned integer stored in
-            MSB order (CMF*256 + FLG), is a multiple of 31."
-            */
-            uint16_t full_check_value =
-                (uint16_t)idat_header->additionalflags;
-            full_check_value =
-                full_check_value
-                | (idat_header->zlibmethodflags << 8);
-            printf(
-                "\t\tfull 16-bit check val (use FCHECK): %u - ",
-                full_check_value);
-            printf(
-                full_check_value % 31 == 0 ? "OK\n" : "ERR\n");
-            assert(full_check_value != 0);
-            assert(full_check_value % 31 == 0);
-            
-            /* 
-            sixth bit is FDICT, the 'preset dictionary' flag
-            If FDICT is set, a DICT dictionary identifier is
-            present immediately after the FLG byte. The
-            dictionary is a sequence of bytes which are
-            initially fed to the compressor without producing
-            any compressed output. DICT is the Adler-32
-            checksum of this sequence of bytes (see the
-            definition of ADLER32 below). 
-            
-            The decompressor can use this identifier to determine
-            which dictionary has been used by the compressor.
-            */
-            uint8_t FDICT =
-                idat_header->additionalflags >> 5 & 1;
-            
-            /*
-            7th & 8th bit is FLEVEL
-            FLEVEL (Compression level)
-            The "deflate" method (CM = 8) sets these flags as
-            follows:
-            
-            0 - compressor used fastest algorithm
-            1 - compressor used fast algorithm
-            2 - compressor used default algorithm
-            3 - compressor used max compression, slowest algo
-            
-            The information in FLEVEL is not needed for
-            decompression; it is there to indicate if
-            recompression might be worthwhile.
-            */
-            uint8_t FLEVEL =
-                idat_header->additionalflags >> 6 & 3;
-            printf("\t\tFDICT: %u\n", FDICT);
-            printf("\t\tFLEVEL: %u\n", FLEVEL);
-            
-            assert(FDICT == 0);
-            
-            printf("\t\tread compressed data...\n");
-            
-            printf(
-                "\t\tprepped recipient of %u bytes...\n",
-                decompressed_size);
+            if (!found_first_IDAT) {
+                printf("\t1st IDAT chunk, read zlib headers..\n");
+                found_first_IDAT = true;
+                
+                ZLIBHeader * zlib_header =
+                    consume_struct(
+                        /* type: */ ZLIBHeader,
+                        /* from: */ entire_file);
+                chunk_data_length -= sizeof(ZLIBHeader);
+                
+                // to mask the rightmost 4 bits we need 00001111 
+                //                                          8421
+                //                                    8+4+2+1=15
+                // to isolate the leftmost 4, we need to
+                // shift right by 4
+                // (I guess the new padding bits on the left
+                // are 0 by default)
+                uint8_t compression_method =
+                    zlib_header->zlibmethodflags & 15;
+                uint8_t compression_info =
+                    zlib_header->zlibmethodflags >> 4;
+                printf(
+                    "\t\tcompression method: %u\n",
+                    compression_method);
+                printf(
+                    "\t\tcompression info: %u\n",
+                    compression_info);
+                assert(compression_method == 8);
+                
+                /* 
+                first FIVE bits is FCHECK
+                the 'check bits for CMF and FLG'
+                to mask the rightmost 5 bits: 15 + 16 = 31
+                spec:
+                "The FCHECK value must be such that CMF and FLG,
+                when viewed as a 16-bit unsigned integer stored in
+                MSB order (CMF*256 + FLG), is a multiple of 31."
+                */
+                uint16_t full_check_value =
+                    (uint16_t)zlib_header->additionalflags;
+                full_check_value =
+                    full_check_value
+                    | (zlib_header->zlibmethodflags << 8);
+                printf(
+                    "\t\tfull 16-bit check val (use FCHECK): %u - ",
+                    full_check_value);
+                printf(
+                    full_check_value % 31 == 0 ? "OK\n" : "ERR\n");
+                assert(full_check_value != 0);
+                assert(full_check_value % 31 == 0);
+                
+                /* 
+                sixth bit is FDICT, the 'preset dictionary' flag
+                If FDICT is set, a DICT dictionary identifier is
+                present immediately after the FLG byte. The
+                dictionary is a sequence of bytes which are
+                initially fed to the compressor without producing
+                any compressed output. DICT is the Adler-32
+                checksum of this sequence of bytes (see the
+                definition of ADLER32 below). 
+                
+                The decompressor can use this identifier to determine
+                which dictionary has been used by the compressor.
+                */
+                uint8_t FDICT =
+                    zlib_header->additionalflags >> 5 & 1;
+                
+                if (FDICT) {
+                    printf("\t\tdiscarding FDICT... (4 bytes)\n");
+                    discard_bits(entire_file, 32);
+                    chunk_data_length -= 4;
+                }
+                
+                /*
+                7th & 8th bit is FLEVEL
+                FLEVEL (Compression level)
+                The "deflate" method (CM = 8) sets these flags as
+                follows:
+                
+                0 - compressor used fastest algorithm
+                1 - compressor used fast algorithm
+                2 - compressor used default algorithm
+                3 - compressor used max compression, slowest algo
+                
+                The information in FLEVEL is not needed for
+                decompression; it is there to indicate if
+                recompression might be worthwhile.
+                */
+                uint8_t FLEVEL =
+                    zlib_header->additionalflags >> 6 & 3;
+                printf("\t\tFDICT: %u\n", FDICT);
+                printf("\t\tFLEVEL: %u\n", FLEVEL);
+                
+                assert(FDICT == 0);
+                
+                printf("\t\tread compressed data...\n");
+                
+                printf(
+                    "\t\tprepped recipient of %u bytes...\n",
+                    decompressed_size);
+                free(zlib_header);
+            }
            
-            void * deflate_started_at = entire_file->data; 
-            deflate(
-                /* recipient: */
-                    pixels,
-                /* recipient_size: */
-                    decompressed_size,
-                /* entire_file: */
-                    entire_file,
-                /* compr_size_bytes: */
-                    chunk_header->length
-                        - sizeof(IDATHeader)
-                        - sizeof(ZLIBFooter));
-            
-            ZLIBFooter * zlib_footer =
-                consume_struct(ZLIBFooter, entire_file);
             printf(
-                "\t\tadler-32 zlib (deflate) checksum: %u\n",
-                zlib_footer->adler_32_checksum);
+                "\t\tcopying %u bytes to compressed stream...\n",
+                chunk_data_length); 
+            assert(entire_file->bits_left == 0);
+            for (uint32_t _ = 0; _ < chunk_data_length; _++)
+            {
+                *compressed_data++ =
+                    *(uint8_t *)entire_file->data++;
+                compressed_data_stream_size++;
+                entire_file->size_left--;
+            }    
         }
         else if (are_equal_strings(
             chunk_header->type,

@@ -62,8 +62,8 @@ int main(int argc, const char * argv[])
     printf("creating buffer..\n");
     
     uint8_t * buffer = malloc(fsize);
-    EntireFile * entire_file =
-        malloc(sizeof(EntireFile));
+    DataStream * entire_file =
+        malloc(sizeof(DataStream));
     
     size_t bytes_read = fread(
         /* ptr: */
@@ -194,6 +194,9 @@ int main(int argc, const char * argv[])
     
     free(gzip_header);
     free(gzip_footer);
+
+    printf("recipient contained:\n");
+    printf("%s\n", recipient);
     
     return 0;
 }

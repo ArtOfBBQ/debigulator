@@ -4,15 +4,14 @@ typedef int32_t bool32_t;
 
 #define NUM_UNIQUE_CODELENGTHS 19
 
-typedef struct EntireFile {
+typedef struct DataStream {
     void * data;
     
     uint8_t bits_left;
     uint8_t bit_buffer;
     
     size_t size_left;
-} EntireFile;
-
+} DataStream;
 
 typedef struct HuffmanEntry {
     uint32_t key;
@@ -68,7 +67,7 @@ uint32_t reverse_bit_order(
 }
 
 uint32_t peek_bits(
-    EntireFile * from,
+    DataStream * from,
     const uint32_t amount)
 {
     assert(amount > 0);
@@ -127,7 +126,7 @@ uint32_t peek_bits(
 }
 
 void discard_bits(
-    EntireFile * from,
+    DataStream * from,
     const unsigned int amount)
 {
     assert(from->bits_left < 9);
@@ -183,7 +182,7 @@ void copy_memory(
 // Grab data from the front of a buffer & advance pointer
 #define consume_struct(type, from) (type *)consume_chunk(from, sizeof(type))
 uint8_t * consume_chunk(
-    EntireFile * from,
+    DataStream * from,
     size_t size_to_consume)
 {
     assert(from->bits_left == 0);
@@ -203,7 +202,7 @@ uint8_t * consume_chunk(
 }
 
 uint32_t consume_bits(
-    EntireFile * from,
+    DataStream * from,
     const uint32_t amount)
 {
     assert(amount > 0);
@@ -222,7 +221,7 @@ uint32_t consume_bits(
 }
 
 char * consume_till_terminate(
-    EntireFile * from,
+    DataStream * from,
     uint32_t max_size,
     char terminator)
 {
@@ -256,7 +255,7 @@ char * consume_till_terminate(
 uint32_t huffman_decode(
     HuffmanEntry * dict,
     const uint32_t dictsize,
-    EntireFile * datastream)
+    DataStream * datastream)
 {
     int found_at = -1;
     int bitcount = 0;
@@ -493,24 +492,24 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 void deflate(
     uint8_t * recipient,
     uint32_t recipient_size,
-    EntireFile * entire_file,
+    DataStream * data_stream,
     unsigned int compressed_size_bytes) 
 {
     assert(recipient != NULL);
     assert(recipient_size >= compressed_size_bytes);
-    assert(entire_file != NULL);
-    assert(entire_file->data != NULL);
-    assert(entire_file->size_left > 0);
+    assert(data_stream != NULL);
+    assert(data_stream->data != NULL);
+    assert(data_stream->size_left > 0);
     assert(compressed_size_bytes > 0);
     
     printf(
         "\t\trunning DEFLATE algo, expecting %u bytes of compressed data...\n",
         compressed_size_bytes);
-    void * started_at = entire_file->data;
+    void * started_at = data_stream->data;
     uint8_t * recipient_at = recipient;
     
-    assert(entire_file->bits_left == 0);
-    assert(entire_file->size_left >= compressed_size_bytes);
+    assert(data_stream->bits_left == 0);
+    assert(data_stream->size_left >= compressed_size_bytes);
     
     int read_more_deflate_blocks = true;
     
@@ -539,7 +538,7 @@ void deflate(
         11 - reserved (error) 
         */
         uint8_t BFINAL = consume_bits(
-            /* buffer: */ entire_file,
+            /* buffer: */ data_stream,
             /* size  : */ 1);
         assert(BFINAL < 2);
         printf(
@@ -548,43 +547,43 @@ void deflate(
         if (BFINAL) { read_more_deflate_blocks = false; }
         
         uint8_t BTYPE =  consume_bits(
-            /* buffer: */ entire_file,
+            /* buffer: */ data_stream,
             /* size  : */ 2);
         
         if (BTYPE == 0) {
             printf("\t\t\tBTYPE 0 - No compression\n");
             
             // spec says to ditch remaining bits
-            if (entire_file->bits_left > 0) {
+            if (data_stream->bits_left > 0) {
                 printf(
                     "\t\t\tditching a byte with %u%s\n",
-                    entire_file->bits_left,
+                    data_stream->bits_left,
                     " bits left...");
                 discard_bits(
-                    /* from: */ entire_file,
-                    /* amount: */ entire_file->bits_left);
-                assert(entire_file->bits_left == 0);
+                    /* from: */ data_stream,
+                    /* amount: */ data_stream->bits_left);
+                assert(data_stream->bits_left == 0);
             }
             
             // read LEN and NLEN
             uint16_t LEN =
-                (int16_t)consume_bits(entire_file, 16);
+                (int16_t)consume_bits(data_stream, 16);
             printf(
                 "\t\t\tuncompr. block has LEN: %u bytes\n",
                 LEN);
             uint16_t NLEN =
-                (uint16_t)consume_bits(entire_file, 16);
+                (uint16_t)consume_bits(data_stream, 16);
             // spec says must be 1's complement of LEN
             assert((uint16_t)LEN == (uint16_t)~NLEN);
             
             for (int _ = 0; _ < LEN; _++) {
-                *recipient_at = *(uint8_t *)entire_file->data;
+                *recipient_at = *(uint8_t *)data_stream->data;
                 recipient_at++;
                 assert(
                     (recipient_at - recipient)
                         <= recipient_size);
-                entire_file->data++;
-                entire_file->size_left--;
+                data_stream->data++;
+                data_stream->size_left--;
             }
         } else if (BTYPE > 2) {
             printf(
@@ -699,7 +698,7 @@ void deflate(
                 // number of Literal/Length codes - 257
                 // (257 - 286)
                 HLIT = consume_bits(
-                    /* from: */ entire_file,
+                    /* from: */ data_stream,
                     /* size: */ 5)
                         + 257;
                 printf(
@@ -711,7 +710,7 @@ void deflate(
                 // # of Distance codes - 1
                 // (1 - 32)
                 HDIST = consume_bits(
-                    /* from: */ entire_file,
+                    /* from: */ data_stream,
                     /* size: */ 5)
                         + 1;
                 
@@ -724,7 +723,7 @@ void deflate(
                 // # of Code Length codes - 4
                 // (4 - 19)
                 uint32_t HCLEN = consume_bits(
-                    /* from: */ entire_file,
+                    /* from: */ data_stream,
                     /* size: */ 4)
                         + 4;
                 
@@ -753,13 +752,13 @@ void deflate(
                     NUM_UNIQUE_CODELENGTHS] = {};
                 printf("\t\t\tReading raw code lengths\n");
                 
-                assert(HCLEN < NUM_UNIQUE_CODELENGTHS);
+                // assert(HCLEN < NUM_UNIQUE_CODELENGTHS);
                 for (uint32_t i = 0; i < HCLEN; i++) {
                     assert(swizzle[i] <
                         NUM_UNIQUE_CODELENGTHS);
                     HCLEN_table[swizzle[i]] =
                             consume_bits(
-                                /* from: */ entire_file,
+                                /* from: */ data_stream,
                                 /* size: */ 3);
                     assert(HCLEN_table[swizzle[i]] <= 7);
                     assert(HCLEN_table[swizzle[i]] >= 0);
@@ -829,7 +828,7 @@ void deflate(
                         /* dictsize: */
                             NUM_UNIQUE_CODELENGTHS,
                         /* raw data: */
-                            entire_file);
+                            data_stream);
                     
                     if (encoded_len <= 15) {
                         litlendist_table[len_i] =
@@ -843,7 +842,7 @@ void deflate(
                         */
                         uint32_t extra_bits_repeat =
                             consume_bits(
-                                /* from: */ entire_file,
+                                /* from: */ data_stream,
                                 /* size: */ 2);
                         uint32_t repeats =
                             extra_bits_repeat + 3;
@@ -869,7 +868,7 @@ void deflate(
                         */
                         uint32_t extra_bits_repeat =
                             consume_bits(
-                                /* from: */ entire_file,
+                                /* from: */ data_stream,
                                 /* size: */ 3);
                         uint32_t repeats =
                             extra_bits_repeat + 3;
@@ -894,7 +893,7 @@ void deflate(
                         */
                         uint32_t extra_bits_repeat =
                             consume_bits(
-                                /* from: */ entire_file,
+                                /* from: */ data_stream,
                                 /* size: */ 7);
                         uint32_t repeats =
                             extra_bits_repeat + 11;
@@ -934,9 +933,6 @@ void deflate(
                             literal_length_huffman[i].value == i);
                         assert(
                             literal_length_huffman[i].key < 99999);
-                        assert(
-                            literal_length_huffman[i].code_length
-                                < 15);
                     }
                 }
                 
@@ -952,7 +948,6 @@ void deflate(
                     if (distance_huffman[i].used == true) {
                         assert(distance_huffman[i].value == i);
                         assert(distance_huffman[i].key < 99999);
-                        assert(distance_huffman[i].code_length < 15);
                     }
                 }
                 
@@ -981,15 +976,30 @@ void deflate(
             }
             
             while (1) {
-                // this consumes from entire_file
-                // so we'll eventually hit 256 and break
+                // we should normally break from this loop
+                // because we hit the magical value 256,
+                // not because of running out of bytes
+                
+                if (data_stream->data - started_at
+                    >= compressed_size_bytes)
+                {
+                    printf(
+                        "\t\tWarning: breaking from DEFLATE preemptively because %li bytes were read\n",
+                        data_stream->data - started_at);
+                    printf(
+                        "\t\tcompressed_size_bytes was: %u\n",
+                        compressed_size_bytes);
+                    read_more_deflate_blocks = false;
+                    break;
+                }
+                
                 uint32_t litlenvalue = huffman_decode(
                     /* dict: */
                         literal_length_huffman,
                     /* dictsize: */
                         HLIT,
                     /* raw data: */
-                        entire_file);
+                        data_stream);
                 
                 if (litlenvalue < 256) {
                     // literal value, not a length
@@ -1016,7 +1026,7 @@ void deflate(
                     uint32_t extra_length =
                         extra_bits > 0 ?
                             consume_bits(
-                                /* from: */ entire_file,
+                                /* from: */ data_stream,
                                 /* size: */ extra_bits)
                         : 0;
                     uint32_t total_length =
@@ -1030,7 +1040,7 @@ void deflate(
                         distance_huffman == NULL ?
                             reverse_bit_order(
                                 consume_bits(
-                                    /* from: */ entire_file,
+                                    /* from: */ data_stream,
                                     /* size: */ 5),
                                 5)
                         : huffman_decode(
@@ -1039,7 +1049,7 @@ void deflate(
                             /* dictsize: */
                                  HDIST,
                             /* raw data: */
-                                 entire_file);
+                                 data_stream);
                     
                     assert(distvalue <= 29);
                     assert(
@@ -1055,7 +1065,7 @@ void deflate(
                     uint32_t dist_extra_bits_decoded =
                         dist_extra_bits > 0 ?
                             consume_bits(
-                                /* from: */ entire_file,
+                                /* from: */ data_stream,
                                 /* size: */ dist_extra_bits)
                             : 0;
                     
@@ -1093,18 +1103,18 @@ void deflate(
         }
     }
 
-    if (entire_file->bits_left != 0) {
+    if (data_stream->bits_left != 0) {
         printf(
             "\t\tpartial byte left after DEFLATE\n");
         printf(
             "\t\tdiscarding: %u bits\n",
-            entire_file->bits_left);
+            data_stream->bits_left);
         discard_bits(
-            /* from: */ entire_file,
-            /* amount: */ entire_file->bits_left);
+            /* from: */ data_stream,
+            /* amount: */ data_stream->bits_left);
     }
     
-    int bytes_read = entire_file->data - started_at; 
+    int bytes_read = data_stream->data - started_at; 
     assert(bytes_read >= 0);
     if (bytes_read != compressed_size_bytes) {
         printf(
@@ -1114,9 +1124,9 @@ void deflate(
         assert(compressed_size_bytes > bytes_read);
         int skip = compressed_size_bytes - bytes_read;
         printf("skipping ahead %u bytes...\n", skip);
-        assert(entire_file->size_left >= skip);
-        entire_file->data += skip;
-        entire_file->size_left -= skip;
+        assert(data_stream->size_left >= skip);
+        data_stream->data += skip;
+        data_stream->size_left -= skip;
     }
     
     printf("\t\tend of DEFLATE\n");

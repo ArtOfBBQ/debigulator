@@ -1,6 +1,6 @@
 APP_NAME="hellogzip"
-INPUT_FILE="gimp_8x8complex" ## try gzipsample or deflate_source
-INPUT_EXTENSION="png"
+INPUT_FILE="gzipsample" ## try gzipsample or deflate_source
+INPUT_EXTENSION="gz"
 
 echo "Building $APP_NAME... (this shell script must be run from the app's root directory)"
 
