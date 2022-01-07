@@ -1,6 +1,7 @@
 typedef int32_t bool32_t;
 #define false 0
 #define true 1
+#define DEFLATE_SILENCE
 
 #define NUM_UNIQUE_CODELENGTHS 19
 
@@ -287,10 +288,12 @@ uint32_t huffman_decode(
     }
     
     if (found_at < 0) {
+        #ifndef DEFLATE_SILENCE 
         printf(
             "failed to find raw :%u for codelen: %u in dict\n",
             raw,
             bitcount);
+        #endif
         assert(1 == 2);
     }
     
@@ -383,11 +386,13 @@ HuffmanEntry * unpack_huffman(
             }
             
             if (actually_used) {
+                #ifndef DEFLATE_SILENCE 
                 printf(
                     "ERROR: smallest_code[%u] was %u%s",
                     bits,
                     smallest_code[bits],
                     " - value can't fit in that few bits!\n");
+                #endif
                 assert(1 == 2);
             }
         }
@@ -401,7 +406,7 @@ HuffmanEntry * unpack_huffman(
     //    not be assigned a value."
     for (uint32_t n = 0; n < array_size; n++) {
         uint32_t len = unpacked_dict[n].code_length;
-       
+        
         if (len >= min_code_length) {
             unpacked_dict[n].key = smallest_code[len];
             unpacked_dict[n].used = true;
@@ -501,10 +506,12 @@ void deflate(
     assert(data_stream->data != NULL);
     assert(data_stream->size_left > 0);
     assert(compressed_size_bytes > 0);
-    
+
+    #ifndef DEFLATE_SILENCE
     printf(
         "\t\trunning DEFLATE algo, expecting %u bytes of compressed data...\n",
         compressed_size_bytes);
+    #endif
     void * started_at = data_stream->data;
     uint8_t * recipient_at = recipient;
     
@@ -514,7 +521,9 @@ void deflate(
     int read_more_deflate_blocks = true;
     
     while (read_more_deflate_blocks) {
+        #ifndef DEFLATE_SILENCE
         printf("\t\treading new DEFLATE block...\n");
+        #endif
         /*
         Each block of compressed data begins with 3 header
         bits containing the following data:
@@ -541,9 +550,11 @@ void deflate(
             /* buffer: */ data_stream,
             /* size  : */ 1);
         assert(BFINAL < 2);
+        #ifndef DEFLATE_SILENCE
         printf(
             "\t\t\tBFINAL (flag for final block): %u\n",
             BFINAL);
+        #endif
         if (BFINAL) { read_more_deflate_blocks = false; }
         
         uint8_t BTYPE =  consume_bits(
@@ -551,26 +562,33 @@ void deflate(
             /* size  : */ 2);
         
         if (BTYPE == 0) {
+            #ifndef DEFLATE_SILENCE
             printf("\t\t\tBTYPE 0 - No compression\n");
+            #endif
             
             // spec says to ditch remaining bits
             if (data_stream->bits_left > 0) {
+                #ifndef DEFLATE_SILENCE
                 printf(
                     "\t\t\tditching a byte with %u%s\n",
                     data_stream->bits_left,
                     " bits left...");
+                #endif
+                
                 discard_bits(
                     /* from: */ data_stream,
                     /* amount: */ data_stream->bits_left);
                 assert(data_stream->bits_left == 0);
             }
             
-            // read LEN and NLEN
             uint16_t LEN =
                 (int16_t)consume_bits(data_stream, 16);
+            #ifndef DEFLATE_SILENCE
             printf(
                 "\t\t\tuncompr. block has LEN: %u bytes\n",
                 LEN);
+            #endif
+            
             uint16_t NLEN =
                 (uint16_t)consume_bits(data_stream, 16);
             // spec says must be 1's complement of LEN
@@ -586,9 +604,11 @@ void deflate(
                 data_stream->size_left--;
             }
         } else if (BTYPE > 2) {
+            #ifndef DEFLATE_SILENCE
             printf(
                 "\t\t\tERROR - unexpected deflate BTYPE %u\n",
                 BTYPE);
+            #endif
             assert(1 == 2);
         } else {
             assert(BTYPE >= 1 && BTYPE <= 2);
@@ -606,7 +626,9 @@ void deflate(
             uint32_t HDIST = 0;
             
             if (BTYPE == 1) {
+                #ifndef DEFLATE_SILENCE
                 printf("\t\t\tBTYPE 1 - Fixed Huffman\n");
+                #endif
                 assert(distance_huffman == NULL);
                 
                 /*
@@ -678,12 +700,16 @@ void deflate(
                 assert(
                     literal_length_huffman[287].code_length == 8);
                 assert(literal_length_huffman[287].key == 199);
-                
+               
+                #ifndef DEFLATE_SILENCE 
                 printf("\t\t\tcreated fixed huffman dict.\n");
+                #endif
             } else {
                 assert(BTYPE == 2);
+                #ifndef DEFLATE_SILENCE
                 printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
                 printf("\t\t\tRead code trees...\n");
+                #endif
                 
                 /*
                 The Huffman codes for the two alphabets
@@ -701,9 +727,12 @@ void deflate(
                     /* from: */ data_stream,
                     /* size: */ 5)
                         + 257;
+                
+                #ifndef DEFLATE_SILENCE
                 printf(
                     "\t\t\tHLIT : %u (expect 257-286)\n",
                     HLIT);
+                #endif
                 assert(HLIT >= 257 && HLIT <= 286);
                 
                 // 5 Bits: HDIST (huffman distance?)
@@ -714,9 +743,11 @@ void deflate(
                     /* size: */ 5)
                         + 1;
                 
+                #ifndef DEFLATE_SILENCE
                 printf(
                     "\t\t\tHDIST: %u (expect 1-32)\n",
                     HDIST);
+                #endif
                 assert(HDIST >= 1 && HDIST <= 32);
                 
                 // 4 Bits: HCLEN (huffman code length)
@@ -727,9 +758,12 @@ void deflate(
                     /* size: */ 4)
                         + 4;
                 
+                #ifndef DEFLATE_SILENCE
                 printf(
                     "\t\t\tHCLEN: %u (4-19 vals of 0-6)\n",
                      HCLEN);
+                #endif
+                
                 assert(
                     HCLEN >= 4
                     && HCLEN <= 19);
@@ -750,9 +784,11 @@ void deflate(
                 
                 uint32_t HCLEN_table[
                     NUM_UNIQUE_CODELENGTHS] = {};
+
+                #ifndef DEFLATE_SILENCE
                 printf("\t\t\tReading raw code lengths\n");
+                #endif
                 
-                // assert(HCLEN < NUM_UNIQUE_CODELENGTHS);
                 for (uint32_t i = 0; i < HCLEN; i++) {
                     assert(swizzle[i] <
                         NUM_UNIQUE_CODELENGTHS);
@@ -769,7 +805,9 @@ void deflate(
                 but these are themselves 'compressed'
                 and need to be unpacked
                 */
+                #ifndef DEFLATE_SILENCE
                 printf("\t\t\tUnpack codelengths table...\n");
+                #endif
                 
                 // TODO: should I do NUM_UNIQUE_CODELGNTHS
                 // or only HCLEN? 
@@ -816,10 +854,6 @@ void deflate(
                 
                 uint32_t * litlendist_table = malloc(
                     sizeof(uint32_t) * two_dicts_size);
-                // TODO: remove this debugging code
-                for (int i = 0; i < two_dicts_size; i++) {
-                    litlendist_table[i] = 99999;
-                }
                 
                 while (len_i < two_dicts_size) {
                     uint32_t encoded_len = huffman_decode(
@@ -909,14 +943,18 @@ void deflate(
                             len_i++;
                         }
                     } else {
+                        #ifndef DEFLATE_SILENCE
                         printf(
                             "ERROR : encoded_len %u\n",
                             encoded_len);
+                        #endif
                         assert(1 == 2);
                     }
                 }
                 
+                #ifndef DEFLATE_SILENCE
                 printf("\t\t\tfinished reading two dicts\n");
+                #endif
                 assert(len_i == two_dicts_size);
                 
                 literal_length_huffman =
@@ -925,8 +963,11 @@ void deflate(
                             litlendist_table,
                         /* array_size : */
                             HLIT);
-                
+               
+                #ifndef DEFLATE_SILENCE 
                 printf("\t\t\tunpacked literal/length dictionary\n");
+                #endif
+                
                 for (int i = 0; i < HLIT; i++) {
                     if (literal_length_huffman[i].used == true) {
                         assert(
@@ -942,7 +983,10 @@ void deflate(
                             litlendist_table + HLIT,
                         /* array_size : */
                             HDIST);
+
+                #ifndef DEFLATE_SILENCE
                 printf("\t\t\tunpacked distance dictionary\n");
+                #endif
                 
                 for (int i = 0; i < HDIST; i++) {
                     if (distance_huffman[i].used == true) {
@@ -983,12 +1027,14 @@ void deflate(
                 if (data_stream->data - started_at
                     >= compressed_size_bytes)
                 {
+                    #ifndef DEFLATE_SILENCE
                     printf(
                         "\t\tWarning: breaking from DEFLATE preemptively because %li bytes were read\n",
                         data_stream->data - started_at);
                     printf(
                         "\t\tcompressed_size_bytes was: %u\n",
                         compressed_size_bytes);
+                    #endif
                     read_more_deflate_blocks = false;
                     break;
                 }
@@ -1087,14 +1133,16 @@ void deflate(
                     }
                 } else {
                     assert(litlenvalue == 256);
+                    #ifndef DEFLATE_SILENCE
                     printf("\t\tend of ltln found!\n");
-                    // TODO: figure out what to do
-                    // with any remaining bits
+                    #endif
                     break;
                 }
             }
-
+            
+            #ifndef DEFLATE_SILENCE
             printf("\t\tend of DEFLATE block...\n");
+            #endif
             
             free(literal_length_huffman);
             if (distance_huffman != NULL) {
@@ -1104,11 +1152,14 @@ void deflate(
     }
 
     if (data_stream->bits_left != 0) {
+        #ifndef DEFLATE_SILENCE
         printf(
             "\t\tpartial byte left after DEFLATE\n");
         printf(
             "\t\tdiscarding: %u bits\n",
             data_stream->bits_left);
+        #endif
+        
         discard_bits(
             /* from: */ data_stream,
             /* amount: */ data_stream->bits_left);
@@ -1117,18 +1168,24 @@ void deflate(
     int bytes_read = data_stream->data - started_at; 
     assert(bytes_read >= 0);
     if (bytes_read != compressed_size_bytes) {
+        #ifndef DEFLATE_SILENCE
         printf(
             "Warning: expected to read %u bytes but got %u\n",
             compressed_size_bytes,
             bytes_read);
+        #endif
         assert(compressed_size_bytes > bytes_read);
         int skip = compressed_size_bytes - bytes_read;
+        #ifndef DEFLATE_SILENCE
         printf("skipping ahead %u bytes...\n", skip);
+        #endif
         assert(data_stream->size_left >= skip);
         data_stream->data += skip;
         data_stream->size_left -= skip;
     }
-    
+   
+    #ifndef DEFLATE_SILENCE 
     printf("\t\tend of DEFLATE\n");
+    #endif
 }
 
