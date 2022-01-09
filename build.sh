@@ -15,9 +15,12 @@ cp resources/$INPUT_FILE.$INPUT_EXTENSION build/$INPUT_FILE.$INPUT_EXTENSION
 
 echo "Compiling $APP_NAME..."
 # clang -g $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
-clang -fsanitize=undefined -g $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
+gcc -fsanitize=undefined -g $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
 
 
 echo "Running $APP_NAME"
 (cd build && ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
+
+# linux only
+(cd build && valgrind --leak-check=full --track-origins=yes ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
 

@@ -440,6 +440,8 @@ DecodedPNG * decode_PNG(
         #endif
         return return_value;
     }
+
+    free(png_signature);
     
     // these pointers are initted below
     uint8_t * compressed_data = NULL;
@@ -461,13 +463,11 @@ DecodedPNG * decode_PNG(
             entire_file->size_left);
         #endif
         unsigned long running_crc = 0xffffffffL;
-	assert(sizeof(PNGChunkHeader) == 8);
         PNGChunkHeader * chunk_header = consume_struct(
             /* type: */   PNGChunkHeader,
             /* buffer: */ entire_file);
-	assert(entire_file->bits_left == 0);
         flip_endian(&chunk_header->length);
-
+	
         if (!are_equal_strings(
             chunk_header->type,
             "IDAT",
@@ -646,6 +646,7 @@ DecodedPNG * decode_PNG(
             }
 	    
 	    assert(pixels == NULL);
+	    
             pixels = malloc(decompressed_size);
             // this copy (compressed_data) is necessary because
             // the data needed for DEFLATE is likely spread
@@ -656,6 +657,7 @@ DecodedPNG * decode_PNG(
             compressed_data = malloc(decompressed_size);
             compressed_data_begin = compressed_data;
             pixels_start = pixels;
+	    free(ihdr_body);
         }  else if (are_equal_strings(
             chunk_header->type,
             "IDAT",
@@ -828,7 +830,6 @@ DecodedPNG * decode_PNG(
             #ifndef PNG_SILENCE
             printf("found IEND header\n");
             #endif
-            break;
         }
         else if ((char)chunk_header->type[0] > 'Z')
         {
@@ -848,7 +849,14 @@ DecodedPNG * decode_PNG(
         }
         
         if (entire_file->size_left < 4
-            || entire_file->bits_left != 0) {
+            || entire_file->bits_left != 0)
+	{
+	    #ifndef PNG_SILENCE
+	    printf(
+		"failed to decode PNG - unexpected remaining file size of %lu and %u bits in buffer\n",
+		entire_file->size_left,
+		entire_file->bits_left);
+	    #endif
             return_value->good = false;
             return return_value;
         }
@@ -870,6 +878,9 @@ DecodedPNG * decode_PNG(
             #endif
         }
         #endif
+	
+	free(chunk_header);	
+	free(block_footer);
     }
     
     // end of "while size file > pngchunkheader" loop
@@ -889,8 +900,10 @@ DecodedPNG * decode_PNG(
         "\t\tfilter method: %u\n",
         filter_type);
     #endif
+
+    free(entire_file);
     
-    return_value->pixels = pixels;
+    return_value->pixels = pixels_start;
     return_value->good = true;
     return_value->pixel_count = decompressed_size;
     return return_value;

@@ -62,7 +62,7 @@ int main(int argc, const char * argv[])
         "image height: %u\n",
         decoded_png->height);
 
-    // free(decoded_png->pixels);
+    free(decoded_png->pixels);
     free(decoded_png);
     
     return 0;
