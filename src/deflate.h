@@ -186,7 +186,7 @@ uint8_t * consume_chunk(
     DataStream * from,
     size_t size_to_consume)
 {
-    assert(from->bits_left == 0);
+    // assert(from->bits_left == 0);
     assert(from->size_left >= size_to_consume);
     
     uint8_t * return_value = malloc(size_to_consume);

@@ -45,6 +45,8 @@ int main(int argc, const char * argv[])
     DecodedPNG * decoded_png = decode_PNG(
         /* compressed_bytes: */ buffer,
         /* compressed_bytes_size: */ bytes_read);
+    free(buffer);
+    
     printf("finished decode_PNG.\n");
     printf(
         "result was: %s\n",
@@ -59,6 +61,9 @@ int main(int argc, const char * argv[])
     printf(
         "image height: %u\n",
         decoded_png->height);
+
+    // free(decoded_png->pixels);
+    free(decoded_png);
     
     return 0;
 }

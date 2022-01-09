@@ -4,8 +4,8 @@
 #include "assert.h"
 #include "deflate.h"
 
-#define PNG_SILENCE
-#define IGNORE_CRC_CHECKS
+// #define PNG_SILENCE
+// #define IGNORE_CRC_CHECKS
 
 typedef struct DecodedPNG {
     uint8_t * pixels;
@@ -498,10 +498,11 @@ DecodedPNG * decode_PNG(
                     compressed_data_stream,
                 /* compr_size_bytes: */
                     compressed_data_stream_size - 4);
+	    
             free(compressed_data_begin);
             free(compressed_data_stream);
         }
-       
+        
         #ifndef IGNORE_CRC_CHECKS 
         running_crc = update_crc(
             /* crc: */ running_crc,
@@ -522,7 +523,15 @@ DecodedPNG * decode_PNG(
         #endif
         
         if (chunk_header->length >= entire_file->size_left) {
+
             return_value->good = false;
+	    #ifndef PNG_SILENCE 
+	    printf(
+		"failing to decode PNG, [%s] chunk of length %u is larger than remaining file size of %lu\n",
+		chunk_header->type,
+		chunk_header->length,
+		entire_file->size_left);
+	    #endif
             return return_value;
         }
         
@@ -532,6 +541,12 @@ DecodedPNG * decode_PNG(
             4))
         {
             if (pixels == NULL) {
+
+		#ifndef PNG_SILENCE 
+		printf(
+		    "failing to decode PNG. [%s] chunk should never appear before [IHDR] chunk\n",
+		    chunk_header->type);
+		#endif
                 return_value->good = false;
                 return return_value;
             }
@@ -603,6 +618,10 @@ DecodedPNG * decode_PNG(
             #endif
             
             if (ihdr_body->filter_method != 0) {
+		#ifndef PNG_SILENCE 
+		printf(
+		    "failing to decode PNG. filter method in [IHDR] chunk must be 0\n");
+		#endif
                 return_value->good = false;
                 return return_value;
             }
@@ -610,10 +629,17 @@ DecodedPNG * decode_PNG(
             if (entire_file->size_left < 4
                 || entire_file->bits_left != 0)
             {
+		#ifndef PNG_SILENCE 
+		printf(
+		    "failing to decode PNG - file size left is %lu bytes, bits in bit buffer: %u\n",
+		    entire_file->size_left,
+		    entire_file->bits_left);
+		#endif
                 return_value->good = false;
                 return return_value;
             }
-            
+	    
+	    assert(pixels == NULL);
             pixels = malloc(decompressed_size);
             // this copy (compressed_data) is necessary because
             // the data needed for DEFLATE is likely spread
@@ -633,6 +659,9 @@ DecodedPNG * decode_PNG(
                 || pixels == NULL
                 || compressed_data == NULL)
             {
+		#ifndef PNG_SILENCE
+		printf("failing to decode PNG - no [IHDR] chunk was found, yet already in [IDAT] chunk\n");
+		#endif
                 return_value->good = false;
                 return return_value;
             }
