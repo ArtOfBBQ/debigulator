@@ -316,6 +316,7 @@ the other values seem to always be the same in every PNG
 also, so you can just use the whole shebang as a check
 to find out if a given file is a PNG.
 */
+
 #pragma pack(push, 1)
 typedef struct PNGSignature {
     uint8_t highbit_hint;             // artifact
@@ -415,6 +416,7 @@ DecodedPNG * decode_PNG(
     entire_file = malloc(sizeof(DataStream));
     entire_file->data = compressed_bytes;
     entire_file->size_left = compressed_bytes_size;
+    entire_file->bits_left = 0;
     
     PNGSignature * png_signature = consume_struct(
         /* type: */ PNGSignature,
@@ -459,9 +461,11 @@ DecodedPNG * decode_PNG(
             entire_file->size_left);
         #endif
         unsigned long running_crc = 0xffffffffL;
+	assert(sizeof(PNGChunkHeader) == 8);
         PNGChunkHeader * chunk_header = consume_struct(
             /* type: */   PNGChunkHeader,
             /* buffer: */ entire_file);
+	assert(entire_file->bits_left == 0);
         flip_endian(&chunk_header->length);
 
         if (!are_equal_strings(
@@ -523,7 +527,7 @@ DecodedPNG * decode_PNG(
         #endif
         
         if (chunk_header->length >= entire_file->size_left) {
-
+	    
             return_value->good = false;
 	    #ifndef PNG_SILENCE 
 	    printf(
@@ -556,9 +560,11 @@ DecodedPNG * decode_PNG(
             4))
         {
             found_IHDR = true;
+	    assert(entire_file->bits_left == 0);
             IHDRBody * ihdr_body = consume_struct(
                 /* type: */ IHDRBody,
                 /* entire_file: */ entire_file);
+	    assert(entire_file->bits_left < 8);
             flip_endian(&ihdr_body->width);
             flip_endian(&ihdr_body->height);
             return_value->width = ihdr_body->width;
