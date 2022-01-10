@@ -4,7 +4,7 @@
 #include "assert.h"
 #include "deflate.h"
 
-// #define PNG_SILENCE
+#define PNG_SILENCE
 // #define IGNORE_CRC_CHECKS
 
 typedef struct DecodedPNG {

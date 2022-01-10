@@ -3,20 +3,16 @@
 int main(int argc, const char * argv[]) 
 {
     if (argc != 2) {
-        #ifndef PNG_SILENCE
         printf("Please supply 1 argument (png file name)\n");
         printf("Got:");
         for (int i = 0; i < argc; i++) {
             
             printf(" %s", argv[i]);
         }
-        #endif
         return 1;
     }
    
-    #ifndef PNG_SILENCE 
     printf("Inspecting file: %s\n", argv[1]);
-    #endif
     
     FILE * imgfile = fopen(
         argv[1],
@@ -61,7 +57,7 @@ int main(int argc, const char * argv[])
     printf(
         "image height: %u\n",
         decoded_png->height);
-
+    
     free(decoded_png->pixels);
     free(decoded_png);
     

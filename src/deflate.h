@@ -4,6 +4,7 @@ typedef int32_t bool32_t;
 #define DEFLATE_SILENCE
 
 #define NUM_UNIQUE_CODELENGTHS 19
+#define HUFFMAN_HASHMAP_SIZE 255
 
 typedef struct DataStream {
     void * data;
@@ -20,6 +21,13 @@ typedef struct HuffmanEntry {
     uint32_t value;
     bool32_t used;
 } HuffmanEntry;
+
+typedef struct HashedHuffman {
+   uint32_t key;
+   uint32_t code_length;
+   uint32_t value;
+   struct HashedHuffman * next_neighbor; 
+} HashedHuffman;
 
 uint32_t mask_rightmost_bits(
     const uint32_t input,
@@ -123,6 +131,18 @@ uint32_t peek_bits(
        return_value |= (partial_new_byte <<= bits_in_return);
     }
     
+    return return_value;
+}
+
+uint32_t compute_hash(
+    uint32_t key,
+    uint32_t code_length)
+{
+    uint32_t return_value = key * code_length; 
+    return_value = return_value & HUFFMAN_HASHMAP_SIZE;
+    
+    assert(return_value >= 0);
+    assert(return_value <= HUFFMAN_HASHMAP_SIZE);
     return return_value;
 }
 
@@ -253,6 +273,95 @@ char * consume_till_terminate(
     return return_value;
 }
 
+void free_hashed_huff(
+    HashedHuffman * dict,
+    const uint32_t dictsize)
+{
+    for (int i = 0; i < dictsize; i++) {
+        while (dict[i].next_neighbor != NULL
+            && dict[i].next_neighbor->next_neighbor != NULL) {
+            HashedHuffman * last_neighbor =
+                dict[i].next_neighbor;
+            
+            while (
+                last_neighbor->next_neighbor != NULL
+                && last_neighbor->next_neighbor->next_neighbor
+                    != NULL)
+            {
+                last_neighbor = last_neighbor->next_neighbor;
+            }
+            
+            free(last_neighbor->next_neighbor);
+            last_neighbor->next_neighbor = NULL;
+        }
+
+        if (dict[i].next_neighbor != NULL) {
+            free(dict[i].next_neighbor);
+            dict[i].next_neighbor = NULL;
+        }
+    }
+}
+
+uint32_t hashed_huffman_decode(
+    HashedHuffman * dict,
+    const uint32_t dictsize,
+    DataStream * datastream)
+{
+    unsigned int bitcount = 0;
+    uint32_t raw = 0;
+    
+    while (bitcount < 24)
+    {
+        bitcount += 1;
+        
+        /*
+        Spec:
+        "Huffman codes are packed starting with the most-
+            significant bit of the code."
+        */
+        raw = reverse_bit_order(
+            peek_bits(
+                /* from: */ datastream,
+                /* size: */ bitcount),
+            bitcount);
+        
+        uint32_t hash = compute_hash(
+            /* key: */ raw,
+            /* code_length: */ bitcount);
+
+        if (
+            dict[hash].key == raw
+            && dict[hash].code_length == bitcount)
+        {
+            discard_bits(datastream, bitcount);
+            return dict[hash].value;
+        } else {
+            HashedHuffman * next_neighbor =
+                dict[hash].next_neighbor;
+            while (next_neighbor != NULL) {
+                if (next_neighbor->key == raw
+                    && next_neighbor->code_length == bitcount)
+                {
+                    discard_bits(datastream, bitcount);
+                    return next_neighbor->value;
+                } else {
+                    next_neighbor =
+                        next_neighbor->next_neighbor;
+                }
+            }
+        }
+    }
+    
+    #ifndef DEFLATE_SILENCE 
+    printf(
+        "failed to find raw :%u for codelen: %u in dict\n",
+        raw,
+        bitcount);
+    #endif
+     
+    return 0;
+}
+
 uint32_t huffman_decode(
     HuffmanEntry * dict,
     const uint32_t dictsize,
@@ -262,7 +371,8 @@ uint32_t huffman_decode(
     int bitcount = 0;
     uint32_t raw = 0;
     
-    while (found_at == -1 && bitcount < 24) {
+    while (found_at == -1 && bitcount < 24)
+    {
         bitcount += 1;
         
         /*
@@ -303,6 +413,67 @@ uint32_t huffman_decode(
     
     return dict[found_at].value;
 };
+
+HashedHuffman * huffman_to_hashmap(
+    HuffmanEntry * orig_huff,
+    uint32_t orig_huff_size)
+{
+    HashedHuffman * hashed_huffman =
+        malloc(HUFFMAN_HASHMAP_SIZE * sizeof(HashedHuffman));
+    for (unsigned int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++)
+    {
+        hashed_huffman[i].key = 0;
+        hashed_huffman[i].value = 0;
+        hashed_huffman[i].code_length = 0;
+        hashed_huffman[i].next_neighbor = NULL;
+    }
+    
+    for (unsigned int i = 0; i < orig_huff_size; i++)
+    {
+        if (orig_huff[i].used == false) {
+            continue;
+        }
+        
+        uint32_t hash = compute_hash(
+            /* key: */ orig_huff[i].key,
+            /* code_length: */ orig_huff[i].code_length);
+        
+        if (
+            hashed_huffman[hash].key == 0
+            && hashed_huffman[hash].code_length == 0
+            && hashed_huffman[hash].value == 0)
+        {
+            // first time using this hash
+            hashed_huffman[hash].key = orig_huff[i].key;
+            hashed_huffman[hash].code_length =
+                orig_huff[i].code_length;
+            hashed_huffman[hash].value = orig_huff[i].value;
+            hashed_huffman[hash].next_neighbor = NULL;
+        } else {
+            // hash conflicting, append new value to linked list
+            HashedHuffman * last_full_link = 
+                &(hashed_huffman[hash]);
+            
+            while (last_full_link->next_neighbor != NULL)
+            {
+                last_full_link = last_full_link->next_neighbor;
+            }
+            
+            assert(last_full_link->next_neighbor == NULL);
+            last_full_link->next_neighbor =
+                malloc(sizeof(HashedHuffman));
+            last_full_link->next_neighbor->next_neighbor = NULL;
+            last_full_link->next_neighbor->key =
+                orig_huff[i].key;
+            last_full_link->next_neighbor->code_length =
+                orig_huff[i].code_length;
+            last_full_link->next_neighbor->value =
+                orig_huff[i].value;
+        }
+    }
+    
+    return hashed_huffman;
+}
 
 HuffmanEntry * unpack_huffman(
     uint32_t * array,
@@ -615,9 +786,11 @@ void deflate(
 
             // used in both dynamic & fixed huffman encoded files
             HuffmanEntry * literal_length_huffman = NULL;
+            HashedHuffman * hashed_litlen_huffman = NULL;
             
             // only used in dynamic, keep NULL for fixed 
             HuffmanEntry * distance_huffman = NULL;
+            HashedHuffman * hashed_dist_huffman = NULL;
             
             // will be overwritten in dynamic
             // leave 288 for fixed
@@ -817,6 +990,12 @@ void deflate(
                             HCLEN_table,
                         /* array_size : */
                             NUM_UNIQUE_CODELENGTHS);
+                HashedHuffman * hashed_clen_huffman =
+                    huffman_to_hashmap(
+                        /* original dict: */
+                            codelengths_huffman,
+                        /* original size: */
+                            NUM_UNIQUE_CODELENGTHS);
                 
                 for (
                     int i = 0;
@@ -856,11 +1035,11 @@ void deflate(
                     sizeof(uint32_t) * two_dicts_size);
                 
                 while (len_i < two_dicts_size) {
-                    uint32_t encoded_len = huffman_decode(
+                    uint32_t encoded_len = hashed_huffman_decode(
                         /* dict: */
-                            codelengths_huffman,
+                            hashed_clen_huffman,
                         /* dictsize: */
-                            NUM_UNIQUE_CODELENGTHS,
+                            HUFFMAN_HASHMAP_SIZE,
                         /* raw data: */
                             data_stream);
                     
@@ -963,7 +1142,11 @@ void deflate(
                             litlendist_table,
                         /* array_size : */
                             HLIT);
-               
+                hashed_litlen_huffman =
+                    huffman_to_hashmap(
+                        /* original: */ literal_length_huffman,
+                        /* orig_size: */ HLIT);
+                
                 #ifndef DEFLATE_SILENCE 
                 printf("\t\t\tunpacked literal/length dictionary\n");
                 #endif
@@ -983,7 +1166,11 @@ void deflate(
                             litlendist_table + HLIT,
                         /* array_size : */
                             HDIST);
-
+                hashed_dist_huffman =
+                    huffman_to_hashmap(
+                        /* original dict: */ distance_huffman,
+                        /* original size: */ HDIST);
+                
                 #ifndef DEFLATE_SILENCE
                 printf("\t\t\tunpacked distance dictionary\n");
                 #endif
@@ -996,6 +1183,9 @@ void deflate(
                 }
                 
                 free(codelengths_huffman);
+                free_hashed_huff(
+                    hashed_clen_huffman,
+                    HUFFMAN_HASHMAP_SIZE);
                 free(litlendist_table);
             }
             
@@ -1039,11 +1229,11 @@ void deflate(
                     break;
                 }
                 
-                uint32_t litlenvalue = huffman_decode(
+                uint32_t litlenvalue = hashed_huffman_decode(
                     /* dict: */
-                        literal_length_huffman,
+                        hashed_litlen_huffman,
                     /* dictsize: */
-                        HLIT,
+                        HUFFMAN_HASHMAP_SIZE,
                     /* raw data: */
                         data_stream);
                 
@@ -1145,8 +1335,15 @@ void deflate(
             #endif
             
             free(literal_length_huffman);
+            free_hashed_huff(
+                hashed_litlen_huffman,
+                HUFFMAN_HASHMAP_SIZE);
+            
             if (distance_huffman != NULL) {
                 free(distance_huffman);
+                free_hashed_huff(
+                    hashed_dist_huffman,
+                    HUFFMAN_HASHMAP_SIZE);
             }
         }
     }

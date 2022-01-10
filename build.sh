@@ -22,5 +22,5 @@ echo "Running $APP_NAME"
 (cd build && ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
 
 # linux only
-(cd build && valgrind --leak-check=full --track-origins=yes ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
+# (cd build && valgrind --leak-check=full --track-origins=yes ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
 
