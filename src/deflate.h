@@ -1,3 +1,8 @@
+#include "inttypes.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "assert.h"
+
 typedef int32_t bool32_t;
 #define false 0
 #define true 1
@@ -47,33 +52,107 @@ uint32_t reverse_bit_order(
     const uint32_t original,
     const unsigned int bit_count)
 {
+    // Approach explained:
+    //
+    // Step 1: swap byte A-B & C-D
+    // bytA.... bytB.... bytC..... bytD.... 
+    //  >>                           <<
+    // bytC.... bytD.... bytA..... bytB....
+    //
+    // Step 2: swap byte A with B and C with D 
+    // bytC.... bytD.... bytA..... bytB....
+    //            >>       <<
+    // bytD.... bytC.... bytB..... bytA....
+    //
+    // Step 3: swap bits 1-4 of every byte with 5-8
+    // 12345678 12345678 12345678 12345678
+    //   >> <<    >> <<    >> <<   >>  <<
+    // 56781234 56781234 56781234 56781234
+    //
+    // Step 4: Swap bits 1-2 with 3-4 & bits 5-6 with 7-8
+    //
+    // 56781234 56781234 56781234 56781234
+    // >><<>><< >><<>><< >><<>><< >><<>><<
+    // 78563412 78563412 78563412 78563412
+    //
+    // Step 5: Swap bit 1 with 2, 3 with 4, 5 with 6, 7 with 8
+    //
+    // 78563412 78563412 78563412 78563412
+    // ><><><>< ><><><>< ><><><>< ><><><><
+    // 87654321 87654321 87654321 87654321
+    //
+    // Step 6: mask the rightmost bits according to bit_count
+    
     assert(bit_count > 0);
     assert(bit_count < 33);
     
     if (bit_count == 1) { return original; }
+  
+    // Step 1: swap byte A-B & C-D
+    uint32_t return_value = 
+        ( (original & 0xFFFF0000) >> 16)
+        | (original & 0x0000FFFF) << 16;
     
-    uint32_t return_value = 0;
+    // Step 2: swap byte A with B and C with D 
+    return_value =
+        ( (return_value & 0xFF00FF00) >> 8)
+        | (return_value & 0x00FF00FF) << 8;
     
-    float middle = (bit_count - 1.0f) / 2.0f;
-    assert(middle > 0);
-    assert(middle <= 16.0f);
+    // Step 3: swap bits 1-4 of every byte with 5-8
+    return_value =
+        ( (return_value & 0xF0F0F0F0) >> 4)
+        | (return_value & 0x0F0F0F0F) << 4;
     
-    for (uint32_t i = 0; i < bit_count; i++) {
-        float dist_to_middle = middle - i;
-        assert(dist_to_middle < 16.0f);
-        
-        uint8_t target_pos = i + (dist_to_middle * 2);
-        
-        assert(target_pos >= 0);
-        assert(target_pos < 33);
-        
-        return_value =
-            return_value |
-                (((original >> i) & 1) << target_pos);
-    }
+    // Step 4: Swap bits 1-2 with 3-4 & bits 5-6 with 7-8
+    return_value =
+        ( (return_value & 0xCCCCCCCC) >> 2)
+        | (return_value & 0x33333333) << 2;
+ 
+    // Step 5: Swap bit 1 with 2, 3 with 4, 5 with 6, 7 with 8
+    return_value =
+        ( (return_value & 0xAAAAAAAA) >> 1)
+        | (return_value & 0x55555555) << 1;
+    
+    // Step 6: mask the leftmost bits according to bit_count
+    uint32_t rightmost_mask = (1 << bit_count) - 1;
+    uint32_t leftmost_mask = rightmost_mask << (32 - bit_count);
+    return_value = return_value & leftmost_mask;
+    return_value = return_value >> (32 - bit_count);
     
     return return_value;
 }
+
+// uint32_t reverse_bit_order(
+//     const uint32_t original,
+//     const unsigned int bit_count)
+// {
+//     assert(bit_count > 0);
+//     assert(bit_count < 33);
+//     
+//     if (bit_count == 1) { return original; }
+//     
+//     uint32_t return_value = 0;
+//     
+//     float middle = (bit_count - 1.0f) / 2.0f;
+//     assert(middle > 0);
+//     assert(middle <= 16.0f);
+//     
+//     for (uint32_t i = 0; i < bit_count; i++) {
+//         float dist_to_middle = middle - i;
+//         assert(dist_to_middle < 16.0f);
+//         
+//         uint8_t target_pos = i + (dist_to_middle * 2);
+//         
+//         assert(target_pos >= 0);
+//         assert(target_pos < 33);
+//         
+//         return_value =
+//             return_value |
+//                 (((original >> i) & 1) << target_pos);
+//     }
+//     
+//     return return_value;
+// }
 
 uint32_t peek_bits(
     DataStream * from,
@@ -318,12 +397,13 @@ uint32_t hashed_huffman_decode(
         Spec:
         "Huffman codes are packed starting with the most-
             significant bit of the code."
+
+        Attention: The hash keys are already reversed,
+        so we can just compare the raw values to the keys 
         */
-        raw = reverse_bit_order(
-            peek_bits(
+        raw = peek_bits(
                 /* from: */ datastream,
-                /* size: */ bitcount),
-            bitcount);
+                /* size: */ bitcount);
         
         uint32_t hash = compute_hash(
             /* key: */ raw,
@@ -362,57 +442,57 @@ uint32_t hashed_huffman_decode(
     return 0;
 }
 
-uint32_t huffman_decode(
-    HuffmanEntry * dict,
-    const uint32_t dictsize,
-    DataStream * datastream)
-{
-    int found_at = -1;
-    int bitcount = 0;
-    uint32_t raw = 0;
-    
-    while (found_at == -1 && bitcount < 24)
-    {
-        bitcount += 1;
-        
-        /*
-        Spec:
-        "Huffman codes are packed starting with the most-
-            significant bit of the code."
-        */
-        raw = reverse_bit_order(
-            peek_bits(
-                /* from: */ datastream,
-                /* size: */ bitcount),
-            bitcount);
-        
-        for (int i = 0; i < dictsize; i++) {
-            if (dict[i].key == raw
-                && dict[i].used == true
-                && bitcount == dict[i].code_length)
-            {
-                found_at = i;
-                break;
-            }
-        }
-    }
-    
-    if (found_at < 0) {
-        #ifndef DEFLATE_SILENCE 
-        printf(
-            "failed to find raw :%u for codelen: %u in dict\n",
-            raw,
-            bitcount);
-        #endif
-        assert(1 == 2);
-    }
-    
-    discard_bits(datastream, bitcount);
-    assert(found_at >= 0);
-    assert(found_at < dictsize);
-    
-    return dict[found_at].value;
-};
+// uint32_t huffman_decode(
+//     HuffmanEntry * dict,
+//     const uint32_t dictsize,
+//     DataStream * datastream)
+// {
+//     int found_at = -1;
+//     int bitcount = 0;
+//     uint32_t raw = 0;
+//     
+//     while (found_at == -1 && bitcount < 24)
+//     {
+//         bitcount += 1;
+//         
+//         /*
+//         Spec:
+//         "Huffman codes are packed starting with the most-
+//             significant bit of the code."
+//         */
+//         raw = reverse_bit_order(
+//             peek_bits(
+//                 /* from: */ datastream,
+//                 /* size: */ bitcount),
+//             bitcount);
+//         
+//         for (int i = 0; i < dictsize; i++) {
+//             if (dict[i].key == raw
+//                 && dict[i].used == true
+//                 && bitcount == dict[i].code_length)
+//             {
+//                 found_at = i;
+//                 break;
+//             }
+//         }
+//     }
+//     
+//     if (found_at < 0) {
+//         #ifndef DEFLATE_SILENCE 
+//         printf(
+//             "failed to find raw :%u for codelen: %u in dict\n",
+//             raw,
+//             bitcount);
+//         #endif
+//         assert(1 == 2);
+//     }
+//     
+//     discard_bits(datastream, bitcount);
+//     assert(found_at >= 0);
+//     assert(found_at < dictsize);
+//     
+//     return dict[found_at].value;
+// };
 
 HashedHuffman * huffman_to_hashmap(
     HuffmanEntry * orig_huff,
@@ -433,9 +513,15 @@ HashedHuffman * huffman_to_hashmap(
         if (orig_huff[i].used == false) {
             continue;
         }
+
+        // we'll store the reversed key, so that we don't
+        // have to reverse on each lookup
+        uint32_t reversed_key = reverse_bit_order(
+            /* raw: */ orig_huff[i].key,
+            /* size: */ orig_huff[i].code_length);
         
         uint32_t hash = compute_hash(
-            /* key: */ orig_huff[i].key,
+            /* key: */ reversed_key,
             /* code_length: */ orig_huff[i].code_length);
         
         if (
@@ -444,7 +530,7 @@ HashedHuffman * huffman_to_hashmap(
             && hashed_huffman[hash].value == 0)
         {
             // first time using this hash
-            hashed_huffman[hash].key = orig_huff[i].key;
+            hashed_huffman[hash].key = reversed_key;
             hashed_huffman[hash].code_length =
                 orig_huff[i].code_length;
             hashed_huffman[hash].value = orig_huff[i].value;
@@ -464,7 +550,7 @@ HashedHuffman * huffman_to_hashmap(
                 malloc(sizeof(HashedHuffman));
             last_full_link->next_neighbor->next_neighbor = NULL;
             last_full_link->next_neighbor->key =
-                orig_huff[i].key;
+                reversed_key;
             last_full_link->next_neighbor->code_length =
                 orig_huff[i].code_length;
             last_full_link->next_neighbor->value =
@@ -1279,11 +1365,11 @@ void deflate(
                                     /* from: */ data_stream,
                                     /* size: */ 5),
                                 5)
-                        : huffman_decode(
+                        : hashed_huffman_decode(
                             /* dict: */
-                                 distance_huffman,
+                                 hashed_dist_huffman,
                             /* dictsize: */
-                                 HDIST,
+                                 HUFFMAN_HASHMAP_SIZE,
                             /* raw data: */
                                  data_stream);
                     

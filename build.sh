@@ -18,8 +18,11 @@ echo "Compiling $APP_NAME..."
 gcc -fsanitize=undefined -g $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
 
 
-echo "Running $APP_NAME"
+# echo "Running $APP_NAME"
 (cd build && ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
+
+# mac os nonsense
+# xcrun xctrace record --template='Time Profiler' --launch -- build/$APP_NAME build/$INPUT_FILE.$INPUT_EXTENSION 
 
 # linux only
 # (cd build && valgrind --leak-check=full --track-origins=yes ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)

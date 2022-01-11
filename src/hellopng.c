@@ -11,7 +11,7 @@ int main(int argc, const char * argv[])
         }
         return 1;
     }
-   
+    
     printf("Inspecting file: %s\n", argv[1]);
     
     FILE * imgfile = fopen(
