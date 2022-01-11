@@ -122,38 +122,6 @@ uint32_t reverse_bit_order(
     return return_value;
 }
 
-// uint32_t reverse_bit_order(
-//     const uint32_t original,
-//     const unsigned int bit_count)
-// {
-//     assert(bit_count > 0);
-//     assert(bit_count < 33);
-//     
-//     if (bit_count == 1) { return original; }
-//     
-//     uint32_t return_value = 0;
-//     
-//     float middle = (bit_count - 1.0f) / 2.0f;
-//     assert(middle > 0);
-//     assert(middle <= 16.0f);
-//     
-//     for (uint32_t i = 0; i < bit_count; i++) {
-//         float dist_to_middle = middle - i;
-//         assert(dist_to_middle < 16.0f);
-//         
-//         uint8_t target_pos = i + (dist_to_middle * 2);
-//         
-//         assert(target_pos >= 0);
-//         assert(target_pos < 33);
-//         
-//         return_value =
-//             return_value |
-//                 (((original >> i) & 1) << target_pos);
-//     }
-//     
-//     return return_value;
-// }
-
 uint32_t peek_bits(
     DataStream * from,
     const uint32_t amount)
