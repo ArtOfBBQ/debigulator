@@ -2,10 +2,7 @@
 #include "inttypes.h"
 #include "stdlib.h"
 #include "assert.h"
-#include "deflate.h"
-
-#define MAX_ORIGINAL_FILENAME_SIZE 50
-#define MAX_COMMENT_SIZE 200
+#include "inflate.h"
 
 #pragma pack(push, 1)
 
@@ -171,13 +168,13 @@ int main(int argc, const char * argv[])
     
     uint8_t * recipient = malloc(decompressed_size);
     
-    deflate(
+    inflate(
         /* recipient: */ recipient,
         /* recipient_size: */ decompressed_size,
         /* entire_file: */ entire_file,
         /* compressed_size_bytes: */ entire_file->size_left - 8);
     
-    printf("\ndeflate algorithm completed & returned\n");
+    printf("\ninflate algorithm decompressed & returned\n");
     
     GZFooter * gzip_footer = consume_struct(
         /* type: */ GZFooter,

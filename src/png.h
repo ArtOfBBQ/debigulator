@@ -2,10 +2,13 @@
 #include "inttypes.h"
 #include "stdlib.h"
 #include "assert.h"
-#include "deflate.h"
+#include "inflate.h"
 
 #define PNG_SILENCE
 // #define IGNORE_CRC_CHECKS
+
+#define true 1  // undefined at end of file
+#define false 0 // undefined at end of file
 
 typedef struct DecodedPNG {
     uint8_t * pixels;
@@ -316,7 +319,6 @@ the other values seem to always be the same in every PNG
 also, so you can just use the whole shebang as a check
 to find out if a given file is a PNG.
 */
-
 #pragma pack(push, 1)
 typedef struct PNGSignature {
     uint8_t highbit_hint;             // artifact
@@ -337,7 +339,7 @@ typedef struct PNGChunkHeader {
 
 /*
 IHDR must be the first chunk type
-(13 data bytes total).
+it contains this data (13 bytes)
 */
 typedef struct IHDRBody {
     uint32_t width;
@@ -352,6 +354,9 @@ typedef struct IHDRBody {
 /*
 chunks with type IDAT are crucial
 they contain the compressed image data
+
+the only compression method supported is 'zlib' aka 'DEFLATE',
+that's why we need our header file inflate.h to read it
 */
 typedef struct ZLIBHeader {
     uint8_t zlibmethodflags;
@@ -396,11 +401,11 @@ bool32_t are_equal_strings(
 {
     for (size_t i = 0; i < len; i++) {
         if (str1[i] != str2[i]) {
-            return 0;
+            return false;
         }
     }
     
-    return 1;
+    return true;
 }
 
 DecodedPNG * decode_PNG(
@@ -418,9 +423,10 @@ DecodedPNG * decode_PNG(
     entire_file->size_left = compressed_bytes_size;
     entire_file->bits_left = 0;
     
-    PNGSignature * png_signature = consume_struct(
-        /* type: */ PNGSignature,
-        /* from: */ entire_file);
+    PNGSignature * png_signature =
+        consume_struct(
+            /* type: */ PNGSignature,
+            /* from: */ entire_file);
     
     #ifndef PNG_SILENCE
     printf(
@@ -440,7 +446,7 @@ DecodedPNG * decode_PNG(
         #endif
         return return_value;
     }
-
+    
     free(png_signature);
     
     // these pointers are initted below
@@ -493,7 +499,7 @@ DecodedPNG * decode_PNG(
                 "won't DEFLATE last 4 bytes because they're an ADLER-32 checksum...\n");
             #endif
             
-            deflate(
+            inflate(
                 /* recipient: */
                     pixels,
                 /* recipient_size: */
@@ -767,7 +773,7 @@ DecodedPNG * decode_PNG(
                 /*
                 7th & 8th bit is FLEVEL
                 FLEVEL (Compression level)
-                The "deflate" method (CM = 8) sets these flags as
+                The "dflate" method (CM = 8) sets these flags as
                 follows:
                 
                 0 - compressor used fastest algorithm
@@ -908,4 +914,7 @@ DecodedPNG * decode_PNG(
     return_value->pixel_count = decompressed_size;
     return return_value;
 }
+
+#undef true
+#undef false
 
