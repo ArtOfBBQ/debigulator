@@ -149,10 +149,6 @@ uint32_t peek_bits(
     DataStream * from,
     const uint32_t amount)
 {
-    assert(amount > 0);
-    assert(amount < 33);
-    assert(from->bits_left < 9);
-    
     uint32_t return_value = 0;
     uint32_t bits_to_peek = amount;
     
@@ -187,7 +183,6 @@ uint32_t peek_bits(
         bits_in_return += 8;
     }
     
-    assert(bits_to_peek < 8);
     if (bits_to_peek > 0) {
        // Add bits from the final byte
        // here again, if there were bits in the return
@@ -212,12 +207,7 @@ uint32_t compute_hash(
     uint32_t key,
     uint32_t code_length)
 {
-    uint32_t return_value = key * code_length; 
-    return_value = return_value & HUFFMAN_HASHMAP_SIZE;
-    
-    assert(return_value >= 0);
-    assert(return_value <= HUFFMAN_HASHMAP_SIZE);
-    return return_value;
+    return (key * code_length) & HUFFMAN_HASHMAP_SIZE;
 }
 
 /*
@@ -227,8 +217,6 @@ void discard_bits(
     DataStream * from,
     const unsigned int amount)
 {
-    assert(from->bits_left < 9);
-    assert(amount > 0);
     unsigned int discards_left = amount;
     
     if (from->bits_left > 0) {
@@ -236,29 +224,25 @@ void discard_bits(
             from->bits_left > discards_left ?
                 discards_left
                 : from->bits_left;
+        
         from->bit_buffer >>= bits_to_discard;
         from->bits_left -= bits_to_discard;
         discards_left -= bits_to_discard;
     }
     
     while (discards_left >= 8) {
-        assert(from->bits_left == 0);
         from->data += 1;
         from->size_left -= 1;
         discards_left -= 8;
     }
     
-    assert(discards_left < 9);
     if (discards_left > 0) {
-        assert(from->bits_left == 0);
         from->bit_buffer = *(uint8_t *)from->data;
         from->data += 1;
         from->size_left -= 1;
         from->bits_left = (8 - discards_left);
         from->bit_buffer >>= discards_left;
     }
-    
-    assert(from->bits_left < 9);
 }
 
 // TODO: this seems silly, let's get rid of this
@@ -397,7 +381,10 @@ uint32_t hashed_huffman_decode(
     DataStream * datastream)
 {
     unsigned int bitcount = 0;
-    uint32_t raw = 0;
+    uint32_t upcoming_bits =
+        peek_bits(
+            /* from: */ datastream,
+            /* size: */ 24);
     
     while (bitcount < 24)
     {
@@ -411,14 +398,14 @@ uint32_t hashed_huffman_decode(
         Attention: The hash keys are already reversed,
         so we can just compare the raw values to the keys 
         */
-        raw = peek_bits(
-                /* from: */ datastream,
-                /* size: */ bitcount);
+        uint32_t raw = mask_rightmost_bits(
+            upcoming_bits,
+            bitcount);
         
         uint32_t hash = compute_hash(
             /* key: */ raw,
             /* code_length: */ bitcount);
-
+        
         if (
             dict[hash].key == raw
             && dict[hash].code_length == bitcount)
@@ -448,7 +435,9 @@ uint32_t hashed_huffman_decode(
         raw,
         bitcount);
     #endif
-     
+    
+    assert(1 == 2);
+    
     return 0;
 }
 
