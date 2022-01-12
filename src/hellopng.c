@@ -22,12 +22,13 @@ int main(int argc, const char * argv[])
     fseek(imgfile, 0, SEEK_SET);
     
     uint8_t * buffer = malloc(fsize);
+    uint8_t * start_of_buffer = buffer;
     
     size_t bytes_read = fread(
         /* ptr: */
             buffer,
         /* size of each element to be read: */
-            1, 
+            1,
         /* nmemb (no of members) to read: */
             fsize,
         /* stream: */
@@ -36,30 +37,35 @@ int main(int argc, const char * argv[])
     printf("bytes read from raw file: %zu\n", bytes_read);
     fclose(imgfile);
     assert(bytes_read == fsize);
-
-    printf("starting decode_PNG...\n");
-    DecodedPNG * decoded_png = decode_PNG(
-        /* compressed_bytes: */ buffer,
-        /* compressed_bytes_size: */ bytes_read);
+    
+    for (int i = 0; i < 20; i++) {
+        
+        uint8_t * buffer_copy = start_of_buffer;
+        printf("starting decode_PNG (run %u)...\n", i);
+        DecodedPNG * decoded_png =
+            decode_PNG(
+                /* compressed_bytes: */ buffer_copy,
+                /* compressed_bytes_size: */ bytes_read);
+        
+        printf(
+            "finished decode_PNG, result was: %s\n",
+            decoded_png->good ? "SUCCESS" : "FAILURE");
+        printf(
+            "bytes in image: %u (about %u pixels)\n",
+            decoded_png->pixel_count,
+            decoded_png->pixel_count / 4);
+        printf(
+            "image width: %u\n",
+            decoded_png->width);
+        printf(
+            "image height: %u\n",
+            decoded_png->height);
+        
+        free(decoded_png->pixels);
+        free(decoded_png);
+    }
+    
     free(buffer);
-    
-    printf("finished decode_PNG.\n");
-    printf(
-        "result was: %s\n",
-        decoded_png->good ? "SUCCESS" : "FAILURE");
-    printf(
-        "bytes in image: %u (about %u pixels)\n",
-        decoded_png->pixel_count,
-        decoded_png->pixel_count / 4);
-    printf(
-        "image width: %u\n",
-        decoded_png->width);
-    printf(
-        "image height: %u\n",
-        decoded_png->height);
-    
-    free(decoded_png->pixels);
-    free(decoded_png);
     
     return 0;
 }

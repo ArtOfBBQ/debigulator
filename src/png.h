@@ -422,11 +422,13 @@ DecodedPNG * decode_PNG(
     entire_file->data = compressed_bytes;
     entire_file->size_left = compressed_bytes_size;
     entire_file->bits_left = 0;
+    assert(entire_file->bits_left == 0);
     
     PNGSignature * png_signature =
         consume_struct(
             /* type: */ PNGSignature,
             /* from: */ entire_file);
+    assert(entire_file->bits_left == 0);
     
     #ifndef PNG_SILENCE
     printf(
@@ -447,6 +449,7 @@ DecodedPNG * decode_PNG(
         return return_value;
     }
     
+    assert(entire_file->bits_left == 0);
     free(png_signature);
     
     // these pointers are initted below
@@ -490,6 +493,7 @@ DecodedPNG * decode_PNG(
             compressed_data_stream->data = compressed_data_begin;
             compressed_data_stream->size_left =
                 compressed_data_stream_size;
+            compressed_data_stream->bits_left = 0;
             
             #ifndef PNG_SILENCE
             printf(
