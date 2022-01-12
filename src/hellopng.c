@@ -38,7 +38,7 @@ int main(int argc, const char * argv[])
     fclose(imgfile);
     assert(bytes_read == fsize);
     
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 30; i++) {
         
         uint8_t * buffer_copy = start_of_buffer;
         printf("starting decode_PNG (run %u)...\n", i+1);

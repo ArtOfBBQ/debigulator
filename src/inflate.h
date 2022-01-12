@@ -41,7 +41,7 @@ typedef struct HashedHuffmanEntry {
 } HashedHuffmanEntry;
 
 typedef struct HashedHuffman {
-    HashedHuffmanEntry * entries[HUFFMAN_HASHMAP_SIZE + 1];
+    HashedHuffmanEntry * entries[HUFFMAN_HASHMAP_SIZE];
     unsigned int min_code_length;
     unsigned int max_code_length;
 } HashedHuffman;
@@ -213,7 +213,7 @@ uint32_t compute_hash(
     uint32_t key,
     uint32_t code_length)
 {
-    return (key * code_length) & HUFFMAN_HASHMAP_SIZE;
+    return (key * code_length) & (HUFFMAN_HASHMAP_SIZE - 1);
 }
 
 /*
@@ -352,13 +352,18 @@ void free_hashed_huff(HashedHuffman * dict)
 {
     if (dict == NULL) { return; }
     
-    for (int i = 0; i <= HUFFMAN_HASHMAP_SIZE; i++) {
-        while (
-            dict->entries[i] != NULL
-            && dict->entries[i]->next_neighbor != NULL
-            && dict->entries[i]->next_neighbor->next_neighbor
-                != NULL)
+    for (int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++) {
+        while (true)
         {
+            if (dict->entries[i] == NULL) { break; }
+            if (dict->entries[i]->next_neighbor == NULL) {
+                break;
+            }
+            if (dict->entries[i]->next_neighbor->next_neighbor
+                == NULL) {
+                break;
+            }
+            
             HashedHuffmanEntry * last_neighbor =
                 dict->entries[i]->next_neighbor;
             
@@ -367,11 +372,14 @@ void free_hashed_huff(HashedHuffman * dict)
                 && last_neighbor->next_neighbor->next_neighbor
                     != NULL)
             {
-                last_neighbor = last_neighbor->next_neighbor;
+                last_neighbor =
+                    last_neighbor->next_neighbor;
             }
             
             assert(last_neighbor->next_neighbor != NULL);
-            assert(last_neighbor->next_neighbor->next_neighbor == NULL);
+            assert(
+                last_neighbor->next_neighbor->next_neighbor
+                    == NULL);
             free(last_neighbor->next_neighbor);
             last_neighbor->next_neighbor = NULL;
             assert(last_neighbor->next_neighbor == NULL);
@@ -381,7 +389,9 @@ void free_hashed_huff(HashedHuffman * dict)
             && dict->entries[i]->next_neighbor != NULL)
         {
             assert(dict->entries[i]->next_neighbor != NULL);
-            assert(dict->entries[i]->next_neighbor->next_neighbor == NULL);
+            assert(
+                dict->entries[i]->next_neighbor->next_neighbor
+                    == NULL);
             free(dict->entries[i]->next_neighbor);
             dict->entries[i]->next_neighbor = NULL;
             assert(dict->entries[i]->next_neighbor == NULL);
@@ -420,7 +430,7 @@ uint32_t hashed_huffman_decode(
         Spec:
         "Huffman codes are packed starting with the most-
             significant bit of the code."
-
+        
         Attention: The hash keys are already reversed,
         so we can just compare the raw values to the keys 
         */
@@ -539,6 +549,8 @@ HashedHuffman * huffman_to_hashmap(
             // hash conflicting, append new value to linked list
             HashedHuffmanEntry * last_full_link = 
                 hashed_huffman->entries[hash];
+            assert(last_full_link != NULL);
+            
             unsigned current_conflict = 1;
             
             while (last_full_link->next_neighbor != NULL)
