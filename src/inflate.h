@@ -3,13 +3,16 @@
 #include "stdlib.h"
 #include "assert.h"
 
+// TODO: delete this debugging global var
+unsigned global_longest_conflict = 0;
+
 typedef int32_t bool32_t;
 #define false 0 // undefined at end of file
 #define true 1  // undefined at end of file
 #define INFLATE_SILENCE
 
 #define NUM_UNIQUE_CODELENGTHS 19
-#define HUFFMAN_HASHMAP_SIZE 255
+#define HUFFMAN_HASHMAP_SIZE 1023
 
 typedef struct DataStream {
     void * data;
@@ -33,11 +36,17 @@ typedef struct HuffmanEntry {
 /*
 We'll store our huffman codes in an improvised hashmap
 */
-typedef struct HashedHuffman {
+typedef struct HashedHuffmanEntry {
    uint32_t key;
    uint32_t code_length;
    uint32_t value;
-   struct HashedHuffman * next_neighbor; 
+   struct HashedHuffmanEntry * next_neighbor; 
+} HashedHuffmanEntry;
+
+typedef struct HashedHuffman {
+    HashedHuffmanEntry * entries[HUFFMAN_HASHMAP_SIZE + 1];
+    unsigned int min_code_length;
+    unsigned int max_code_length;
 } HashedHuffman;
 
 uint32_t mask_rightmost_bits(
@@ -340,17 +349,19 @@ char * consume_till_terminate(
 
 /*
 Our hashmaps are full of pointers to heap memory,
-so we want a function to free everything in 1 go
+this frees everything in 1 go
 */
-void free_hashed_huff(
-    HashedHuffman * dict,
-    const uint32_t dictsize)
+void free_hashed_huff(HashedHuffman * dict)
 {
-    for (int i = 0; i < dictsize; i++) {
-        while (dict[i].next_neighbor != NULL
-            && dict[i].next_neighbor->next_neighbor != NULL) {
-            HashedHuffman * last_neighbor =
-                dict[i].next_neighbor;
+    for (int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++) {
+        while (
+            dict->entries[i] != NULL
+            && dict->entries[i]->next_neighbor != NULL
+            && dict->entries[i]->next_neighbor->next_neighbor
+                != NULL)
+        {
+            HashedHuffmanEntry * last_neighbor =
+                dict->entries[i]->next_neighbor;
             
             while (
                 last_neighbor->next_neighbor != NULL
@@ -360,33 +371,46 @@ void free_hashed_huff(
                 last_neighbor = last_neighbor->next_neighbor;
             }
             
+            assert(last_neighbor->next_neighbor != NULL);
+            assert(last_neighbor->next_neighbor->next_neighbor == NULL);
             free(last_neighbor->next_neighbor);
             last_neighbor->next_neighbor = NULL;
+            assert(last_neighbor->next_neighbor == NULL);
         }
-
-        if (dict[i].next_neighbor != NULL) {
-            free(dict[i].next_neighbor);
-            dict[i].next_neighbor = NULL;
+        
+        if (dict->entries[i] != NULL
+            && dict->entries[i]->next_neighbor != NULL)
+        {
+            assert(dict->entries[i]->next_neighbor != NULL);
+            assert(dict->entries[i]->next_neighbor->next_neighbor == NULL);
+            free(dict->entries[i]->next_neighbor);
+            dict->entries[i]->next_neighbor = NULL;
+            assert(dict->entries[i]->next_neighbor == NULL);
+        }
+        
+        if (dict->entries[i] != NULL) {
+            assert(dict->entries[i]->next_neighbor == NULL);
+            free(dict->entries[i]);
+            dict->entries[i] = NULL;
         }
     }
 }
 
 /*
 Given a datastream and a hashmap of huffman codes,
-read & decompress/decoee the next value
+read & decompress/decode the next value
 */
 uint32_t hashed_huffman_decode(
     HashedHuffman * dict,
-    const uint32_t dictsize,
     DataStream * datastream)
 {
-    unsigned int bitcount = 0;
+    unsigned int bitcount = dict->min_code_length - 1;
     uint32_t upcoming_bits =
         peek_bits(
             /* from: */ datastream,
             /* size: */ 24);
     
-    while (bitcount < 24)
+    while (bitcount < dict->max_code_length)
     {
         bitcount += 1;
         
@@ -406,15 +430,18 @@ uint32_t hashed_huffman_decode(
             /* key: */ raw,
             /* code_length: */ bitcount);
         
-        if (
-            dict[hash].key == raw
-            && dict[hash].code_length == bitcount)
+        if (dict->entries[hash] == NULL)
+        {
+            continue;
+        } else if (
+            dict->entries[hash]->key == raw
+            && dict->entries[hash]->code_length == bitcount)
         {
             discard_bits(datastream, bitcount);
-            return dict[hash].value;
+            return dict->entries[hash]->value;
         } else {
-            HashedHuffman * next_neighbor =
-                dict[hash].next_neighbor;
+            HashedHuffmanEntry * next_neighbor =
+                dict->entries[hash]->next_neighbor;
             while (next_neighbor != NULL) {
                 if (next_neighbor->key == raw
                     && next_neighbor->code_length == bitcount)
@@ -448,22 +475,26 @@ HashedHuffman * huffman_to_hashmap(
     HuffmanEntry * orig_huff,
     uint32_t orig_huff_size)
 {
+    unsigned int longest_conflict = 0;
+    
     HashedHuffman * hashed_huffman =
-        malloc(HUFFMAN_HASHMAP_SIZE * sizeof(HashedHuffman));
+        malloc(sizeof(HashedHuffman));
+   
+    // initialize all pointers to NULL 
     for (unsigned int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++)
     {
-        hashed_huffman[i].key = 0;
-        hashed_huffman[i].value = 0;
-        hashed_huffman[i].code_length = 0;
-        hashed_huffman[i].next_neighbor = NULL;
+        hashed_huffman->entries[i] = NULL;
     }
+    
+    hashed_huffman->min_code_length = 1000;
+    hashed_huffman->max_code_length = 1;
     
     for (unsigned int i = 0; i < orig_huff_size; i++)
     {
         if (orig_huff[i].used == false) {
             continue;
         }
-
+        
         // we'll store the reversed key, so that we don't
         // have to reverse on each lookup
         uint32_t reversed_key = reverse_bit_order(
@@ -473,39 +504,71 @@ HashedHuffman * huffman_to_hashmap(
         uint32_t hash = compute_hash(
             /* key: */ reversed_key,
             /* code_length: */ orig_huff[i].code_length);
+        assert(hash <= HUFFMAN_HASHMAP_SIZE);
+        assert(hash >= 0);
+        
+        if (orig_huff[i].code_length
+            < hashed_huffman->min_code_length)
+        {
+            hashed_huffman->min_code_length =
+                orig_huff[i].code_length;
+        }
+        if (orig_huff[i].code_length
+            > hashed_huffman->max_code_length)
+        {
+            hashed_huffman->max_code_length =
+                orig_huff[i].code_length;
+        }
         
         if (
-            hashed_huffman[hash].key == 0
-            && hashed_huffman[hash].code_length == 0
-            && hashed_huffman[hash].value == 0)
+            hashed_huffman->entries[hash] == NULL)
         {
+            hashed_huffman->entries[hash] =
+                malloc(sizeof(HashedHuffmanEntry));
+            
             // first time using this hash
-            hashed_huffman[hash].key = reversed_key;
-            hashed_huffman[hash].code_length =
+            hashed_huffman->entries[hash]->key = reversed_key;
+            hashed_huffman->entries[hash]->code_length =
                 orig_huff[i].code_length;
-            hashed_huffman[hash].value = orig_huff[i].value;
-            hashed_huffman[hash].next_neighbor = NULL;
+            hashed_huffman->entries[hash]->value =
+                orig_huff[i].value;
+            hashed_huffman->entries[hash]->next_neighbor = NULL;
         } else {
             // hash conflicting, append new value to linked list
-            HashedHuffman * last_full_link = 
-                &(hashed_huffman[hash]);
+            HashedHuffmanEntry * last_full_link = 
+                hashed_huffman->entries[hash];
+            unsigned current_conflict = 1;
             
             while (last_full_link->next_neighbor != NULL)
             {
                 last_full_link = last_full_link->next_neighbor;
+                current_conflict++;
             }
             
             assert(last_full_link->next_neighbor == NULL);
             last_full_link->next_neighbor =
-                malloc(sizeof(HashedHuffman));
-            last_full_link->next_neighbor->next_neighbor = NULL;
+                malloc(sizeof(HashedHuffmanEntry));
+            last_full_link->next_neighbor->next_neighbor =
+                NULL;
             last_full_link->next_neighbor->key =
                 reversed_key;
             last_full_link->next_neighbor->code_length =
                 orig_huff[i].code_length;
             last_full_link->next_neighbor->value =
                 orig_huff[i].value;
+            
+            if (current_conflict > longest_conflict) {
+                longest_conflict = current_conflict;
+            }
         }
+    }
+    
+    assert(
+        hashed_huffman->min_code_length
+            <= hashed_huffman->max_code_length);
+    
+    if (longest_conflict > global_longest_conflict) {
+        global_longest_conflict = longest_conflict;
     }
     
     return hashed_huffman;
@@ -625,7 +688,7 @@ HuffmanEntry * unpack_huffman(
             smallest_code[len]++;
         }
     }
-   
+    
     free(bl_count);
     free(smallest_code);
     
@@ -1082,8 +1145,6 @@ void inflate(
                     uint32_t encoded_len = hashed_huffman_decode(
                         /* dict: */
                             hashed_clen_huffman,
-                        /* dictsize: */
-                            HUFFMAN_HASHMAP_SIZE,
                         /* raw data: */
                             data_stream);
                     
@@ -1227,9 +1288,7 @@ void inflate(
                 }
                 
                 free(codelengths_huffman);
-                free_hashed_huff(
-                    hashed_clen_huffman,
-                    HUFFMAN_HASHMAP_SIZE);
+                free_hashed_huff(hashed_clen_huffman);
                 free(litlendist_table);
             }
             
@@ -1276,8 +1335,6 @@ void inflate(
                 uint32_t litlenvalue = hashed_huffman_decode(
                     /* dict: */
                         hashed_litlen_huffman,
-                    /* dictsize: */
-                        HUFFMAN_HASHMAP_SIZE,
                     /* raw data: */
                         data_stream);
                 
@@ -1326,8 +1383,6 @@ void inflate(
                         : hashed_huffman_decode(
                             /* dict: */
                                  hashed_dist_huffman,
-                            /* dictsize: */
-                                 HUFFMAN_HASHMAP_SIZE,
                             /* raw data: */
                                  data_stream);
                     
@@ -1379,15 +1434,11 @@ void inflate(
             #endif
             
             free(literal_length_huffman);
-            free_hashed_huff(
-                hashed_litlen_huffman,
-                HUFFMAN_HASHMAP_SIZE);
+            free_hashed_huff(hashed_litlen_huffman);
             
             if (distance_huffman != NULL) {
                 free(distance_huffman);
-                free_hashed_huff(
-                    hashed_dist_huffman,
-                    HUFFMAN_HASHMAP_SIZE);
+                free_hashed_huff(hashed_dist_huffman);
             }
         }
     }
@@ -1428,6 +1479,10 @@ void inflate(
     #ifndef INFLATE_SILENCE 
     printf("\t\tend of DEFLATE\n");
     #endif
+    // TODO: delete this hashmap printf
+    printf(
+        "\tlongest hashmap conflict: %u\n",
+        global_longest_conflict);
 }
 
 #undef true
