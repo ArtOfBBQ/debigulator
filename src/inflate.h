@@ -3,9 +3,6 @@
 #include "stdlib.h"
 #include "assert.h"
 
-// TODO: delete this debugging global var
-unsigned global_longest_conflict = 0;
-
 typedef int32_t bool32_t;
 #define false 0 // undefined at end of file
 #define true 1  // undefined at end of file
@@ -566,10 +563,6 @@ HashedHuffman * huffman_to_hashmap(
     assert(
         hashed_huffman->min_code_length
             <= hashed_huffman->max_code_length);
-    
-    if (longest_conflict > global_longest_conflict) {
-        global_longest_conflict = longest_conflict;
-    }
     
     return hashed_huffman;
 }
@@ -1479,10 +1472,6 @@ void inflate(
     #ifndef INFLATE_SILENCE 
     printf("\t\tend of DEFLATE\n");
     #endif
-    // TODO: delete this hashmap printf
-    printf(
-        "\tlongest hashmap conflict: %u\n",
-        global_longest_conflict);
 }
 
 #undef true
