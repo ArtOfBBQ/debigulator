@@ -350,7 +350,9 @@ this frees everything in 1 go
 */
 void free_hashed_huff(HashedHuffman * dict)
 {
-    for (int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++) {
+    if (dict == NULL) { return; }
+    
+    for (int i = 0; i <= HUFFMAN_HASHMAP_SIZE; i++) {
         while (
             dict->entries[i] != NULL
             && dict->entries[i]->next_neighbor != NULL
@@ -391,6 +393,9 @@ void free_hashed_huff(HashedHuffman * dict)
             dict->entries[i] = NULL;
         }
     }
+    
+    free(dict);
+    dict = NULL;
 }
 
 /*
@@ -1428,11 +1433,8 @@ void inflate(
             
             free(literal_length_huffman);
             free_hashed_huff(hashed_litlen_huffman);
-            
-            if (distance_huffman != NULL) {
-                free(distance_huffman);
-                free_hashed_huff(hashed_dist_huffman);
-            }
+	    free(distance_huffman);
+	    free_hashed_huff(hashed_dist_huffman);
         }
     }
 
