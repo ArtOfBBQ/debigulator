@@ -1,14 +1,21 @@
-#include "stdio.h"
 #include "inttypes.h"
 #include "stdlib.h"
-#include "assert.h"
 #include "inflate.h"
 
 #define PNG_SILENCE
-// #define IGNORE_CRC_CHECKS
+#define IGNORE_CRC_CHECKS
+#define IGNORE_ASSERTS
+// true/false/ignoreasserts are undef'd at EOF
+#define true 1
+#define false 0
 
-#define true 1  // undefined at end of file
-#define false 0 // undefined at end of file
+#ifndef PNG_SILENCE
+#include "stdio.h"
+#endif
+
+#ifndef IGNORE_ASSERTS
+#include "assert.h"
+#endif
 
 typedef struct DecodedPNG {
     uint8_t * pixels;
@@ -416,19 +423,26 @@ DecodedPNG * decode_PNG(
     return_value = malloc(sizeof(DecodedPNG));
     return_value->good = false;
     
+    #ifndef IGNORE_ASSERTS
     assert(compressed_bytes_size > 0);
+    #endif
     DataStream * entire_file = NULL;
     entire_file = malloc(sizeof(DataStream));
     entire_file->data = compressed_bytes;
     entire_file->size_left = compressed_bytes_size;
     entire_file->bits_left = 0;
+    #ifndef IGNORE_ASSERTS
     assert(entire_file->bits_left == 0);
+    #endif
     
     PNGSignature * png_signature =
         consume_struct(
             /* type: */ PNGSignature,
             /* from: */ entire_file);
+    
+    #ifndef IGNORE_ASSERTS
     assert(entire_file->bits_left == 0);
+    #endif
     
     #ifndef PNG_SILENCE
     printf(
@@ -448,8 +462,10 @@ DecodedPNG * decode_PNG(
         #endif
         return return_value;
     }
-    
+   
+    #ifndef IGNORE_ASSERTS
     assert(entire_file->bits_left == 0);
+    #endif
     free(png_signature);
     
     // these pointers are initted below
@@ -570,11 +586,15 @@ DecodedPNG * decode_PNG(
             4))
         {
             found_IHDR = true;
+            #ifndef IGNORE_ASSERTS
 	    assert(entire_file->bits_left == 0);
+            #endif
             IHDRBody * ihdr_body = consume_struct(
                 /* type: */ IHDRBody,
                 /* entire_file: */ entire_file);
+            #ifndef IGNORE_ASSERTS
 	    assert(entire_file->bits_left < 8);
+            #endif
             flip_endian(&ihdr_body->width);
             flip_endian(&ihdr_body->height);
             return_value->width = ihdr_body->width;
@@ -654,8 +674,10 @@ DecodedPNG * decode_PNG(
                 return_value->good = false;
                 return return_value;
             }
-	    
+	   
+            #ifndef IGNORE_ASSERTS
 	    assert(pixels == NULL);
+            #endif
 	    
             pixels = malloc(decompressed_size);
             // this copy (compressed_data) is necessary because
@@ -769,7 +791,9 @@ DecodedPNG * decode_PNG(
                     zlib_header->additionalflags >> 5 & 1;
                 
                 if (FDICT) {
+                    #ifndef PNG_SILENCE
                     printf("\t\tdiscarding FDICT... (4 bytes)\n");
+                    #endif
                     discard_bits(entire_file, 32);
                     chunk_data_length -= 4;
                 }
@@ -921,4 +945,4 @@ DecodedPNG * decode_PNG(
 
 #undef true
 #undef false
-
+#undef IGNORE_ASSERTS

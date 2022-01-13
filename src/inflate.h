@@ -1,15 +1,22 @@
 #include "inttypes.h"
-#include "stdio.h"
 #include "stdlib.h"
-#include "assert.h"
 
 typedef int32_t bool32_t;
 #define false 0 // undefined at end of file
 #define true 1  // undefined at end of file
 #define INFLATE_SILENCE
+#define IGNORE_ASSERTS
 
 #define NUM_UNIQUE_CODELENGTHS 19
 #define HUFFMAN_HASHMAP_SIZE 1023
+
+#ifndef INFLATE_SILENCE
+#include "stdio.h"
+#endif
+
+#ifndef IGNORE_ASSERTS
+#include "assert.h"
+#endif
 
 typedef struct DataStream {
     void * data;
@@ -113,9 +120,11 @@ uint32_t reverse_bit_order(
     // 87654321 87654321 87654321 87654321
     //
     // Step 6: mask the rightmost bits according to bit_count
-    
+   
+    #ifndef IGNORE_ASSERTS
     assert(bit_count > 0);
     assert(bit_count < 33);
+    #endif
     
     if (bit_count == 1) { return original; }
   
@@ -205,6 +214,16 @@ uint32_t peek_bits(
     return return_value;
 }
 
+// TODO: handle error paths instead of just crashing
+void crash_program() {
+    #ifndef INFLATE_SILENCE
+    printf("intentionally crashing program...\n");
+    #endif
+    uint8_t * bad_memory_access = NULL;
+    uint8_t impossible = *bad_memory_access;
+    return;
+}
+
 /*
 For our hashmaps, we need a hash function to index them
 given the key & code length we're looking for
@@ -277,8 +296,10 @@ uint8_t * consume_chunk(
     DataStream * from,
     size_t size_to_consume)
 {
-    // assert(from->bits_left == 0);
+    #ifndef IGNORE_ASSERTS
+    assert(from->bits_left == 0);
     assert(from->size_left >= size_to_consume);
+    #endif
     
     uint8_t * return_value = malloc(size_to_consume);
     
@@ -297,8 +318,10 @@ uint32_t consume_bits(
     DataStream * from,
     const uint32_t amount)
 {
+    #ifndef IGNORE_ASSERTS 
     assert(amount > 0);
     assert(amount < 33);
+    #endif
     
     uint32_t bits_to_consume = amount;
     
@@ -317,7 +340,9 @@ char * consume_till_terminate(
     uint32_t max_size,
     char terminator)
 {
+    #ifndef IGNORE_ASSERTS
     assert(max_size <= from->size_left);
+    #endif
     
     uint32_t string_size = 0;
     char * seeker = (char *)from->data;
@@ -329,13 +354,17 @@ char * consume_till_terminate(
         seeker++;
     }
     
+    #ifndef IGNORE_ASSERTS
     assert(string_size > 0);
+    #endif
     
     char * return_value = malloc(
         string_size * sizeof(char));
     
     for (int i = 0; i <= string_size; i++) {
+        #ifndef IGNORE_ASSERTS
         assert(from->size_left > 0);
+        #endif
         return_value[i] = ((char *)from->data)[0];
         from->data++;
         from->size_left--;
@@ -375,30 +404,40 @@ void free_hashed_huff(HashedHuffman * dict)
                 last_neighbor =
                     last_neighbor->next_neighbor;
             }
-            
+           
+            #ifndef IGNORE_ASSERTS 
             assert(last_neighbor->next_neighbor != NULL);
             assert(
                 last_neighbor->next_neighbor->next_neighbor
                     == NULL);
+            #endif
             free(last_neighbor->next_neighbor);
             last_neighbor->next_neighbor = NULL;
+            #ifndef IGNORE_ASSERTS
             assert(last_neighbor->next_neighbor == NULL);
+            #endif
         }
         
         if (dict->entries[i] != NULL
             && dict->entries[i]->next_neighbor != NULL)
         {
+            #ifndef IGNORE_ASSERTS
             assert(dict->entries[i]->next_neighbor != NULL);
             assert(
                 dict->entries[i]->next_neighbor->next_neighbor
                     == NULL);
+            #endif
             free(dict->entries[i]->next_neighbor);
             dict->entries[i]->next_neighbor = NULL;
+            #ifndef IGNORE_ASSERTS
             assert(dict->entries[i]->next_neighbor == NULL);
+            #endif
         }
         
         if (dict->entries[i] != NULL) {
+            #ifndef IGNORE_ASSERTS
             assert(dict->entries[i]->next_neighbor == NULL);
+            #endif
             free(dict->entries[i]);
             dict->entries[i] = NULL;
         }
@@ -475,7 +514,7 @@ uint32_t hashed_huffman_decode(
         bitcount);
     #endif
     
-    assert(1 == 2);
+    crash_program();
     
     return 0;
 }
@@ -516,8 +555,11 @@ HashedHuffman * huffman_to_hashmap(
         uint32_t hash = compute_hash(
             /* key: */ reversed_key,
             /* code_length: */ orig_huff[i].code_length);
+
+        #ifndef IGNORE_ASSERTS
         assert(hash <= HUFFMAN_HASHMAP_SIZE);
         assert(hash >= 0);
+        #endif
         
         if (orig_huff[i].code_length
             < hashed_huffman->min_code_length)
@@ -549,7 +591,9 @@ HashedHuffman * huffman_to_hashmap(
             // hash conflicting, append new value to linked list
             HashedHuffmanEntry * last_full_link = 
                 hashed_huffman->entries[hash];
+            #ifndef IGNORE_ASSERTS
             assert(last_full_link != NULL);
+            #endif
             
             unsigned current_conflict = 1;
             
@@ -558,8 +602,11 @@ HashedHuffman * huffman_to_hashmap(
                 last_full_link = last_full_link->next_neighbor;
                 current_conflict++;
             }
-            
+           
+            #ifndef IGNORE_ASSERTS 
             assert(last_full_link->next_neighbor == NULL);
+            #endif
+            
             last_full_link->next_neighbor =
                 malloc(sizeof(HashedHuffmanEntry));
             last_full_link->next_neighbor->next_neighbor =
@@ -576,10 +623,12 @@ HashedHuffman * huffman_to_hashmap(
             }
         }
     }
-    
+   
+    #ifndef IGNORE_ASSERTS 
     assert(
         hashed_huffman->min_code_length
             <= hashed_huffman->max_code_length);
+    #endif
     
     return hashed_huffman;
 }
@@ -644,8 +693,11 @@ HuffmanEntry * unpack_huffman(
     */
     unsigned int code = 0;
     bl_count[0] = 0;
-    
+   
+    #ifndef IGNORE_ASSERTS 
     assert(max_code_length < array_size);
+    #endif
+    
     for (
         int bits = 1;
         bits <= max_code_length; 
@@ -677,7 +729,8 @@ HuffmanEntry * unpack_huffman(
                     smallest_code[bits],
                     " - value can't fit in that few bits!\n");
                 #endif
-                assert(1 == 2);
+                
+                crash_program();
             }
         }
     }
@@ -788,12 +841,14 @@ void inflate(
     DataStream * data_stream,
     unsigned int compressed_size_bytes) 
 {
+    #ifndef IGNORE_ASSERTS
     assert(recipient != NULL);
     assert(recipient_size >= compressed_size_bytes);
     assert(data_stream != NULL);
     assert(data_stream->data != NULL);
     assert(data_stream->size_left > 0);
     assert(compressed_size_bytes > 0);
+    #endif
     
     #ifndef INFLATE_SILENCE
     printf(
@@ -802,9 +857,11 @@ void inflate(
     #endif
     void * started_at = data_stream->data;
     uint8_t * recipient_at = recipient;
-    
+   
+    #ifndef IGNORE_ASSERTS 
     assert(data_stream->size_left >= compressed_size_bytes);
     assert(data_stream->bits_left == 0);
+    #endif
     
     int read_more_deflate_blocks = true;
     
@@ -837,7 +894,10 @@ void inflate(
         uint8_t BFINAL = consume_bits(
             /* buffer: */ data_stream,
             /* size  : */ 1);
+        #ifndef IGNORE_ASSERTS
         assert(BFINAL < 2);
+        #endif
+        
         #ifndef INFLATE_SILENCE
         printf(
             "\t\t\tBFINAL (flag for final block): %u\n",
@@ -866,7 +926,9 @@ void inflate(
                 discard_bits(
                     /* from: */ data_stream,
                     /* amount: */ data_stream->bits_left);
+                #ifndef IGNORE_ASSERTS
                 assert(data_stream->bits_left == 0);
+                #endif
             }
             
             uint16_t LEN =
@@ -879,15 +941,20 @@ void inflate(
             
             uint16_t NLEN =
                 (uint16_t)consume_bits(data_stream, 16);
+
+            #ifndef IGNORE_ASSERTS
             // spec says must be 1's complement of LEN
             assert((uint16_t)LEN == (uint16_t)~NLEN);
+            #endif
             
             for (int _ = 0; _ < LEN; _++) {
                 *recipient_at = *(uint8_t *)data_stream->data;
                 recipient_at++;
+                #ifndef IGNORE_ASSERTS
                 assert(
                     (recipient_at - recipient)
                         <= recipient_size);
+                #endif
                 data_stream->data++;
                 data_stream->size_left--;
             }
@@ -897,10 +964,12 @@ void inflate(
                 "\t\t\tERROR - unexpected deflate BTYPE %u\n",
                 BTYPE);
             #endif
-            assert(1 == 2);
+            crash_program();
         } else {
+            #ifndef IGNORE_ASSERTS
             assert(BTYPE >= 1 && BTYPE <= 2);
-
+            #endif
+            
             // used in both dynamic & fixed huffman encoded files
             HuffmanEntry * literal_length_huffman = NULL;
             HashedHuffman * hashed_litlen_huffman = NULL;
@@ -919,7 +988,10 @@ void inflate(
                 #ifndef INFLATE_SILENCE
                 printf("\t\t\tBTYPE 1 - Fixed Huffman\n");
                 #endif
+                
+                #ifndef IGNORE_ASSERTS
                 assert(distance_huffman == NULL);
+                #endif
                 
                 /*
                 The Huffman codes for the two alphabets
@@ -957,7 +1029,8 @@ void inflate(
                             fixed_hclen_table,
                         /* array_size : */
                             288);
-                
+               
+                #ifndef IGNORE_ASSERTS 
                 assert(literal_length_huffman[0].value == 0);
                 assert(
                     literal_length_huffman[0].code_length == 8);
@@ -990,12 +1063,16 @@ void inflate(
                 assert(
                     literal_length_huffman[287].code_length == 8);
                 assert(literal_length_huffman[287].key == 199);
-               
+                #endif
+                
                 #ifndef INFLATE_SILENCE 
                 printf("\t\t\tcreated fixed huffman dict.\n");
                 #endif
             } else {
+                #ifndef IGNORE_ASSERTS
                 assert(BTYPE == 2);
+                #endif
+                
                 #ifndef INFLATE_SILENCE
                 printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
                 printf("\t\t\tRead code trees...\n");
@@ -1023,7 +1100,10 @@ void inflate(
                     "\t\t\tHLIT : %u (expect 257-286)\n",
                     HLIT);
                 #endif
+
+                #ifndef IGNORE_ASSERTS
                 assert(HLIT >= 257 && HLIT <= 286);
+                #endif
                 
                 // 5 Bits: HDIST (huffman distance?)
                 // # of Distance codes - 1
@@ -1038,7 +1118,10 @@ void inflate(
                     "\t\t\tHDIST: %u (expect 1-32)\n",
                     HDIST);
                 #endif
+
+                #ifndef IGNORE_ASSERTS
                 assert(HDIST >= 1 && HDIST <= 32);
+                #endif
                 
                 // 4 Bits: HCLEN (huffman code length)
                 // # of Code Length codes - 4
@@ -1053,10 +1136,12 @@ void inflate(
                     "\t\t\tHCLEN: %u (4-19 vals of 0-6)\n",
                      HCLEN);
                 #endif
-                
+               
+                #ifndef IGNORE_ASSERTS 
                 assert(
                     HCLEN >= 4
                     && HCLEN <= 19);
+                #endif
                 
                 // This is a fixed swizzle (order of elements
                 // in an array) that's agreed upon in the
@@ -1080,14 +1165,20 @@ void inflate(
                 #endif
                 
                 for (uint32_t i = 0; i < HCLEN; i++) {
+                    #ifndef IGNORE_ASSERTS
                     assert(swizzle[i] <
                         NUM_UNIQUE_CODELENGTHS);
+                    #endif
+                    
                     HCLEN_table[swizzle[i]] =
                             consume_bits(
                                 /* from: */ data_stream,
                                 /* size: */ 3);
+                    
+                    #ifndef IGNORE_ASSERTS
                     assert(HCLEN_table[swizzle[i]] <= 7);
                     assert(HCLEN_table[swizzle[i]] >= 0);
+                    #endif
                 }
                 
                 /*
@@ -1120,12 +1211,14 @@ void inflate(
                     i++)
                 {
                     if (codelengths_huffman[i].used == true) {
+                        #ifndef IGNORE_ASSERTS
                         assert(
                           codelengths_huffman[i].key >= 0);
                         assert(
                           codelengths_huffman[i].value >= 0);
                         assert(
                           codelengths_huffman[i].value < 19);
+                        #endif
                     }
                 }
                 
@@ -1174,10 +1267,12 @@ void inflate(
                                 /* size: */ 2);
                         uint32_t repeats =
                             extra_bits_repeat + 3;
-                        
+                       
+                        #ifndef IGNORE_ASSERTS 
                         assert(repeats >= 3);
                         assert(repeats <= 6);
                         assert(len_i > 0);
+                        #endif
                         
                         for (
                             int i = 0;
@@ -1200,9 +1295,11 @@ void inflate(
                                 /* size: */ 3);
                         uint32_t repeats =
                             extra_bits_repeat + 3;
-                        
+                       
+                        #ifndef IGNORE_ASSERTS 
                         assert(repeats >= 3);
                         assert(repeats < 11);
+                        #endif
                         
                         for (
                             int i = 0;
@@ -1225,8 +1322,11 @@ void inflate(
                                 /* size: */ 7);
                         uint32_t repeats =
                             extra_bits_repeat + 11;
+                        
+                        #ifndef IGNORE_ASSERTS
                         assert(repeats >= 11);
                         assert(repeats < 139);
+                        #endif
                         
                         for (
                             int i = 0;
@@ -1242,14 +1342,17 @@ void inflate(
                             "ERROR : encoded_len %u\n",
                             encoded_len);
                         #endif
-                        assert(1 == 2);
+                        crash_program();
                     }
                 }
                 
                 #ifndef INFLATE_SILENCE
                 printf("\t\t\tfinished reading two dicts\n");
                 #endif
+                
+                #ifndef IGNORE_ASSERTS
                 assert(len_i == two_dicts_size);
+                #endif
                 
                 literal_length_huffman =
                     unpack_huffman(
@@ -1263,15 +1366,20 @@ void inflate(
                         /* orig_size: */ HLIT);
                 
                 #ifndef INFLATE_SILENCE 
-                printf("\t\t\tunpacked literal/length dictionary\n");
+                printf(
+                    "\t\t\tunpacked lit/len dict\n");
                 #endif
                 
                 for (int i = 0; i < HLIT; i++) {
                     if (literal_length_huffman[i].used == true) {
+                        #ifndef IGNORE_ASSERTS
                         assert(
-                            literal_length_huffman[i].value == i);
+                            literal_length_huffman[i].value
+                                == i);
                         assert(
-                            literal_length_huffman[i].key < 99999);
+                            literal_length_huffman[i].key
+                                < 99999);
+                        #endif
                     }
                 }
                 
@@ -1292,8 +1400,10 @@ void inflate(
                 
                 for (int i = 0; i < HDIST; i++) {
                     if (distance_huffman[i].used == true) {
+                        #ifndef IGNORE_ASSERTS
                         assert(distance_huffman[i].value == i);
                         assert(distance_huffman[i].key < 99999);
+                        #endif
                     }
                 }
                 
@@ -1302,8 +1412,8 @@ void inflate(
                 free(litlendist_table);
             }
             
-            // the remaining part of the algorithm is mostly
-            // the same whether we're using dynamic huffman tables
+            // the remaining part of the algorithm is mostly the
+            // same whether we're using dynamic huffman tables
             // or fixed huffman tables - we just use a different
             // literal-length-dictionary.
             // The only other difference is in the case of fixed
@@ -1312,14 +1422,18 @@ void inflate(
             // dynamic huffman  it has to be decoded using the
             // distance dictionary we prepared
             if (BTYPE == 2) {
+                #ifndef IGNORE_ASSERTS
                 assert(distance_huffman != NULL);
                 assert(HDIST > 0);
                 assert(HLIT > 0);
                 assert(HLIT < 300);
+                #endif
             } else if (BTYPE == 1) {
+                #ifndef IGNORE_ASSERTS
                 assert(distance_huffman == NULL);
                 assert(HDIST == 0);
                 assert(HLIT == 288);
+                #endif
             }
             
             while (1) {
@@ -1353,17 +1467,26 @@ void inflate(
                     *recipient_at =
                         (uint8_t)(litlenvalue & 255);
                     recipient_at++;
+                    
+                    #ifndef IGNORE_ASSERTS
                     assert(
                         (recipient_at - recipient)
                             <= recipient_size);
+                    #endif
                     
                 } else if (litlenvalue > 256) {
                     // length, (therefore also need distance)
+                    #ifndef IGNORE_ASSERTS
                     assert(litlenvalue < 286);
+                    #endif
                     uint32_t i = litlenvalue - 257;
+                    
+                    #ifndef IGNORE_ASSERTS
                     assert(
                         length_extra_bits_table[i].value
                             == litlenvalue);
+                    #endif
+                    
                     uint32_t extra_bits =
                         length_extra_bits_table[i]
                             .num_extra_bits;
@@ -1378,10 +1501,13 @@ void inflate(
                         : 0;
                     uint32_t total_length =
                         base_length + extra_length;
+
+                    #ifndef IGNORE_ASSERTS
                     assert(
                         total_length >=
                         length_extra_bits_table[i]
                             .base_decoded);
+                    #endif
                     
                     uint32_t distvalue =
                         distance_huffman == NULL ?
@@ -1395,11 +1521,14 @@ void inflate(
                                  hashed_dist_huffman,
                             /* raw data: */
                                  data_stream);
-                    
+                   
+                    #ifndef IGNORE_ASSERTS 
                     assert(distvalue <= 29);
                     assert(
                         dist_extra_bits_table[distvalue].value
                             == distvalue);
+                    #endif
+                    
                     uint32_t dist_extra_bits =
                         dist_extra_bits_table[distvalue]
                             .num_extra_bits;
@@ -1418,23 +1547,31 @@ void inflate(
                         base_dist + dist_extra_bits_decoded;
                     
                     // go back dist bytes, then copy length bytes
+                    #ifndef IGNORE_ASSERTS
                     assert(
                         recipient_at - total_dist >= recipient);
+                    #endif
                     uint8_t * back_dist_bytes =
                         recipient_at - total_dist;
                     for (int _ = 0; _ < total_length; _++) {
                         *recipient_at = *back_dist_bytes;
                         recipient_at++;
+                        #ifndef IGNORE_ASSERTS
                         assert(
                             (recipient_at - recipient)
                                 < recipient_size);
+                        #endif
                         back_dist_bytes++;
                     }
                 } else {
+                    #ifndef IGNORE_ASSERTS
                     assert(litlenvalue == 256);
+                    #endif
+                    
                     #ifndef INFLATE_SILENCE
                     printf("\t\tend of ltln found!\n");
                     #endif
+                    
                     break;
                 }
             }
@@ -1465,7 +1602,9 @@ void inflate(
     }
     
     int bytes_read = data_stream->data - started_at; 
+    #ifndef IGNORE_ASSERTS
     assert(bytes_read >= 0);
+    #endif
     if (bytes_read != compressed_size_bytes) {
         #ifndef INFLATE_SILENCE
         printf(
@@ -1473,12 +1612,20 @@ void inflate(
             compressed_size_bytes,
             bytes_read);
         #endif
+        
+        #ifndef IGNORE_ASSERTS
         assert(compressed_size_bytes > bytes_read);
+        #endif
+        
         int skip = compressed_size_bytes - bytes_read;
         #ifndef INFLATE_SILENCE
         printf("skipping ahead %u bytes...\n", skip);
         #endif
+
+        #ifndef IGNORE_ASSERTS
         assert(data_stream->size_left >= skip);
+        #endif
+        
         data_stream->data += skip;
         data_stream->size_left -= skip;
     }
