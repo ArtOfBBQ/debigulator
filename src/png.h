@@ -2,9 +2,9 @@
 #include "stdlib.h"
 #include "inflate.h"
 
-#define PNG_SILENCE
+// #define PNG_SILENCE
 #define IGNORE_CRC_CHECKS
-#define IGNORE_ASSERTS
+// #define IGNORE_ASSERTS
 // true/false/ignoreasserts are undef'd at EOF
 #define true 1
 #define false 0
@@ -18,10 +18,11 @@
 #endif
 
 typedef struct DecodedPNG {
-    uint8_t * pixels;
+    uint8_t * rgba_values;
+    uint32_t rgba_values_size;
     uint32_t width;
     uint32_t height;
-    uint32_t pixel_count;
+    uint32_t pixel_count; // rgba_values_size / 4
     bool32_t good;
 } DecodedPNG;
 
@@ -472,8 +473,8 @@ DecodedPNG * decode_PNG(
     uint8_t * compressed_data = NULL;
     uint8_t * compressed_data_begin = NULL;
     uint32_t compressed_data_stream_size = 0;
-    uint8_t * pixels = NULL;
-    uint8_t * pixels_start = NULL;
+    uint8_t * decoded_stream = NULL;
+    uint8_t * decoded_stream_start = NULL;
     unsigned int decompressed_size = 0;
     
     bool32_t found_first_IDAT = false;
@@ -521,7 +522,7 @@ DecodedPNG * decode_PNG(
             
             inflate(
                 /* recipient: */
-                    pixels,
+                    decoded_stream,
                 /* recipient_size: */
                     decompressed_size,
                 /* datastream: */
@@ -570,7 +571,7 @@ DecodedPNG * decode_PNG(
             "PLTE",
             4))
         {
-            if (pixels == NULL) {
+            if (decoded_stream == NULL) {
 
 		#ifndef PNG_SILENCE 
 		printf(
@@ -676,10 +677,10 @@ DecodedPNG * decode_PNG(
             }
 	   
             #ifndef IGNORE_ASSERTS
-	    assert(pixels == NULL);
+	    assert(decoded_stream == NULL);
             #endif
 	    
-            pixels = malloc(decompressed_size);
+            decoded_stream = malloc(decompressed_size);
             // this copy (compressed_data) is necessary because
             // the data needed for DEFLATE is likely spread
             // across multiple chunks with useless header data
@@ -688,7 +689,7 @@ DecodedPNG * decode_PNG(
             // first, then DEFLATE afterwards
             compressed_data = malloc(decompressed_size);
             compressed_data_begin = compressed_data;
-            pixels_start = pixels;
+            decoded_stream_start = decoded_stream;
 	    free(ihdr_body);
         }  else if (are_equal_strings(
             chunk_header->type,
@@ -696,7 +697,7 @@ DecodedPNG * decode_PNG(
             4))
         {
             if (!found_IHDR
-                || pixels == NULL
+                || decoded_stream == NULL
                 || compressed_data == NULL)
             {
 		#ifndef PNG_SILENCE
@@ -855,7 +856,7 @@ DecodedPNG * decode_PNG(
             "IEND",
             4))
         {
-            if (pixels == NULL) {
+            if (decoded_stream == NULL) {
                 return_value->good = false;
                 return return_value;
             }
@@ -895,9 +896,10 @@ DecodedPNG * decode_PNG(
             return return_value;
         }
         
-        PNGFooter * block_footer = consume_struct(
-            PNGFooter,
-            entire_file);
+        PNGFooter * block_footer =
+            consume_struct(
+                PNGFooter,
+                entire_file);
         
         #ifndef IGNORE_CRC_CHECKS
         flip_endian(&block_footer->CRC);
@@ -928,21 +930,62 @@ DecodedPNG * decode_PNG(
     // "filters" could have been called "transforms",
     // not sure how it's a filter
     
-    uint32_t filter_type = *pixels_start;
+    free(entire_file);
+    uint32_t filter_type = *decoded_stream_start;
     #ifndef PNG_SILENCE
     printf(
-        "\t\tfilter method: %u\n",
-        filter_type);
+        "\t\treconstructing (un-doing PNG filters)...\n");
     #endif
-
-    free(entire_file);
     
-    return_value->pixels = pixels_start;
+    uint32_t pixel_count =
+        return_value->width
+            * return_value->height;
+    return_value->pixel_count = pixel_count;
+    return_value->rgba_values = malloc(pixel_count * 4);
+    return_value->rgba_values_size = 0;
+    
+    decoded_stream = decoded_stream_start;
+    uint8_t * rgba_at = return_value->rgba_values;
+    
+    for (int w = 0; w < return_value->width; w++) {
+        
+        uint8_t filter_type = *decoded_stream++; 
+        #ifndef PNG_SILENCE
+        printf(
+            "\t\treconstructing row %u, filter_type: %u\n",
+            w,
+            filter_type);
+        #endif
+        
+        for (int h = 0; h < return_value->height; h++) {
+            // R
+            *rgba_at++ = *decoded_stream++;
+            return_value->rgba_values_size++;
+            // G
+            *rgba_at++ = *decoded_stream++;
+            return_value->rgba_values_size++;
+            // B
+            *rgba_at++ = *decoded_stream++;
+            return_value->rgba_values_size++;
+            // A
+            *rgba_at++ = *decoded_stream++;
+            return_value->rgba_values_size++;
+        }
+    }
+
+    #ifndef IGNORE_ASSERTS
+    assert(
+        return_value->rgba_values_size * 4
+            == return_value->pixel_count);
+    #endif
+    
     return_value->good = true;
-    return_value->pixel_count = decompressed_size;
+    free(decoded_stream_start);
+    
     return return_value;
 }
 
 #undef true
 #undef false
 #undef IGNORE_ASSERTS
+

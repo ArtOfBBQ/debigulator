@@ -53,7 +53,7 @@ int main(int argc, const char * argv[])
         return 1;
     }
     
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 1; i++) {
         
         uint8_t * buffer_copy = start_of_buffer;
         #ifndef HELLOPNG_SILENCE
@@ -70,9 +70,11 @@ int main(int argc, const char * argv[])
             "finished decode_PNG, result was: %s\n",
             decoded_png->good ? "SUCCESS" : "FAILURE");
         printf(
-            "bytes in image: %u (about %u pixels)\n",
-            decoded_png->pixel_count,
-            decoded_png->pixel_count / 4);
+            "rgba values in image: %u\n",
+            decoded_png->rgba_values_size);
+        printf(
+            "pixels in image (info from image header): %u\n",
+            decoded_png->pixel_count);
         printf(
             "image width: %u\n",
             decoded_png->width);
@@ -81,7 +83,7 @@ int main(int argc, const char * argv[])
             decoded_png->height);
         #endif
         
-        free(decoded_png->pixels);
+        free(decoded_png->rgba_values);
         free(decoded_png);
     }
     
