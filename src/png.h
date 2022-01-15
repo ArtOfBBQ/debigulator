@@ -428,13 +428,13 @@ uint8_t compute_paeth_predictor(
     /* previous_scanline_value */ uint8_t b,
     /* previous_scanline_previous_pixel: */ uint8_t c)
 {
-    uint8_t Pr = 0;
+    int32_t Pr = 0;
     
-    uint8_t  p = a + b - c;
-    uint8_t pa = abs(p - a);
-    uint8_t pb = abs(p - b);
-    uint8_t pc = abs(p - c);
-
+    int32_t  p = a + b - c;
+    int32_t pa = abs(p - a);
+    int32_t pb = abs(p - b);
+    int32_t pc = abs(p - c);
+    
     if (pa <= pb && pa <= pc) {
 	Pr = a;
     } else if (pb <= pc) {
@@ -443,7 +443,7 @@ uint8_t compute_paeth_predictor(
 	Pr = c;
     }
 
-    return Pr;
+    return (uint8_t)Pr;
 }
 
 /*
@@ -471,11 +471,11 @@ uint8_t undo_PNG_filter(
 	// TODO: this should be floored,
         // I think that's the default
 	// behavior of ints anyway but lets make sure
-	return original_value
-	    + ((previous_pixel_value
-                + previous_scanline_value) / 2);
+        uint32_t avg =
+            ((uint32_t)previous_pixel_value +
+            (uint32_t)previous_scanline_value) / 2;
+	return original_value + (uint8_t)avg;
     } else if (filter_type == 4) {
-	// TODO: implement filter type 4
 	return original_value
 	    + compute_paeth_predictor(
 		previous_pixel_value,
@@ -1049,7 +1049,7 @@ DecodedPNG * decode_PNG(
 	    // repeat this 4x, once for every byte in pixel
             // (R, G, B & A) 
             for (int _ = 0; _ < 4; _++) {
-
+                
 		*rgba_at++ = undo_PNG_filter(
 		    /* filter_type: */ filter_type,
 		    /* original_value: */ *decoded_stream,
