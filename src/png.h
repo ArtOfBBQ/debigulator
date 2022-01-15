@@ -416,6 +416,79 @@ bool32_t are_equal_strings(
     return true;
 }
 
+/*
+One of the reconstruction algorithms (see undo_PNG_filter below)
+is a 'paeth predictor'
+
+The PNG specification has sample code for the paeth predictor,
+so I just copy pasted it here below.
+*/
+uint8_t compute_paeth_predictor(
+    /* previous_pixel_value */ uint8_t a,
+    /* previous_scanline_value */ uint8_t b,
+    /* previous_scanline_previous_pixel: */ uint8_t c)
+{
+    uint8_t Pr = 0;
+    
+    uint8_t  p = a + b - c;
+    uint8_t pa = abs(p - a);
+    uint8_t pb = abs(p - b);
+    uint8_t pc = abs(p - c);
+
+    if (pa <= pb && pa <= pc) {
+	Pr = a;
+    } else if (pb <= pc) {
+	Pr = b;
+    } else {
+	Pr = c;
+    }
+
+    return Pr;
+}
+
+/*
+PNG files have to be 'reconstructed' even after all of the 
+decompression is finished. The original RGBA values are not
+stored - the 'transformed' or 'filtered' values are stored
+instead, and to undo these transforms you need several values
+from other pixels. You can read about this in the specification
+but it might take some struggling to understand.
+*/
+uint8_t undo_PNG_filter(
+    unsigned int filter_type,
+    uint8_t original_value,
+    uint8_t previous_scanline_value,
+    uint8_t previous_scanline_previous_pixel_value,
+    uint8_t previous_pixel_value)
+{
+    if (filter_type == 0) {
+	return original_value;
+    } else if (filter_type == 1) {
+	return original_value + previous_pixel_value;
+    } else if (filter_type == 2) {
+	return original_value + previous_scanline_value;
+    } else if (filter_type == 3) {
+	// TODO: this should be floored, I think that's the default
+	// behavior of ints anyway but lets make sure
+	return original_value
+	    + ((previous_pixel_value + previous_scanline_value) / 2);
+    } else if (filter_type == 4) {
+	// TODO: implement filter type 4
+	return original_value
+	    + compute_paeth_predictor(
+		previous_pixel_value,
+		previous_scanline_value,
+		previous_scanline_previous_pixel_value);
+    } else {
+	#ifndef PNG_SILENCE
+	printf(
+	    "ERROR - unsupported filter type: %u\. Filter type must be 1-4\n",
+	    filter_type);
+	#endif	
+	crash_program();
+    }
+}
+
 DecodedPNG * decode_PNG(
     uint8_t * compressed_bytes,
     uint32_t compressed_bytes_size)
@@ -934,7 +1007,7 @@ DecodedPNG * decode_PNG(
     uint32_t filter_type = *decoded_stream_start;
     #ifndef PNG_SILENCE
     printf(
-        "\t\treconstructing (un-doing PNG filters)...\n");
+        "\n\nreconstructing (un-doing PNG filters)...\n");
     #endif
     
     uint32_t pixel_count =
@@ -947,32 +1020,76 @@ DecodedPNG * decode_PNG(
     decoded_stream = decoded_stream_start;
     uint8_t * rgba_at = return_value->rgba_values;
     
+    
+    /*
+    The spec tells us to track these values:
+    
+    x = the byte being filtered;
+    a = the byte in the pixel immediately before the pixl containing x
+    b = the byte in the previous scanline
+    c = the byte in the pixel immediately before the pixl containing b 
+    */
+    uint8_t * previous_scanline = 
+	decoded_stream
+	- 1
+	- (return_value->height * 4);
+    uint8_t * previous_scanline_previous_pixel =
+	previous_scanline - 4;
+    uint8_t * previous_pixel = decoded_stream - 4;
+    
+    
+    // TODO: width and height may need to be in the opposite order,
+    // try it out after square PNG's are working correctly
     for (int w = 0; w < return_value->width; w++) {
-        
+       	
         uint8_t filter_type = *decoded_stream++; 
+	previous_scanline++;
+	previous_scanline_previous_pixel++;
+	previous_pixel++;
+	
         #ifndef PNG_SILENCE
         printf(
-            "\t\treconstructing row %u, filter_type: %u\n",
+            "\treconstructing row %u, filter_type: %u\n",
             w,
             filter_type);
         #endif
         
         for (int h = 0; h < return_value->height; h++) {
-            // R
-            *rgba_at++ = *decoded_stream++;
-            return_value->rgba_values_size++;
-            // G
-            *rgba_at++ = *decoded_stream++;
-            return_value->rgba_values_size++;
-            // B
-            *rgba_at++ = *decoded_stream++;
-            return_value->rgba_values_size++;
-            // A
-            *rgba_at++ = *decoded_stream++;
-            return_value->rgba_values_size++;
+	   
+	    // repeat this 4x, once for every byte in pixel (R, G, B & A) 
+            for (int _ = 0; _ < 4; _++) {
+
+		// TODO: I can't understand the spec easily, it sounds like
+		// maybe they want the previously already-reconstructed
+		// values instead of the originals. So in that case
+		// 'previous pixel' would need to come from the reconstructed
+		// output, not from the transformed input
+		// let's try both ways until we find out what works 
+		*rgba_at++ = undo_PNG_filter(
+		    /* filter_type: */ filter_type,
+		    /* original_value: */ *decoded_stream,
+		    /* prev_scanline_val: */
+			previous_scanline >= decoded_stream_start ?
+			    *previous_scanline
+			    : 0,
+		    /* prev_scanline_prev_pixel_val: */
+			previous_scanline_previous_pixel >=
+			    decoded_stream_start ?
+				*previous_scanline_previous_pixel
+				: 0,
+		    /* previous_pixel_val: */
+			previous_pixel >= decoded_stream_start ?
+			    *previous_pixel
+			    : 0);
+		return_value->rgba_values_size++;
+		decoded_stream++;
+		previous_scanline++;
+		previous_scanline_previous_pixel++;
+		previous_pixel++;
+	    }
         }
     }
-
+    
     #ifndef IGNORE_ASSERTS
     assert(
         return_value->rgba_values_size * 4
