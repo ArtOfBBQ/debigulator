@@ -82,7 +82,60 @@ int main(int argc, const char * argv[])
             "image height: %u\n",
             decoded_png->height);
         #endif
-        
+
+	// let's convert to greyscale
+	uint8_t * grayscale_vals = malloc(decoded_png->pixel_count);
+	uint8_t * grayscale_vals_at = grayscale_vals;
+	for (int i = 0; i < decoded_png->pixel_count; i += 4) {
+	    
+	    *grayscale_vals_at =
+		(decoded_png->rgba_values[i]
+		+ decoded_png->rgba_values[i + 1]
+		+ decoded_png->rgba_values[i + 2])
+		    / 3;
+
+	    // apply alpha
+	    *grayscale_vals_at++ *= (decoded_png->rgba_values[i + 3] / 255);
+	}
+
+	unsigned int pixels_per_char = decoded_png->width / 30;
+	printf(
+	    "printing grayscale image in 30 chars, pixels per char: %u\n",
+	    pixels_per_char);
+	grayscale_vals_at = grayscale_vals;
+       	
+	for (int h = 0; h < decoded_png->height; h += pixels_per_char) {
+	    printf("\n");
+	    for (int w = 0; w < decoded_png->width; w += pixels_per_char) {
+		
+		unsigned int val_to_print = 0;
+		int index = (h * decoded_png->width);
+		index += w;
+		for (int i = 0; i < pixels_per_char; i++) {
+		    
+		    index += i;
+		    val_to_print += grayscale_vals[index];
+		}
+		val_to_print /= pixels_per_char;
+
+		if (val_to_print < 20) {
+		    printf(".");
+		} else if (val_to_print < 50) {
+		    printf(".");
+		} else if (val_to_print < 80) {
+		    printf(":");
+		} else if (val_to_print < 110) {
+		    printf("░");
+		} else if (val_to_print < 160) {
+		    printf("▒");
+		} else if (val_to_print < 210) {
+		    printf("▓");
+		} else {
+		    printf("█");
+		}
+	    }
+	}
+	
         free(decoded_png->rgba_values);
         free(decoded_png);
     }
