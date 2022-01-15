@@ -100,14 +100,21 @@ int main(int argc, const char * argv[])
 
 	unsigned int pixels_per_char = decoded_png->width / 30;
 	printf(
-	    "printing grayscale image in 30 chars, pixels per char: %u\n",
+	    "printing grayscale in 30 chars, pixels/char: %u\n",
 	    pixels_per_char);
 	grayscale_vals_at = grayscale_vals;
        	
-	for (int h = 0; h < decoded_png->height; h += pixels_per_char) {
+	for (
+            int h = 0;
+            h < decoded_png->height;
+            h += pixels_per_char)
+        {
 	    printf("\n");
-	    for (int w = 0; w < decoded_png->width; w += pixels_per_char) {
-		
+	    for (
+                int w = 0;
+                w < decoded_png->width;
+                w += pixels_per_char)
+            {
 		unsigned int val_to_print = 0;
 		int index = (h * decoded_png->width);
 		index += w;
@@ -117,9 +124,9 @@ int main(int argc, const char * argv[])
 		    val_to_print += grayscale_vals[index];
 		}
 		val_to_print /= pixels_per_char;
-
-		if (val_to_print < 20) {
-		    printf(".");
+                
+		if (val_to_print < 10) {
+		    printf(" ");
 		} else if (val_to_print < 50) {
 		    printf(".");
 		} else if (val_to_print < 80) {

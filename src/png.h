@@ -468,10 +468,12 @@ uint8_t undo_PNG_filter(
     } else if (filter_type == 2) {
 	return original_value + previous_scanline_value;
     } else if (filter_type == 3) {
-	// TODO: this should be floored, I think that's the default
+	// TODO: this should be floored,
+        // I think that's the default
 	// behavior of ints anyway but lets make sure
 	return original_value
-	    + ((previous_pixel_value + previous_scanline_value) / 2);
+	    + ((previous_pixel_value
+                + previous_scanline_value) / 2);
     } else if (filter_type == 4) {
 	// TODO: implement filter type 4
 	return original_value
@@ -482,11 +484,13 @@ uint8_t undo_PNG_filter(
     } else {
 	#ifndef PNG_SILENCE
 	printf(
-	    "ERROR - unsupported filter type: %u\. Filter type must be 1-4\n",
+	    "ERROR - unsupported filter type: %u. Expect 1-4\n",
 	    filter_type);
 	#endif	
 	crash_program();
     }
+    
+    return 0;
 }
 
 DecodedPNG * decode_PNG(
@@ -1030,22 +1034,18 @@ DecodedPNG * decode_PNG(
     c = the byte in the pixel immediately before the pixl containing b 
     */
     uint8_t * previous_scanline = 
-	decoded_stream
-	- 1
+	rgba_at
 	- (return_value->height * 4);
     uint8_t * previous_scanline_previous_pixel =
 	previous_scanline - 4;
-    uint8_t * previous_pixel = decoded_stream - 4;
+    uint8_t * previous_pixel = rgba_at - 4;
     
-    
-    // TODO: width and height may need to be in the opposite order,
-    // try it out after square PNG's are working correctly
+    // TODO: width and height may need to be in the opposite
+    // order, try it out after square PNG's are working
+    // correctly
     for (int w = 0; w < return_value->width; w++) {
        	
         uint8_t filter_type = *decoded_stream++; 
-	previous_scanline++;
-	previous_scanline_previous_pixel++;
-	previous_pixel++;
 	
         #ifndef PNG_SILENCE
         printf(
@@ -1056,31 +1056,28 @@ DecodedPNG * decode_PNG(
         
         for (int h = 0; h < return_value->height; h++) {
 	   
-	    // repeat this 4x, once for every byte in pixel (R, G, B & A) 
+	    // repeat this 4x, once for every byte in pixel
+            // (R, G, B & A) 
             for (int _ = 0; _ < 4; _++) {
 
-		// TODO: I can't understand the spec easily, it sounds like
-		// maybe they want the previously already-reconstructed
-		// values instead of the originals. So in that case
-		// 'previous pixel' would need to come from the reconstructed
-		// output, not from the transformed input
-		// let's try both ways until we find out what works 
 		*rgba_at++ = undo_PNG_filter(
 		    /* filter_type: */ filter_type,
 		    /* original_value: */ *decoded_stream,
 		    /* prev_scanline_val: */
-			previous_scanline >= decoded_stream_start ?
-			    *previous_scanline
-			    : 0,
+			previous_scanline >=
+                            return_value->rgba_values ?
+                                *previous_scanline
+                                : 0,
 		    /* prev_scanline_prev_pixel_val: */
 			previous_scanline_previous_pixel >=
-			    decoded_stream_start ?
+			    return_value->rgba_values ?
 				*previous_scanline_previous_pixel
 				: 0,
 		    /* previous_pixel_val: */
-			previous_pixel >= decoded_stream_start ?
-			    *previous_pixel
-			    : 0);
+			previous_pixel >=
+                            return_value->rgba_values ?
+                                *previous_pixel
+                                : 0);
 		return_value->rgba_values_size++;
 		decoded_stream++;
 		previous_scanline++;
