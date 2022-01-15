@@ -1,5 +1,5 @@
 APP_NAME="hellopng"
-INPUT_FILE="gimp_test" ## try gzipsample or deflate_source
+INPUT_FILE="fs_angrymob" ## try gzipsample or deflate_source
 INPUT_EXTENSION="png"
 
 echo "Building $APP_NAME... (this shell script must be run from the app's root directory)"
@@ -14,8 +14,8 @@ echo "copying resources..."
 cp resources/$INPUT_FILE.$INPUT_EXTENSION build/$INPUT_FILE.$INPUT_EXTENSION
 
 echo "Compiling $APP_NAME..."
-# clang $MAC_FRAMEWORKS -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
-gcc -fsanitize=undefined -g -o3 $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
+clang $MAC_FRAMEWORKS -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
+# gcc -fsanitize=undefined -g -o3 $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
 
 # echo "Running $APP_NAME"
 (cd build && time ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)

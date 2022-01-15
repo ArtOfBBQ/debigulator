@@ -1040,22 +1040,12 @@ DecodedPNG * decode_PNG(
 	previous_scanline - 4;
     uint8_t * previous_pixel = rgba_at - 4;
     
-    // TODO: width and height may need to be in the opposite
-    // order, try it out after square PNG's are working
-    // correctly
-    for (int w = 0; w < return_value->width; w++) {
+    for (int h = 0; h < return_value->height; h++) {
        	
         uint8_t filter_type = *decoded_stream++; 
-	
-        #ifndef PNG_SILENCE
-        printf(
-            "\treconstructing row %u, filter_type: %u\n",
-            w,
-            filter_type);
-        #endif
         
-        for (int h = 0; h < return_value->height; h++) {
-	   
+        for (int w = 0; w < return_value->width; w++) {
+	    
 	    // repeat this 4x, once for every byte in pixel
             // (R, G, B & A) 
             for (int _ = 0; _ < 4; _++) {
