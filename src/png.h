@@ -457,30 +457,30 @@ but it might take some struggling to understand.
 uint8_t undo_PNG_filter(
     unsigned int filter_type,
     uint8_t original_value,
-    uint8_t previous_scanline_value,
-    uint8_t previous_scanline_previous_pixel_value,
-    uint8_t previous_pixel_value)
+    uint8_t b_previous_scanline,
+    uint8_t c_previous_scanline_previous_pixel,
+    uint8_t a_previous_pixel)
 {
     if (filter_type == 0) {
 	return original_value;
     } else if (filter_type == 1) {
-	return original_value + previous_pixel_value;
+	return original_value + a_previous_pixel;
     } else if (filter_type == 2) {
-	return original_value + previous_scanline_value;
+	return original_value + b_previous_scanline;
     } else if (filter_type == 3) {
 	// TODO: this should be floored,
         // I think that's the default
 	// behavior of ints anyway but lets make sure
         uint32_t avg =
-            ((uint32_t)previous_pixel_value +
-            (uint32_t)previous_scanline_value) / 2;
+            ((uint32_t)a_previous_pixel +
+            (uint32_t)b_previous_scanline) / 2;
 	return original_value + (uint8_t)avg;
     } else if (filter_type == 4) {
 	return original_value
 	    + compute_paeth_predictor(
-		previous_pixel_value,
-		previous_scanline_value,
-		previous_scanline_previous_pixel_value);
+		a_previous_pixel,
+		b_previous_scanline,
+		c_previous_scanline_previous_pixel);
     } else {
 	#ifndef PNG_SILENCE
 	printf(
@@ -1029,16 +1029,17 @@ DecodedPNG * decode_PNG(
     The spec tells us to track these values:
     
     x = the byte being filtered;
-    a = the byte in the pixel immediately before the pixl containing x
+    a = the byte in the pixel immediately
+        before the pixel containing x
     b = the byte in the previous scanline
-    c = the byte in the pixel immediately before the pixl containing b 
+    c = the byte in the pixel immediately
+        before the pixel containing b 
     */
-    uint8_t * previous_scanline = 
-	rgba_at
-	- (return_value->height * 4);
-    uint8_t * previous_scanline_previous_pixel =
-	previous_scanline - 4;
-    uint8_t * previous_pixel = rgba_at - 4;
+    uint8_t * a_previous_pixel = return_value->rgba_values - 4;
+    uint8_t * b_previous_scanline =
+        return_value->rgba_values - (return_value->width * 4);
+    uint8_t * c_previous_scanline_previous_pixel =
+        b_previous_scanline - 4;
     
     for (int h = 0; h < return_value->height; h++) {
        	
@@ -1051,28 +1052,29 @@ DecodedPNG * decode_PNG(
             for (int _ = 0; _ < 4; _++) {
                 
 		*rgba_at++ = undo_PNG_filter(
-		    /* filter_type: */ filter_type,
-		    /* original_value: */ *decoded_stream,
-		    /* prev_scanline_val: */
-			previous_scanline >=
-                            return_value->rgba_values ?
-                                *previous_scanline
-                                : 0,
-		    /* prev_scanline_prev_pixel_val: */
-			previous_scanline_previous_pixel >=
-			    return_value->rgba_values ?
-				*previous_scanline_previous_pixel
-				: 0,
-		    /* previous_pixel_val: */
-			previous_pixel >=
-                            return_value->rgba_values ?
-                                *previous_pixel
-                                : 0);
+		    /* filter_type: */
+                        filter_type,
+		    /* original_value: */
+                        *decoded_stream,
+		    /* b_previous_scanline: */
+                        b_previous_scanline
+                            >= return_value->rgba_values ?
+                        *b_previous_scanline : 0,
+		    /* c_previous_scanline_previous_pixel: */
+                        c_previous_scanline_previous_pixel
+                            >= return_value->rgba_values ?
+                        *c_previous_scanline_previous_pixel : 0,
+		    /* a_previous_pixel: */
+                        a_previous_pixel
+                            >= return_value->rgba_values ?
+                        *a_previous_pixel : 0);
+                
+                a_previous_pixel++;
+                b_previous_scanline++;
+                c_previous_scanline_previous_pixel++;
+                
 		return_value->rgba_values_size++;
 		decoded_stream++;
-		previous_scanline++;
-		previous_scanline_previous_pixel++;
-		previous_pixel++;
 	    }
         }
     }

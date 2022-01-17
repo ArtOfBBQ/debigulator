@@ -83,94 +83,20 @@ int main(int argc, const char * argv[])
             "image height: %u\n",
             decoded_png->height);
         #endif
-
-        #ifndef HELLOPNG_SILENCE
-        uint32_t max_alpha_pixels = 0;
-        uint32_t min_alpha_pixels = 0;
-        uint32_t other_pixels = 0;
-        for (int w = 1; w <= decoded_png->width; w++) {
-            printf("\n");
-            for (int h = 1; h <= decoded_png->height; h++) {
-                int j =
-                    ((h - 1)*decoded_png->width*4)
-                    + ((w - 1) * 4);
-                if (decoded_png->rgba_values[j + 3] > 254) {
-                    max_alpha_pixels += 1;
-                } else if (decoded_png->rgba_values[j + 3] == 0) {
-                    min_alpha_pixels += 1;
-                } else {
-                    other_pixels += 1;
-                }
-            }
-        }
-        #endif
-        
-        printf(
-            "pixels with 255alpha: %u, 0alpha: %u other: %u\n",
-            max_alpha_pixels,
-            min_alpha_pixels,
-            other_pixels);
-        
-	// let's convert to greyscale
-	uint8_t * grayscale_vals = malloc(decoded_png->pixel_count);
-	uint8_t * grayscale_vals_at = grayscale_vals;
-	for (int i = 0; i < decoded_png->pixel_count; i += 4) {
-	    
-	    *grayscale_vals_at =
-		(decoded_png->rgba_values[i]
-		+ decoded_png->rgba_values[i + 1]
-		+ decoded_png->rgba_values[i + 2])
-		    / 3;
-            
-	    // apply alpha
-	    *grayscale_vals_at++ *=
-                (decoded_png->rgba_values[i + 3] / 0xFF);
-	}
-        
-	unsigned int pixels_per_char = decoded_png->width / 30;
-	printf(
-	    "printing grayscale in 30 chars, pixels/char: %u\n",
-	    pixels_per_char);
-	grayscale_vals_at = grayscale_vals;
-        
-	for (
-            int h = 0;
-            h < decoded_png->height;
-            h += pixels_per_char)
+       
+        for (
+            int i = 0;
+            i < decoded_png->rgba_values_size;
+            i += 4)
         {
-	    printf("\nh:%u\t", h);
-	    for (
-                int w = 0;
-                w < decoded_png->width;
-                w += pixels_per_char)
-            {
-		unsigned int val_to_print = 0;
-		int index = (h * decoded_png->width);
-		index += w;
-		for (int i = 0; i < pixels_per_char; i++) {
-		    
-		    index += i;
-		    val_to_print += grayscale_vals[index];
-		}
-		val_to_print /= pixels_per_char;
-                
-		if (val_to_print < 10) {
-		    printf(" ");
-		} else if (val_to_print < 50) {
-		    printf(".");
-		} else if (val_to_print < 80) {
-		    printf(":");
-		} else if (val_to_print < 110) {
-		    printf("░");
-		} else if (val_to_print < 160) {
-		    printf("▒");
-		} else if (val_to_print < 210) {
-		    printf("▓");
-		} else {
-		    printf("█");
-		}
-	    }
-	}
+            if (i % 32 == 0) { printf("\n\n"); }
+            printf(
+                "[%u,%u,%u,%u],",
+                decoded_png->rgba_values[i],
+                decoded_png->rgba_values[i + 1],
+                decoded_png->rgba_values[i + 2],
+                decoded_png->rgba_values[i + 3]);
+        }
 	
         free(decoded_png->rgba_values);
         free(decoded_png);

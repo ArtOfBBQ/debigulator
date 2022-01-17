@@ -4,8 +4,8 @@
 typedef int32_t bool32_t;
 #define false 0 // undefined at end of file
 #define true 1  // undefined at end of file
-#define INFLATE_SILENCE
-#define IGNORE_ASSERTS
+// #define INFLATE_SILENCE
+// #define IGNORE_ASSERTS
 
 #define NUM_UNIQUE_CODELENGTHS 19
 #define HUFFMAN_HASHMAP_SIZE 1023
@@ -455,11 +455,17 @@ uint32_t hashed_huffman_decode(
     HashedHuffman * dict,
     DataStream * datastream)
 {
+    #ifndef IGNORE_ASSERTS
+    assert(dict != NULL);
+    assert(datastream != NULL);
+    #endif
+    
     unsigned int bitcount = dict->min_code_length - 1;
     uint32_t upcoming_bits =
         peek_bits(
             /* from: */ datastream,
             /* size: */ 24);
+    uint32_t raw = 0;
     
     while (bitcount < dict->max_code_length)
     {
@@ -473,7 +479,7 @@ uint32_t hashed_huffman_decode(
         Attention: The hash keys are already reversed,
         so we can just compare the raw values to the keys 
         */
-        uint32_t raw = mask_rightmost_bits(
+        raw = mask_rightmost_bits(
             upcoming_bits,
             bitcount);
         
@@ -1064,6 +1070,11 @@ void inflate(
                     literal_length_huffman[287].code_length == 8);
                 assert(literal_length_huffman[287].key == 199);
                 #endif
+
+                hashed_litlen_huffman =
+                    huffman_to_hashmap(
+                        /* original: */ literal_length_huffman,
+                        /* orig_size: */ HLIT);
                 
                 #ifndef INFLATE_SILENCE 
                 printf("\t\t\tcreated fixed huffman dict.\n");
