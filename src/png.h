@@ -2,9 +2,10 @@
 #include "stdlib.h"
 #include "inflate.h"
 
-// #define PNG_SILENCE
+#define PNG_SILENCE
 #define IGNORE_CRC_CHECKS
-// #define PNG_IGNORE_ASSERTS
+#define PNG_IGNORE_ASSERTS
+
 // true/false/ignoreasserts are undef'd at EOF
 #define true 1
 #define false 0
@@ -457,10 +458,13 @@ uint8_t compute_paeth_predictor(
     if (pc < 0) { pc *= -1; }
     
     if (pa <= pb && pa <= pc) {
+        // code path not hit in working PNG
 	Pr_paeth = a;
     } else if (pb <= pc) {
+        // code path not hit in working PNG
 	Pr_paeth = b;
     } else {
+        // code path not hit in working PNG
 	Pr_paeth = c;
     }
     
@@ -485,36 +489,28 @@ uint8_t undo_PNG_filter(
     if (filter_type == 0) {
 	return original_value;
     } else if (filter_type == 1) {
-        // note: code path used in the working image
 	return original_value + a_previous_pixel;
     } else if (filter_type == 2) {
-        // note: code path used in the working image
 	return original_value + b_previous_scanline;
     } else if (filter_type == 3) {
-	// TODO: this should be floored,
-        // I think that's the default
-	// behavior of ints anyway but lets make sure
-        
-        // TODO: not used in working image, but not used in
-        // 1 of the failing imgs either
-        // furthermore, I don't think the bug is here after
-        // checking how it affects the image itself
         uint32_t avg =
             ((uint32_t)a_previous_pixel +
             (uint32_t)b_previous_scanline) / 2;
 	return original_value + (uint8_t)avg;
     } else if (filter_type == 4) {
-        // TODO: not used in working image, but used in
-        // all failing imgs
-        // a bug almost has to be here 
-	return original_value
-	    + compute_paeth_predictor(
+        uint8_t computed_paeth =
+            compute_paeth_predictor(
 		/* a_previous_pixel   : */
                     (int32_t)a_previous_pixel,
 		/* b_previous_scanline: */
                     (int32_t)b_previous_scanline,
                 /* c_prev_scl_prev_pxl: */
                     (int32_t)c_previous_scanline_previous_pixel);
+        uint32_t u32_orig = (uint32_t)original_value;
+        uint32_t u32_paeth = (uint32_t)computed_paeth;
+        uint8_t return_value = original_value + computed_paeth;
+        
+	return return_value; 
     } else {
 	#ifndef PNG_SILENCE
 	printf(
@@ -1068,12 +1064,15 @@ DecodedPNG * decode_PNG(
     b = the byte in the previous scanline
     c = the byte in the pixel immediately
         before the pixel containing b 
+
+    [c][b]
+    [a][x]
     */
-    uint8_t * a_previous_pixel =
-        return_value->rgba_values - 4;
+    uint8_t * a_previous_pixel = return_value->rgba_values - 4;
     uint8_t * b_previous_scanline =
-        return_value->rgba_values - (return_value->width * 4);
-    uint8_t * c_previous_scanline_previous_pixel =
+        return_value->rgba_values
+        - (return_value->width * 4);
+    uint8_t * c_previous_scanline_previous_pixel = 
         b_previous_scanline - 4;
     
     for (int h = 0; h < return_value->height; h++) {
@@ -1085,6 +1084,14 @@ DecodedPNG * decode_PNG(
 	    // repeat this 4x, once for every byte in pixel
             // (R, G, B & A) 
             for (int _ = 0; _ < 4; _++) {
+                // when a/b/c are out of bounds,
+                // we have to use a 0 instead
+                uint8_t a = w > 0 ?
+                    *a_previous_pixel : 0; 
+                uint8_t b = h > 0 ?
+                    *b_previous_scanline : 0;
+                uint8_t c = h > 0 && w > 0 ?
+                    *c_previous_scanline_previous_pixel : 0;
                 
 		*rgba_at++ = undo_PNG_filter(
 		    /* filter_type: */
@@ -1092,25 +1099,19 @@ DecodedPNG * decode_PNG(
 		    /* original_value: */
                         *decoded_stream,
                     /* a_previous_pixel: */
-                        a_previous_pixel
-                            >= return_value->rgba_values ?
-                        *a_previous_pixel : 0,
+                        a,
 		    /* b_previous_scanline: */
-                        b_previous_scanline
-                            >= return_value->rgba_values ?
-                        *b_previous_scanline : 0,
+                        b,
 		    /* c_previous_scanline_previous_pixel: */
-                        c_previous_scanline_previous_pixel
-                            >= return_value->rgba_values ?
-                        *c_previous_scanline_previous_pixel : 0);
+                        c);
                 
+		return_value->rgba_values_size++;
                 a_previous_pixel++;
                 b_previous_scanline++;
                 c_previous_scanline_previous_pixel++;
                 
-		return_value->rgba_values_size++;
 		decoded_stream++;
-	    }
+            }
         }
     }
     

@@ -5,7 +5,7 @@ typedef int32_t bool32_t;
 #define false 0 // undefined at end of file
 #define true 1  // undefined at end of file
 #define INFLATE_SILENCE
-// #define IGNORE_ASSERTS
+#define IGNORE_ASSERTS
 
 #define NUM_UNIQUE_CODELENGTHS 19
 #define HUFFMAN_HASHMAP_SIZE 1023

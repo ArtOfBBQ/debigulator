@@ -2,9 +2,6 @@
 #include "stdio.h"
 #include "assert.h"
 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
-
 // #define HELLOPNG_SILENCE
 
 int main(int argc, const char * argv[]) 
@@ -81,18 +78,6 @@ int main(int argc, const char * argv[])
         "image height: %u\n",
         decoded_png->height);
     #endif
-   
-    // let's write our image to disk with an existing, working
-    // library to see if it's correct
-    int stb_success = stbi_write_bmp(
-        /* filename        : */ "output.bmp",
-        /* width           : */ decoded_png->width,
-        /* height          : */ decoded_png->height,
-        /* comp            : */ 4,
-        /* data            : */ (void *)decoded_png->rgba_values);
-    printf(
-        "stbi_write_bmp was %s\n",
-        stb_success ? "successful" : "failed");
     
     free(decoded_png->rgba_values);
     free(decoded_png);
