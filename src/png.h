@@ -4,7 +4,7 @@
 
 // #define PNG_SILENCE
 #define IGNORE_CRC_CHECKS
-// #define IGNORE_ASSERTS
+// #define PNG_IGNORE_ASSERTS
 // true/false/ignoreasserts are undef'd at EOF
 #define true 1
 #define false 0
@@ -13,7 +13,7 @@
 #include "stdio.h"
 #endif
 
-#ifndef IGNORE_ASSERTS
+#ifndef PNG_IGNORE_ASSERTS
 #include "assert.h"
 #endif
 
@@ -424,26 +424,47 @@ The PNG specification has sample code for the paeth predictor,
 so I just copy pasted it here below.
 */
 uint8_t compute_paeth_predictor(
-    /* previous_pixel_value */ uint8_t a,
-    /* previous_scanline_value */ uint8_t b,
-    /* previous_scanline_previous_pixel: */ uint8_t c)
+    /* a_previous_pixel */ int32_t a,
+    /* b_previous_scanline */ int32_t b,
+    /* c_previous_scanline_previous_pixel: */ int32_t c)
 {
-    int32_t Pr = 0;
+    /*
+    sample Code from the specification:
+        p = a + b - c
+        pa = abs(p - a)
+        pb = abs(p - b)
+        pc = abs(p - c)
+        if pa <= pb and pa <= pc then Pr = a
+        else if pb <= pc then Pr = b
+        else Pr = c
+        return Pr
     
-    int32_t  p = a + b - c;
-    int32_t pa = abs(p - a);
-    int32_t pb = abs(p - b);
-    int32_t pc = abs(p - c);
+    'The calculations within the PaethPredictor function
+    shall be performed exactly, without overflow.'
+    */
+    
+    int32_t Pr_paeth = 0;
+    
+    int32_t p = a + b - c;
+    
+    int32_t pa = p - a;
+    if (pa < 0) { pa *= -1; }
+    
+    int32_t pb = p - b;
+    if (pb < 0) { pb *= -1; }
+    
+    int32_t pc = p - c;
+    if (pc < 0) { pc *= -1; }
     
     if (pa <= pb && pa <= pc) {
-	Pr = a;
+	Pr_paeth = a;
     } else if (pb <= pc) {
-	Pr = b;
+	Pr_paeth = b;
     } else {
-	Pr = c;
+	Pr_paeth = c;
     }
-
-    return (uint8_t)Pr;
+    
+    return (uint8_t)Pr_paeth;
 }
 
 /*
@@ -457,30 +478,43 @@ but it might take some struggling to understand.
 uint8_t undo_PNG_filter(
     unsigned int filter_type,
     uint8_t original_value,
+    uint8_t a_previous_pixel,
     uint8_t b_previous_scanline,
-    uint8_t c_previous_scanline_previous_pixel,
-    uint8_t a_previous_pixel)
+    uint8_t c_previous_scanline_previous_pixel)
 {
     if (filter_type == 0) {
 	return original_value;
     } else if (filter_type == 1) {
+        // note: code path used in the working image
 	return original_value + a_previous_pixel;
     } else if (filter_type == 2) {
+        // note: code path used in the working image
 	return original_value + b_previous_scanline;
     } else if (filter_type == 3) {
 	// TODO: this should be floored,
         // I think that's the default
 	// behavior of ints anyway but lets make sure
+        
+        // TODO: not used in working image, but not used in
+        // 1 of the failing imgs either
+        // furthermore, I don't think the bug is here after
+        // checking how it affects the image itself
         uint32_t avg =
             ((uint32_t)a_previous_pixel +
             (uint32_t)b_previous_scanline) / 2;
 	return original_value + (uint8_t)avg;
     } else if (filter_type == 4) {
+        // TODO: not used in working image, but used in
+        // all failing imgs
+        // a bug almost has to be here 
 	return original_value
 	    + compute_paeth_predictor(
-		a_previous_pixel,
-		b_previous_scanline,
-		c_previous_scanline_previous_pixel);
+		/* a_previous_pixel   : */
+                    (int32_t)a_previous_pixel,
+		/* b_previous_scanline: */
+                    (int32_t)b_previous_scanline,
+                /* c_prev_scl_prev_pxl: */
+                    (int32_t)c_previous_scanline_previous_pixel);
     } else {
 	#ifndef PNG_SILENCE
 	printf(
@@ -501,7 +535,7 @@ DecodedPNG * decode_PNG(
     return_value = malloc(sizeof(DecodedPNG));
     return_value->good = false;
     
-    #ifndef IGNORE_ASSERTS
+    #ifndef PNG_IGNORE_ASSERTS
     assert(compressed_bytes_size > 0);
     #endif
     DataStream * entire_file = NULL;
@@ -509,7 +543,7 @@ DecodedPNG * decode_PNG(
     entire_file->data = compressed_bytes;
     entire_file->size_left = compressed_bytes_size;
     entire_file->bits_left = 0;
-    #ifndef IGNORE_ASSERTS
+    #ifndef PNG_IGNORE_ASSERTS
     assert(entire_file->bits_left == 0);
     #endif
     
@@ -518,7 +552,7 @@ DecodedPNG * decode_PNG(
             /* type: */ PNGSignature,
             /* from: */ entire_file);
     
-    #ifndef IGNORE_ASSERTS
+    #ifndef PNG_IGNORE_ASSERTS
     assert(entire_file->bits_left == 0);
     #endif
     
@@ -541,7 +575,7 @@ DecodedPNG * decode_PNG(
         return return_value;
     }
    
-    #ifndef IGNORE_ASSERTS
+    #ifndef PNG_IGNORE_ASSERTS
     assert(entire_file->bits_left == 0);
     #endif
     free(png_signature);
@@ -664,13 +698,13 @@ DecodedPNG * decode_PNG(
             4))
         {
             found_IHDR = true;
-            #ifndef IGNORE_ASSERTS
+            #ifndef PNG_IGNORE_ASSERTS
 	    assert(entire_file->bits_left == 0);
             #endif
             IHDRBody * ihdr_body = consume_struct(
                 /* type: */ IHDRBody,
                 /* entire_file: */ entire_file);
-            #ifndef IGNORE_ASSERTS
+            #ifndef PNG_IGNORE_ASSERTS
 	    assert(entire_file->bits_left < 8);
             #endif
             flip_endian(&ihdr_body->width);
@@ -753,7 +787,7 @@ DecodedPNG * decode_PNG(
                 return return_value;
             }
 	   
-            #ifndef IGNORE_ASSERTS
+            #ifndef PNG_IGNORE_ASSERTS
 	    assert(decoded_stream == NULL);
             #endif
 	    
@@ -1035,7 +1069,8 @@ DecodedPNG * decode_PNG(
     c = the byte in the pixel immediately
         before the pixel containing b 
     */
-    uint8_t * a_previous_pixel = return_value->rgba_values - 4;
+    uint8_t * a_previous_pixel =
+        return_value->rgba_values - 4;
     uint8_t * b_previous_scanline =
         return_value->rgba_values - (return_value->width * 4);
     uint8_t * c_previous_scanline_previous_pixel =
@@ -1056,6 +1091,10 @@ DecodedPNG * decode_PNG(
                         filter_type,
 		    /* original_value: */
                         *decoded_stream,
+                    /* a_previous_pixel: */
+                        a_previous_pixel
+                            >= return_value->rgba_values ?
+                        *a_previous_pixel : 0,
 		    /* b_previous_scanline: */
                         b_previous_scanline
                             >= return_value->rgba_values ?
@@ -1063,11 +1102,7 @@ DecodedPNG * decode_PNG(
 		    /* c_previous_scanline_previous_pixel: */
                         c_previous_scanline_previous_pixel
                             >= return_value->rgba_values ?
-                        *c_previous_scanline_previous_pixel : 0,
-		    /* a_previous_pixel: */
-                        a_previous_pixel
-                            >= return_value->rgba_values ?
-                        *a_previous_pixel : 0);
+                        *c_previous_scanline_previous_pixel : 0);
                 
                 a_previous_pixel++;
                 b_previous_scanline++;
@@ -1079,10 +1114,10 @@ DecodedPNG * decode_PNG(
         }
     }
     
-    #ifndef IGNORE_ASSERTS
+    #ifndef PNG_IGNORE_ASSERTS
     assert(
-        return_value->rgba_values_size * 4
-            == return_value->pixel_count);
+        return_value->rgba_values_size
+            == return_value->pixel_count * 4);
     #endif
     
     return_value->good = true;
@@ -1093,5 +1128,5 @@ DecodedPNG * decode_PNG(
 
 #undef true
 #undef false
-#undef IGNORE_ASSERTS
+#undef PNG_IGNORE_ASSERTS
 

@@ -2,6 +2,9 @@
 #include "stdio.h"
 #include "assert.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 // #define HELLOPNG_SILENCE
 
 int main(int argc, const char * argv[]) 
@@ -54,54 +57,45 @@ int main(int argc, const char * argv[])
         return 1;
     }
     
-    for (int i = 0; i < 1; i++) {
-        
-        uint8_t * buffer_copy = start_of_buffer;
-        #ifndef HELLOPNG_SILENCE
-        printf("starting decode_PNG (run %u)...\n", i+1);
-        #endif
-        
-        DecodedPNG * decoded_png =
-            decode_PNG(
-                /* compressed_bytes: */ buffer_copy,
-                /* compressed_bytes_size: */ bytes_read);
-       
-        #ifndef HELLOPNG_SILENCE 
-        printf(
-            "finished decode_PNG, result was: %s\n",
-            decoded_png->good ? "SUCCESS" : "FAILURE");
-        printf(
-            "rgba values in image: %u\n",
-            decoded_png->rgba_values_size);
-        printf(
-            "pixels in image (info from image header): %u\n",
-            decoded_png->pixel_count);
-        printf(
-            "image width: %u\n",
-            decoded_png->width);
-        printf(
-            "image height: %u\n",
-            decoded_png->height);
-        #endif
-       
-        for (
-            int i = 0;
-            i < decoded_png->rgba_values_size;
-            i += 4)
-        {
-            if (i % 32 == 0) { printf("\n\n"); }
-            printf(
-                "[%u,%u,%u,%u],",
-                decoded_png->rgba_values[i],
-                decoded_png->rgba_values[i + 1],
-                decoded_png->rgba_values[i + 2],
-                decoded_png->rgba_values[i + 3]);
-        }
-	
-        free(decoded_png->rgba_values);
-        free(decoded_png);
-    }
+    uint8_t * buffer_copy = start_of_buffer;
     
+    DecodedPNG * decoded_png =
+        decode_PNG(
+            /* compressed_bytes: */ buffer_copy,
+            /* compressed_bytes_size: */ bytes_read);
+   
+    #ifndef HELLOPNG_SILENCE 
+    printf(
+        "finished decode_PNG, result was: %s\n",
+        decoded_png->good ? "SUCCESS" : "FAILURE");
+    printf(
+        "rgba values in image: %u\n",
+        decoded_png->rgba_values_size);
+    printf(
+        "pixels in image (info from image header): %u\n",
+        decoded_png->pixel_count);
+    printf(
+        "image width: %u\n",
+        decoded_png->width);
+    printf(
+        "image height: %u\n",
+        decoded_png->height);
+    #endif
+   
+    // let's write our image to disk with an existing, working
+    // library to see if it's correct
+    int stb_success = stbi_write_bmp(
+        /* filename        : */ "output.bmp",
+        /* width           : */ decoded_png->width,
+        /* height          : */ decoded_png->height,
+        /* comp            : */ 4,
+        /* data            : */ (void *)decoded_png->rgba_values);
+    printf(
+        "stbi_write_bmp was %s\n",
+        stb_success ? "successful" : "failed");
+    
+    free(decoded_png->rgba_values);
+    free(decoded_png);
     free(buffer);
     
     return 0;
