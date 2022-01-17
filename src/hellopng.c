@@ -1,6 +1,10 @@
-#include "png.h"
+/*
+This file is meant as an example of how to use the "png.h"
+header to read pixels from a .png file.
+*/
+
+#include "decode_png.h"
 #include "stdio.h"
-#include "assert.h"
 
 // #define HELLOPNG_SILENCE
 
@@ -25,6 +29,7 @@ int main(int argc, const char * argv[])
     FILE * imgfile = fopen(
         argv[1],
         "rb");
+    
     fseek(imgfile, 0, SEEK_END);
     size_t fsize = ftell(imgfile);
     fseek(imgfile, 0, SEEK_SET);
@@ -56,11 +61,11 @@ int main(int argc, const char * argv[])
     
     uint8_t * buffer_copy = start_of_buffer;
     
-    DecodedPNG * decoded_png =
+    DecodedImage * decoded_png =
         decode_PNG(
             /* compressed_bytes: */ buffer_copy,
             /* compressed_bytes_size: */ bytes_read);
-   
+    
     #ifndef HELLOPNG_SILENCE 
     printf(
         "finished decode_PNG, result was: %s\n",
@@ -78,6 +83,10 @@ int main(int argc, const char * argv[])
         "image height: %u\n",
         decoded_png->height);
     #endif
+    
+    DecodedImage * resized_img = resize_image_to_width(
+        /* original  : */ decoded_png,
+        /* new_width : */ 8);
     
     free(decoded_png->rgba_values);
     free(decoded_png);

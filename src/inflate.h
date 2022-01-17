@@ -1,3 +1,14 @@
+/*
+This file allows you to "inflate" (decompress) a buffer of bytes
+that was compressed using the DEFLATE or 'zlib' algorithm.
+DEFLATE is widely used since the 90's, so you could decompress
+the data chunk inside a gzip (.gz) file, an IDAT (image data)
+chunk inside a .png image, etc.
+*/
+
+#ifndef INFLATE_H
+#define INFLATE_H
+
 #include "inttypes.h"
 #include "stdlib.h"
 
@@ -1648,4 +1659,6 @@ void inflate(
 
 #undef true
 #undef false
+
+#endif
 
