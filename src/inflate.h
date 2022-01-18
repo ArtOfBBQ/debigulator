@@ -814,25 +814,25 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 // Given some data that was compressed using the DEFLATE
 // or 'zlib' algorithm, you can 'INFLATE' it back 
 // to the original
-static void inflate(
+// returns 1 when failed, 0 when succesful
+static uint32_t inflate(
     uint8_t * recipient,
     uint32_t recipient_size,
     DataStream * data_stream,
     unsigned int compressed_size_bytes) 
 {
     if (recipient == NULL
-        || recipient_size >= compressed_size_bytes
-        || data_stream != NULL
-        || data_stream->data != NULL
-        || data_stream->size_left > 0
-        || compressed_size_bytes > 0)
+        || recipient_size < compressed_size_bytes
+        || data_stream == NULL
+        || data_stream->data == NULL
+        || data_stream->size_left < 1
+        || compressed_size_bytes < 1)
     {
-
         #ifndef INFLATE_SILENCE
         printf(
-            "inflate() error: was passed nonsense datastream\n");
+            "inflate() ERROR: was passed nonsense datastream\n");
         #endif
-        return;
+        return 1;
     }
     
     #ifndef INFLATE_SILENCE
@@ -929,7 +929,7 @@ static void inflate(
                 (uint16_t)consume_bits(data_stream, 16);
             if ((uint16_t)LEN != (uint16_t)~NLEN) {
                 // TODO: leave error message
-                return;
+                return 1;
             }
             
             for (int _ = 0; _ < LEN; _++) {
@@ -1624,6 +1624,8 @@ static void inflate(
     #ifndef INFLATE_SILENCE 
     printf("\t\tend of DEFLATE\n");
     #endif
+
+    return 0;
 }
 
 #undef true

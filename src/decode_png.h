@@ -26,8 +26,8 @@ All other code is implementation detail.
 #include "decodedimage.h"
 
 #define PNG_SILENCE
-#define IGNORE_CRC_CHECKS
-#define PNG_IGNORE_ASSERTS
+// #define IGNORE_CRC_CHECKS
+// #define DECODE_PNG_IGNORE_ASSERTS
 
 // true/false/ignoreasserts are undef'd at EOF
 #define true 1
@@ -37,7 +37,7 @@ All other code is implementation detail.
 #include "stdio.h"
 #endif
 
-#ifndef PNG_IGNORE_ASSERTS
+#ifndef DECODE_PNG_IGNORE_ASSERTS
 #include "assert.h"
 #endif
 
@@ -53,7 +53,7 @@ Table of CRCs of all 8-bit messages.
 The table itself is not found in the spec, but the spec
 has a snippet of C code that generates it
 */
-unsigned long crc_table[256] = {
+static unsigned long crc_table[256] = {
     0,
     1996959894,
     3993919788,
@@ -318,14 +318,14 @@ should be initialized to all 1's, and the transmitted value
 is the 1's complement of the final running CRC (see the
 crc() routine below).
 */
-unsigned long update_crc(
+static unsigned long update_crc(
     unsigned long crc,
     unsigned char *buf,
-    int len)
+    uint32_t len)
 {
     unsigned long c = crc;
-    int n;
-
+    uint32_t n;
+    
     for (n = 0; n < len; n++) {
         c = crc_table[(c ^ buf[n]) & 0xff] ^ (c >> 8);
     }
@@ -499,7 +499,7 @@ static uint8_t undo_PNG_filter(
     uint8_t a_previous_pixel,
     uint8_t b_previous_scanline,
     uint8_t c_previous_scanline_previous_pixel)
-{
+{ 
     if (filter_type == 0) {
 	return original_value;
     } else if (filter_type == 1) {
@@ -543,7 +543,7 @@ static DecodedImage * decode_PNG(
     return_value = malloc(sizeof(DecodedImage));
     return_value->good = false;
     
-    #ifndef PNG_IGNORE_ASSERTS
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(compressed_bytes_size > 0);
     #endif
     DataStream * entire_file = NULL;
@@ -551,7 +551,7 @@ static DecodedImage * decode_PNG(
     entire_file->data = compressed_bytes;
     entire_file->size_left = compressed_bytes_size;
     entire_file->bits_left = 0;
-    #ifndef PNG_IGNORE_ASSERTS
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(entire_file->bits_left == 0);
     #endif
     
@@ -560,7 +560,7 @@ static DecodedImage * decode_PNG(
             /* type: */ PNGSignature,
             /* from: */ entire_file);
     
-    #ifndef PNG_IGNORE_ASSERTS
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(entire_file->bits_left == 0);
     #endif
     
@@ -583,7 +583,7 @@ static DecodedImage * decode_PNG(
         return return_value;
     }
    
-    #ifndef PNG_IGNORE_ASSERTS
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(entire_file->bits_left == 0);
     #endif
     free(png_signature);
@@ -604,7 +604,7 @@ static DecodedImage * decode_PNG(
     {
         #ifndef PNG_SILENCE
         printf(
-            "%lu bytes left in file, read another PNG chunk..\n",
+            "%u bytes left in file, read another PNG chunk..\n",
             entire_file->size_left);
         #endif
         
@@ -637,13 +637,13 @@ static DecodedImage * decode_PNG(
             
             #ifndef PNG_SILENCE
             printf(
-                "created concatenated datastream of %lu bytes\n",
+                "created concatenated datastream of %u bytes\n",
                 compressed_data_stream->size_left);
             printf(
                 "won't DEFLATE last 4 bytes because they're an ADLER-32 checksum...\n");
             #endif
             
-            inflate(
+            uint32_t inflate_result = inflate(
                 /* recipient: */
                     decoded_stream,
                 /* recipient_size: */
@@ -652,6 +652,11 @@ static DecodedImage * decode_PNG(
                     compressed_data_stream,
                 /* compr_size_bytes: */
                     compressed_data_stream_size - 4);
+
+            if (inflate_result != 0) {
+                return_value->good = false;
+                return return_value;
+            }
 	    
             free(compressed_data_begin);
             free(compressed_data_stream);
@@ -681,7 +686,7 @@ static DecodedImage * decode_PNG(
             return_value->good = false;
 	    #ifndef PNG_SILENCE 
 	    printf(
-		"failing to decode PNG, [%s] chunk of length %u is larger than remaining file size of %lu\n",
+		"failing to decode PNG, [%s] chunk of length %u is larger than remaining file size of %u\n",
 		chunk_header->type,
 		chunk_header->length,
 		entire_file->size_left);
@@ -710,13 +715,13 @@ static DecodedImage * decode_PNG(
             4))
         {
             found_IHDR = true;
-            #ifndef PNG_IGNORE_ASSERTS
+            #ifndef DECODE_PNG_IGNORE_ASSERTS
 	    assert(entire_file->bits_left == 0);
             #endif
             IHDRBody * ihdr_body = consume_struct(
                 /* type: */ IHDRBody,
                 /* entire_file: */ entire_file);
-            #ifndef PNG_IGNORE_ASSERTS
+            #ifndef DECODE_PNG_IGNORE_ASSERTS
 	    assert(entire_file->bits_left < 8);
             #endif
             flip_endian(&ihdr_body->width);
@@ -791,7 +796,7 @@ static DecodedImage * decode_PNG(
             {
 		#ifndef PNG_SILENCE 
 		printf(
-		    "failing to decode PNG - file size left is %lu bytes, bits in bit buffer: %u\n",
+		    "failing to decode PNG - file size left is %u bytes, bits in bit buffer: %u\n",
 		    entire_file->size_left,
 		    entire_file->bits_left);
 		#endif
@@ -799,7 +804,7 @@ static DecodedImage * decode_PNG(
                 return return_value;
             }
 	   
-            #ifndef PNG_IGNORE_ASSERTS
+            #ifndef DECODE_PNG_IGNORE_ASSERTS
 	    assert(decoded_stream == NULL);
             #endif
 	    
@@ -1012,7 +1017,7 @@ static DecodedImage * decode_PNG(
 	{
 	    #ifndef PNG_SILENCE
 	    printf(
-		"failed to decode PNG - unexpected remaining file size of %lu and %u bits in buffer\n",
+		"failed to decode PNG - unexpected remaining file size of %u and %u bits in buffer\n",
 		entire_file->size_left,
 		entire_file->bits_left);
 	    #endif
@@ -1070,7 +1075,6 @@ static DecodedImage * decode_PNG(
     decoded_stream = decoded_stream_start;
     uint8_t * rgba_at = return_value->rgba_values;
     
-    
     /*
     The spec tells us to track these values:
     
@@ -1094,6 +1098,10 @@ static DecodedImage * decode_PNG(
     for (uint32_t h = 0; h < return_value->height; h++) {
        	
         uint8_t filter_type = *decoded_stream++; 
+        #ifndef DECODE_PNG_IGNORE_ASSERTS
+        assert(filter_type >= 0);
+        assert(filter_type <= 4);
+        #endif
         
         for (uint32_t w = 0; w < return_value->width; w++) {
 	    
@@ -1131,7 +1139,7 @@ static DecodedImage * decode_PNG(
         }
     }
     
-    #ifndef PNG_IGNORE_ASSERTS
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(
         return_value->rgba_values_size
             == return_value->pixel_count * 4);
@@ -1145,6 +1153,6 @@ static DecodedImage * decode_PNG(
 
 #undef true
 #undef false
-#undef PNG_IGNORE_ASSERTS
+#undef DECODE_PNG_IGNORE_ASSERTS
 
 #endif

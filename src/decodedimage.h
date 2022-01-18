@@ -48,6 +48,10 @@ static DecodedImage * downsize_image_to_scalar(
         (uint32_t)((float)original->width * x_scalar);
     return_value->height =
         (uint32_t)((float)original->height * y_scalar);
+    #ifndef DECODED_IMAGE_IGNORE_ASSERTS
+    assert(return_value->width > 0);
+    assert(return_value->height > 0);
+    #endif
     return_value->pixel_count =
         return_value->width * return_value->height;
     return_value->rgba_values_size =
@@ -68,16 +72,14 @@ static DecodedImage * downsize_image_to_scalar(
                 (uint32_t)((float)w * pixels_per_x);
             uint32_t last_x =
                 (uint32_t)((float)(w + 1) * pixels_per_x);
-            #ifndef DECODED_IMAGE_IGNORE_ASSERTS
-            assert(first_x >= 0);
-            assert(last_x <= original->width);
-            #endif
-            
             uint32_t first_y =
                 (uint32_t)((float)h * pixels_per_y);
             uint32_t last_y =
                 (uint32_t)((float)(h + 1) * pixels_per_y);
+            uint32_t pixels_per_pixel = 1;
             #ifndef DECODED_IMAGE_IGNORE_ASSERTS
+            assert(first_x >= 0);
+            assert(last_x <= original->width);
             assert(first_y >= 0);
             assert(last_y <= original->height);
             #endif
@@ -86,20 +88,23 @@ static DecodedImage * downsize_image_to_scalar(
             uint32_t sum_val_g = 0;
             uint32_t sum_val_b = 0;
             uint32_t sum_val_a = 0;
-            
+           
             for (
                 uint32_t orig_x = first_x;
-                orig_x < last_x;
+                orig_x <= last_x;
                 orig_x++) 
             {
                 for (
                     uint32_t orig_y = first_y;
-                    orig_y < last_y;
+                    orig_y <= last_y;
                     orig_y++) 
                 {
                     uint32_t orig_pixel =
                         (orig_y * original->width)
                         + orig_x;
+                    if (orig_pixel >= original->pixel_count) {
+                        orig_pixel = original->pixel_count - 1;
+                    }
                     #ifndef DECODED_IMAGE_IGNORE_ASSERTS
                     assert(orig_pixel >= 0);
                     assert(orig_pixel < original->pixel_count);
@@ -111,6 +116,7 @@ static DecodedImage * downsize_image_to_scalar(
                     assert(
                         (idx + 3) < original->rgba_values_size);
                     #endif
+                    
                     sum_val_r += original->rgba_values[idx];
                     sum_val_g += original->rgba_values[idx + 1];
                     sum_val_b += original->rgba_values[idx + 2];
@@ -130,17 +136,15 @@ static DecodedImage * downsize_image_to_scalar(
             assert(i >= 0);
             assert((i + 3) < return_value->rgba_values_size);
             #endif
-            
-            uint32_t divisor =
-                (last_x - first_x + 1) * (last_y - first_y + 1);
+           
             return_value->rgba_values[i] =
-                (uint8_t)(sum_val_r / divisor);
-            return_value->rgba_values[i] =
-                (uint8_t)(sum_val_g / divisor);
-            return_value->rgba_values[i] =
-                (uint8_t)(sum_val_b / divisor);
-            return_value->rgba_values[i] =
-                (uint8_t)(sum_val_a / divisor);
+                (uint8_t)(sum_val_r / pixels_per_pixel);
+            return_value->rgba_values[i+1] =
+                (uint8_t)(sum_val_g / pixels_per_pixel);
+            return_value->rgba_values[i+2] =
+                (uint8_t)(sum_val_b / pixels_per_pixel);
+            return_value->rgba_values[i+3] =
+                (uint8_t)(sum_val_a / pixels_per_pixel);
         }
     }
     

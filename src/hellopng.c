@@ -65,7 +65,7 @@ int main(int argc, const char * argv[])
         decode_PNG(
             /* compressed_bytes: */ buffer_copy,
             /* compressed_bytes_size: */ (uint32_t)bytes_read);
-    
+
     #ifndef HELLOPNG_SILENCE 
     printf(
         "finished decode_PNG, result was: %s\n",
@@ -82,25 +82,41 @@ int main(int argc, const char * argv[])
     printf(
         "image height: %u\n",
         decoded_png->height);
+
+    uint32_t avg_r = 0;
+    uint32_t avg_g = 0;
+    uint32_t avg_b = 0;
+    uint32_t avg_alpha = 0;
+    for (
+        uint32_t i = 0;
+        (i+3) < decoded_png->rgba_values_size;
+        i += 4)
+    {
+        avg_r += decoded_png->rgba_values[i];
+        avg_g += decoded_png->rgba_values[i+1];
+        avg_b += decoded_png->rgba_values[i+2];
+        avg_alpha += decoded_png->rgba_values[i+3];
+    }
+    printf(
+        "average pixel: [%u,%u,%u,%u]\n",
+        avg_r / decoded_png->pixel_count,
+        avg_g / decoded_png->pixel_count,
+        avg_b / decoded_png->pixel_count,
+        avg_alpha / decoded_png->pixel_count);
     #endif
     
     DecodedImage * resized_img =
         resize_image_to_width(
             /* original  : */ decoded_png,
-            /* new_width : */ 8);
-
+            /* new_width : */ 40);
+    
     assert(
         resized_img->pixel_count
             == resized_img->rgba_values_size / 4);
     
     #ifndef HELLOPNG_SILENCE
-    printf(
-        "resized w: %u, h: %u, pixels: %u, rgba values: %u\n",
-        resized_img->width,
-        resized_img->height,
-        resized_img->pixel_count,
-        resized_img->rgba_values_size);
-    
+    // let's print the PNG to the screen in crappy
+    // unicode characters
     uint8_t * printfeed = resized_img->rgba_values;
     for (uint32_t h = 0; h < resized_img->height; h++) {
         printf("\n");
@@ -112,11 +128,17 @@ int main(int argc, const char * argv[])
             // apply alpha as brigthness
             pixel_strength =
                 (pixel_strength * printfeed[3]) / 255;
-
-            if (pixel_strength < 20) {
-                printf("%u", pixel_strength); 
+            
+            if (pixel_strength < 30) {
+                printf("  "); 
+            } else if (pixel_strength < 70) {
+                printf("░░");
+            } else if (pixel_strength < 110) {
+                printf("▒▒");
+            } else if (pixel_strength < 150) {
+                printf("▓▓");
             } else {
-                printf("#");
+                printf("██");
             }
             
             printfeed += 4;
@@ -124,11 +146,11 @@ int main(int argc, const char * argv[])
     }
     #endif
     
-    free(resized_img->rgba_values);
-    free(resized_img);
+    // free(resized_img->rgba_values);
+    // free(resized_img);
     free(decoded_png->rgba_values);
     free(decoded_png);
-    free(buffer);
+    // free(buffer);
     
     return 0;
 }
