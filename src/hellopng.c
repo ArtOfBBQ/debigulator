@@ -31,7 +31,7 @@ int main(int argc, const char * argv[])
         "rb");
     
     fseek(imgfile, 0, SEEK_END);
-    size_t fsize = ftell(imgfile);
+    unsigned long fsize = (unsigned long)ftell(imgfile);
     fseek(imgfile, 0, SEEK_SET);
     
     uint8_t * buffer = malloc(fsize);
@@ -64,7 +64,7 @@ int main(int argc, const char * argv[])
     DecodedImage * decoded_png =
         decode_PNG(
             /* compressed_bytes: */ buffer_copy,
-            /* compressed_bytes_size: */ bytes_read);
+            /* compressed_bytes_size: */ (uint32_t)bytes_read);
     
     #ifndef HELLOPNG_SILENCE 
     printf(
@@ -84,10 +84,48 @@ int main(int argc, const char * argv[])
         decoded_png->height);
     #endif
     
-    DecodedImage * resized_img = resize_image_to_width(
-        /* original  : */ decoded_png,
-        /* new_width : */ 8);
+    DecodedImage * resized_img =
+        resize_image_to_width(
+            /* original  : */ decoded_png,
+            /* new_width : */ 8);
+
+    assert(
+        resized_img->pixel_count
+            == resized_img->rgba_values_size / 4);
     
+    #ifndef HELLOPNG_SILENCE
+    printf(
+        "resized w: %u, h: %u, pixels: %u, rgba values: %u\n",
+        resized_img->width,
+        resized_img->height,
+        resized_img->pixel_count,
+        resized_img->rgba_values_size);
+    
+    uint8_t * printfeed = resized_img->rgba_values;
+    for (uint32_t h = 0; h < resized_img->height; h++) {
+        printf("\n");
+        for (uint32_t w = 0; w < resized_img->width; w++) {
+            // average of rgb
+            uint32_t pixel_strength =
+                (printfeed[0] + printfeed[1] + printfeed[2])
+                    / 3;
+            // apply alpha as brigthness
+            pixel_strength =
+                (pixel_strength * printfeed[3]) / 255;
+
+            if (pixel_strength < 20) {
+                printf("%u", pixel_strength); 
+            } else {
+                printf("#");
+            }
+            
+            printfeed += 4;
+        }
+    }
+    #endif
+    
+    free(resized_img->rgba_values);
+    free(resized_img);
     free(decoded_png->rgba_values);
     free(decoded_png);
     free(buffer);

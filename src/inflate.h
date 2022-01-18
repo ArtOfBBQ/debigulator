@@ -30,12 +30,12 @@ typedef int32_t bool32_t;
 #endif
 
 typedef struct DataStream {
-    void * data;
+    uint8_t * data;
     
-    uint8_t bits_left;
+    uint32_t bits_left;
     uint8_t bit_buffer;
     
-    size_t size_left;
+    uint32_t size_left;
 } DataStream;
 
 /*
@@ -64,16 +64,16 @@ typedef struct HashedHuffman {
     unsigned int max_code_length;
 } HashedHuffman;
 
-uint32_t mask_rightmost_bits(
+static uint32_t mask_rightmost_bits(
     const uint32_t input,
-    const int bits_to_mask)
+    const uint32_t bits_to_mask)
 {
     return input & ((1 << bits_to_mask) - 1);
 }
 
-uint32_t mask_leftmost_bits(
+static uint32_t mask_leftmost_bits(
     const uint32_t input,
-    const int bits_to_mask)
+    const uint32_t bits_to_mask)
 {
     uint32_t return_value = input;
     
@@ -97,7 +97,7 @@ to do a lot of bit reversing, e.g.
 If we have the number 10 (0000 1010)
 then reverse_bit_order(10, 4) = 3 (0000 0101)
 */
-uint32_t reverse_bit_order(
+static uint32_t reverse_bit_order(
     const uint32_t original,
     const unsigned int bit_count)
 {
@@ -171,17 +171,17 @@ uint32_t reverse_bit_order(
 /*
 Look at the top bits of our data stream, but keep them inplace
 */
-uint32_t peek_bits(
+static uint32_t peek_bits(
     DataStream * from,
     const uint32_t amount)
 {
     uint32_t return_value = 0;
     uint32_t bits_to_peek = amount;
     
-    unsigned int bits_in_return = 0;
+    uint32_t bits_in_return = 0;
     
     if (from->bits_left > 0) {
-        int num_to_read_from_buf =
+        uint32_t num_to_read_from_buf =
             bits_to_peek > from->bits_left ?
                 from->bits_left
                 : bits_to_peek;
@@ -226,12 +226,12 @@ uint32_t peek_bits(
 }
 
 // TODO: handle error paths instead of just crashing
-void crash_program() {
+static void crash_program() {
     #ifndef INFLATE_SILENCE
     printf("intentionally crashing program...\n");
     #endif
     uint8_t * bad_memory_access = NULL;
-    uint8_t impossible = *bad_memory_access;
+    *bad_memory_access = 0;
     return;
 }
 
@@ -239,7 +239,7 @@ void crash_program() {
 For our hashmaps, we need a hash function to index them
 given the key & code length we're looking for
 */
-uint32_t compute_hash(
+static uint32_t compute_hash(
     uint32_t key,
     uint32_t code_length)
 {
@@ -249,14 +249,14 @@ uint32_t compute_hash(
 /*
 Throw away the top x bits from our datastream
 */
-void discard_bits(
+static void discard_bits(
     DataStream * from,
     const unsigned int amount)
 {
     unsigned int discards_left = amount;
     
     if (from->bits_left > 0) {
-        int bits_to_discard =
+        uint32_t bits_to_discard =
             from->bits_left > discards_left ?
                 discards_left
                 : from->bits_left;
@@ -282,7 +282,7 @@ void discard_bits(
 }
 
 // TODO: this seems silly, let's get rid of this
-void copy_memory(
+static void copy_memory(
     void * from,
     void * to,
     size_t size)
@@ -303,9 +303,9 @@ Grab data from our data stream and immediately cast it
 to one of our structs or an 8-bit int
 */
 #define consume_struct(type, from) (type *)consume_chunk(from, sizeof(type))
-uint8_t * consume_chunk(
+static uint8_t * consume_chunk(
     DataStream * from,
-    size_t size_to_consume)
+    const size_t size_to_consume)
 {
     #ifndef IGNORE_ASSERTS
     assert(from->bits_left == 0);
@@ -325,7 +325,7 @@ uint8_t * consume_chunk(
     return return_value;
 }
 
-uint32_t consume_bits(
+static uint32_t consume_bits(
     DataStream * from,
     const uint32_t amount)
 {
@@ -346,49 +346,11 @@ uint32_t consume_bits(
     return return_val;
 }
 
-char * consume_till_terminate(
-    DataStream * from,
-    uint32_t max_size,
-    char terminator)
-{
-    #ifndef IGNORE_ASSERTS
-    assert(max_size <= from->size_left);
-    #endif
-    
-    uint32_t string_size = 0;
-    char * seeker = (char *)from->data;
-    while (
-        *seeker != terminator 
-        && string_size < max_size)
-    {
-        string_size++;
-        seeker++;
-    }
-    
-    #ifndef IGNORE_ASSERTS
-    assert(string_size > 0);
-    #endif
-    
-    char * return_value = malloc(
-        string_size * sizeof(char));
-    
-    for (int i = 0; i <= string_size; i++) {
-        #ifndef IGNORE_ASSERTS
-        assert(from->size_left > 0);
-        #endif
-        return_value[i] = ((char *)from->data)[0];
-        from->data++;
-        from->size_left--;
-    }
-    
-    return return_value;
-}
-
 /*
 Our hashmaps are full of pointers to heap memory,
 this frees everything in 1 go
 */
-void free_hashed_huff(HashedHuffman * dict)
+static void free_hashed_huff(HashedHuffman * dict)
 {
     if (dict == NULL) { return; }
     
@@ -462,7 +424,7 @@ void free_hashed_huff(HashedHuffman * dict)
 Given a datastream and a hashmap of huffman codes,
 read & decompress/decode the next value
 */
-uint32_t hashed_huffman_decode(
+static uint32_t hashed_huffman_decode(
     HashedHuffman * dict,
     DataStream * datastream)
 {
@@ -471,7 +433,7 @@ uint32_t hashed_huffman_decode(
     assert(datastream != NULL);
     #endif
     
-    unsigned int bitcount = dict->min_code_length - 1;
+    uint32_t bitcount = dict->min_code_length - 1;
     uint32_t upcoming_bits =
         peek_bits(
             /* from: */ datastream,
@@ -539,7 +501,7 @@ uint32_t hashed_huffman_decode(
 /*
 Convert an array of huffman codes to a hashmap of huffman codes
 */
-HashedHuffman * huffman_to_hashmap(
+static HashedHuffman * huffman_to_hashmap(
     HuffmanEntry * orig_huff,
     uint32_t orig_huff_size)
 {
@@ -654,7 +616,7 @@ HashedHuffman * huffman_to_hashmap(
 Given an array of code lengths, unpack it to
 an array of huffman codes
 */
-HuffmanEntry * unpack_huffman(
+static HuffmanEntry * unpack_huffman(
     uint32_t * array,
     const uint32_t array_size)
 {
@@ -662,7 +624,7 @@ HuffmanEntry * unpack_huffman(
         sizeof(HuffmanEntry) * array_size);
     
     // initialize dict
-    for (int i = 0; i < array_size; i++) {
+    for (uint32_t i = 0; i < array_size; i++) {
         unpacked_dict[i].value = i;
         unpacked_dict[i].code_length = array[i];
         unpacked_dict[i].key = 1234543;
@@ -676,11 +638,11 @@ HuffmanEntry * unpack_huffman(
     unsigned int unique_code_lengths = 0;
     unsigned int min_code_length = 123454321;
     unsigned int max_code_length = 0;
-    for (int i = 0; i < array_size; i++) {
+    for (uint32_t i = 0; i < array_size; i++) {
         bl_count[i] = 0;
     }
     
-    for (int i = 0; i < array_size; i++) {
+    for (uint32_t i = 0; i < array_size; i++) {
         if (bl_count[array[i]] == 0) {
             unique_code_lengths += 1;
         }
@@ -716,7 +678,7 @@ HuffmanEntry * unpack_huffman(
     #endif
     
     for (
-        int bits = 1;
+        uint32_t bits = 1;
         bits <= max_code_length; 
         bits++)
     {
@@ -732,7 +694,7 @@ HuffmanEntry * unpack_huffman(
         // are wrong (too many small code lengths)
         if (smallest_code[bits] >= (1 << bits)) {
             bool32_t actually_used = false;
-            for (int i = 0; i < array_size; i++) {
+            for (uint32_t i = 0; i < array_size; i++) {
                 if (unpacked_dict[i].code_length == bits) {
                     actually_used = true;
                 }
@@ -852,27 +814,33 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 // Given some data that was compressed using the DEFLATE
 // or 'zlib' algorithm, you can 'INFLATE' it back 
 // to the original
-void inflate(
+static void inflate(
     uint8_t * recipient,
     uint32_t recipient_size,
     DataStream * data_stream,
     unsigned int compressed_size_bytes) 
 {
-    #ifndef IGNORE_ASSERTS
-    assert(recipient != NULL);
-    assert(recipient_size >= compressed_size_bytes);
-    assert(data_stream != NULL);
-    assert(data_stream->data != NULL);
-    assert(data_stream->size_left > 0);
-    assert(compressed_size_bytes > 0);
-    #endif
+    if (recipient == NULL
+        || recipient_size >= compressed_size_bytes
+        || data_stream != NULL
+        || data_stream->data != NULL
+        || data_stream->size_left > 0
+        || compressed_size_bytes > 0)
+    {
+
+        #ifndef INFLATE_SILENCE
+        printf(
+            "inflate() error: was passed nonsense datastream\n");
+        #endif
+        return;
+    }
     
     #ifndef INFLATE_SILENCE
     printf(
         "\t\tstart INFLATE expecting %u bytes of compr. data\n",
         compressed_size_bytes);
     #endif
-    void * started_at = data_stream->data;
+    uint8_t * started_at = data_stream->data;
     uint8_t * recipient_at = recipient;
    
     #ifndef IGNORE_ASSERTS 
@@ -886,6 +854,7 @@ void inflate(
         #ifndef INFLATE_SILENCE
         printf("\t\treading new DEFLATE block...\n");
         #endif
+        
         /*
         Each block of compressed data begins with 3 header
         bits containing the following data:
@@ -908,7 +877,7 @@ void inflate(
         10 - compressed with dynamic Huffman codes
         11 - reserved (error) 
         */
-        uint8_t BFINAL = consume_bits(
+        uint32_t BFINAL = consume_bits(
             /* buffer: */ data_stream,
             /* size  : */ 1);
         #ifndef IGNORE_ASSERTS
@@ -922,7 +891,7 @@ void inflate(
         #endif
         if (BFINAL) { read_more_deflate_blocks = false; }
         
-        uint8_t BTYPE =  consume_bits(
+        uint32_t BTYPE = consume_bits(
             /* buffer: */ data_stream,
             /* size  : */ 2);
         
@@ -949,7 +918,7 @@ void inflate(
             }
             
             uint16_t LEN =
-                (int16_t)consume_bits(data_stream, 16);
+                (uint16_t)consume_bits(data_stream, 16);
             #ifndef INFLATE_SILENCE
             printf(
                 "\t\t\tuncompr. block has LEN: %u bytes\n",
@@ -958,11 +927,10 @@ void inflate(
             
             uint16_t NLEN =
                 (uint16_t)consume_bits(data_stream, 16);
-
-            #ifndef IGNORE_ASSERTS
-            // spec says must be 1's complement of LEN
-            assert((uint16_t)LEN == (uint16_t)~NLEN);
-            #endif
+            if ((uint16_t)LEN != (uint16_t)~NLEN) {
+                // TODO: leave error message
+                return;
+            }
             
             for (int _ = 0; _ < LEN; _++) {
                 *recipient_at = *(uint8_t *)data_stream->data;
@@ -1297,7 +1265,7 @@ void inflate(
                         #endif
                         
                         for (
-                            int i = 0;
+                            uint32_t i = 0;
                             i < repeats;
                             i++)
                         {
@@ -1324,7 +1292,7 @@ void inflate(
                         #endif
                         
                         for (
-                            int i = 0;
+                            uint32_t i = 0;
                             i < repeats;
                             i++)
                         {
@@ -1351,7 +1319,7 @@ void inflate(
                         #endif
                         
                         for (
-                            int i = 0;
+                            uint32_t i = 0;
                             i < repeats;
                             i++)
                         {
@@ -1392,7 +1360,7 @@ void inflate(
                     "\t\t\tunpacked lit/len dict\n");
                 #endif
                 
-                for (int i = 0; i < HLIT; i++) {
+                for (uint32_t i = 0; i < HLIT; i++) {
                     if (literal_length_huffman[i].used == true) {
                         #ifndef IGNORE_ASSERTS
                         assert(
@@ -1420,7 +1388,7 @@ void inflate(
                 printf("\t\t\tunpacked distance dictionary\n");
                 #endif
                 
-                for (int i = 0; i < HDIST; i++) {
+                for (uint32_t i = 0; i < HDIST; i++) {
                     if (distance_huffman[i].used == true) {
                         #ifndef IGNORE_ASSERTS
                         assert(distance_huffman[i].value == i);
@@ -1575,7 +1543,7 @@ void inflate(
                     #endif
                     uint8_t * back_dist_bytes =
                         recipient_at - total_dist;
-                    for (int _ = 0; _ < total_length; _++) {
+                    for (uint32_t _ = 0; _ < total_length; _++) {
                         *recipient_at = *back_dist_bytes;
                         recipient_at++;
                         #ifndef IGNORE_ASSERTS
@@ -1623,7 +1591,8 @@ void inflate(
             /* amount: */ data_stream->bits_left);
     }
     
-    int bytes_read = data_stream->data - started_at; 
+    uint32_t bytes_read =
+        (uint32_t)(data_stream->data - started_at);
     #ifndef IGNORE_ASSERTS
     assert(bytes_read >= 0);
     #endif
@@ -1639,7 +1608,7 @@ void inflate(
         assert(compressed_size_bytes > bytes_read);
         #endif
         
-        int skip = compressed_size_bytes - bytes_read;
+        uint32_t skip = compressed_size_bytes - bytes_read;
         #ifndef INFLATE_SILENCE
         printf("skipping ahead %u bytes...\n", skip);
         #endif
