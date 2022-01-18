@@ -5,6 +5,8 @@ decompress & read a .gz file's contents using
 */
 
 #include "decode_gz.h"
+#include "stdio.h"
+#include "assert.h"
 
 
 int main(int argc, const char * argv[])
@@ -43,14 +45,16 @@ int main(int argc, const char * argv[])
             gzipfile);
     printf("bytes read: %zu\n", bytes_read);
     fclose(gzipfile);
-    assert(bytes_read == fsize);
+    // assert(bytes_read == fsize);
     
-    char * decompressed_contents = decode_gz(
+    DecodedData * decompressed_contents = decode_gz(
         /* buffer : */ buffer,
         /* buffer_size: */ fsize);
+
+    free(buffer);
     
     printf("decompressed_contents contained:\n");
-    printf("%s\n", decompressed_contents);
+    printf("%s\n", decompressed_contents->data);
     
     return 0;
 }
