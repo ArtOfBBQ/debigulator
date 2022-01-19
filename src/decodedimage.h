@@ -6,7 +6,10 @@ to play with it.
 #ifndef DECODED_IMAGE_H
 #define DECODED_IMAGE_H
 
+#define bool32_t uint32_t
+
 #include "inttypes.h"
+#include "stdlib.h"
 
 #ifndef DECODED_IMAGE_SILENCE
 #include "stdio.h"
@@ -164,6 +167,8 @@ static DecodedImage * resize_image_to_width(
     
     return return_value;
 }
+
+#undef bool32_t
 
 #endif
 
