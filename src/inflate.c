@@ -292,7 +292,7 @@ uint8_t * consume_chunk(
     assert(from->size_left >= size_to_consume);
     #endif
     
-    uint8_t * return_value = malloc(size_to_consume);
+    uint8_t * return_value = (uint8_t *)malloc(size_to_consume);
     
     copy_memory(
         /* from: */   from->data,
@@ -488,8 +488,8 @@ static HashedHuffman * huffman_to_hashmap(
     unsigned int longest_conflict = 0;
     
     HashedHuffman * hashed_huffman =
-        malloc(sizeof(HashedHuffman));
-   
+        (HashedHuffman *)malloc(sizeof(HashedHuffman));
+    
     // initialize all pointers to NULL 
     for (unsigned int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++)
     {
@@ -537,7 +537,8 @@ static HashedHuffman * huffman_to_hashmap(
             hashed_huffman->entries[hash] == NULL)
         {
             hashed_huffman->entries[hash] =
-                malloc(sizeof(HashedHuffmanEntry));
+                (HashedHuffmanEntry *)
+                    malloc(sizeof(HashedHuffmanEntry));
             
             // first time using this hash
             hashed_huffman->entries[hash]->key = reversed_key;
@@ -567,7 +568,8 @@ static HashedHuffman * huffman_to_hashmap(
             #endif
             
             last_full_link->next_neighbor =
-                malloc(sizeof(HashedHuffmanEntry));
+                (HashedHuffmanEntry *)
+                    malloc(sizeof(HashedHuffmanEntry));
             last_full_link->next_neighbor->next_neighbor =
                 NULL;
             last_full_link->next_neighbor->key =
@@ -600,8 +602,9 @@ static HuffmanEntry * unpack_huffman(
     uint32_t * array,
     const uint32_t array_size)
 {
-    HuffmanEntry * unpacked_dict = malloc(
-        sizeof(HuffmanEntry) * array_size);
+    HuffmanEntry * unpacked_dict =
+        (HuffmanEntry *)malloc(
+            sizeof(HuffmanEntry) * array_size);
     
     // initialize dict
     for (uint32_t i = 0; i < array_size; i++) {
@@ -613,7 +616,7 @@ static HuffmanEntry * unpack_huffman(
     
     // 1) Count the number of codes for each code length.  Let
     // bl_count[N] be the number of codes of length N, N >= 1.
-    uint32_t * bl_count = malloc(
+    uint32_t * bl_count = (uint32_t *)malloc(
         array_size * sizeof(uint32_t));
     unsigned int unique_code_lengths = 0;
     unsigned int min_code_length = 123454321;
@@ -639,7 +642,7 @@ static HuffmanEntry * unpack_huffman(
     // 2) "Find the numerical value of the smallest code for each
     //    code length:"
     uint32_t * smallest_code =
-        malloc(array_size * sizeof(uint32_t));
+        (uint32_t *)malloc(array_size * sizeof(uint32_t));
     
     /*
         this code is yanked straight from the spec
@@ -1211,7 +1214,7 @@ uint32_t inflate(
                 uint32_t len_i = 0;
                 uint32_t two_dicts_size = HLIT + HDIST;
                 
-                uint32_t * litlendist_table = malloc(
+                uint32_t * litlendist_table = (uint32_t *)malloc(
                     sizeof(uint32_t) * two_dicts_size);
                 
                 while (len_i < two_dicts_size) {

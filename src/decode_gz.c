@@ -26,7 +26,7 @@ static char * consume_till_terminate(
     assert(string_size > 0);
     #endif
     
-    char * return_value = malloc(
+    char * return_value = (char *)malloc(
         string_size * sizeof(char));
     
     for (uint32_t i = 0; i <= string_size; i++) {
@@ -74,7 +74,8 @@ DecodedData * decode_gz(
     uint8_t * compressed_bytes,
     uint32_t compressed_bytes_size)
 {
-    DecodedData * return_value = malloc(sizeof(DecodedData));
+    DecodedData * return_value =
+        (DecodedData *)malloc(sizeof(DecodedData));
     
     if (compressed_bytes == NULL) {
         return_value->good = false;
@@ -82,7 +83,7 @@ DecodedData * decode_gz(
     }
     
     DataStream * data_stream =
-        malloc(sizeof(DataStream));
+        (DataStream *)malloc(sizeof(DataStream));
     
     data_stream->data = compressed_bytes;
     data_stream->size_left = compressed_bytes_size;
@@ -205,7 +206,7 @@ DecodedData * decode_gz(
     // TODO: figure out how much memory to assign in advance
     uint32_t decompressed_size = data_stream->size_left * 25;
     
-    uint8_t * recipient = malloc(decompressed_size);
+    uint8_t * recipient = (uint8_t *)malloc(decompressed_size);
     
     inflate(
         /* recipient: */ recipient,

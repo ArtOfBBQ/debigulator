@@ -518,14 +518,14 @@ DecodedImage * decode_PNG(
     uint32_t compressed_bytes_size)
 {
     DecodedImage * return_value = NULL;
-    return_value = malloc(sizeof(DecodedImage));
+    return_value = (DecodedImage *)malloc(sizeof(DecodedImage));
     return_value->good = false;
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(compressed_bytes_size > 0);
     #endif
     DataStream * entire_file = NULL;
-    entire_file = malloc(sizeof(DataStream));
+    entire_file = (DataStream *)malloc(sizeof(DataStream));
     entire_file->data = compressed_bytes;
     entire_file->size_left = compressed_bytes_size;
     entire_file->bits_left = 0;
@@ -607,7 +607,7 @@ DecodedImage * decode_PNG(
             #endif
             
             DataStream * compressed_data_stream =
-                malloc(sizeof(DataStream));
+                (DataStream *)malloc(sizeof(DataStream));
             compressed_data_stream->data = compressed_data_begin;
             compressed_data_stream->size_left =
                 compressed_data_stream_size;
@@ -786,14 +786,16 @@ DecodedImage * decode_PNG(
 	    assert(decoded_stream == NULL);
             #endif
 	    
-            decoded_stream = malloc(decompressed_size);
+            decoded_stream =
+                (uint8_t *)malloc(decompressed_size);
             // this copy (compressed_data) is necessary because
             // the data needed for DEFLATE is likely spread
             // across multiple chunks with useless header data
             // & checksums sprinkled in between
             // we'll concatenate all the data into compressed_data
             // first, then DEFLATE afterwards
-            compressed_data = malloc(decompressed_size);
+            compressed_data =
+                (uint8_t *)malloc(decompressed_size);
             compressed_data_begin = compressed_data;
             decoded_stream_start = decoded_stream;
 	    free(ihdr_body);
@@ -1047,7 +1049,8 @@ DecodedImage * decode_PNG(
         return_value->width
             * return_value->height;
     return_value->pixel_count = pixel_count;
-    return_value->rgba_values = malloc(pixel_count * 4);
+    return_value->rgba_values =
+        (uint8_t *)malloc(pixel_count * 4);
     return_value->rgba_values_size = 0;
     
     decoded_stream = decoded_stream_start;

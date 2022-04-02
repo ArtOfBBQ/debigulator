@@ -34,7 +34,7 @@ int main(int argc, const char * argv[])
     unsigned long fsize = (unsigned long)ftell(imgfile);
     fseek(imgfile, 0, SEEK_SET);
     
-    uint8_t * buffer = malloc(fsize);
+    uint8_t * buffer = (uint8_t *)malloc(fsize);
     uint8_t * start_of_buffer = buffer;
     
     size_t bytes_read = fread(

@@ -45,7 +45,8 @@ static DecodedImage * downsize_image_to_scalar(
         original->pixel_count == original->rgba_values_size / 4);
     #endif
     
-    DecodedImage * return_value = malloc(sizeof(DecodedImage));
+    DecodedImage * return_value =
+        (DecodedImage *)malloc(sizeof(DecodedImage));
     
     return_value->width =
         (uint32_t)((float)original->width * x_scalar);
@@ -60,7 +61,7 @@ static DecodedImage * downsize_image_to_scalar(
     return_value->rgba_values_size =
         return_value->pixel_count * 4;
     return_value->rgba_values =
-        malloc(sizeof(return_value->rgba_values_size));
+        (uint8_t *)malloc(sizeof(return_value->rgba_values_size));
     
     float pixels_per_x = original->width / return_value->width;
     float pixels_per_y = original->height / return_value->height;
