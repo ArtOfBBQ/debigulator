@@ -1,5 +1,5 @@
-APP_NAME="hellogz"
-INPUT_FILE="gimp_test" ## try gzipsample or gimp_test
+APP_NAME="hellopng"
+INPUT_FILE="backgrounddetailed1" ## try gzipsample or gimp_test
 INPUT_EXTENSION="png" ## try gimp_test, fs_angrymob or gzipsample.gz
 ADDITIONAL_SOURCES="src/decode_png.c src/inflate.c src/decode_gz.c"
 
@@ -15,7 +15,7 @@ echo "copying resources..."
 cp resources/$INPUT_FILE.$INPUT_EXTENSION build/$INPUT_FILE.$INPUT_EXTENSION
 
 echo "Compiling $APP_NAME..."
-clang -Weverything -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
+clang -g -Weverything -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
 # clang++ -std="c++17" -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
 # gcc -fsanitize=undefined -g -o3 $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
 

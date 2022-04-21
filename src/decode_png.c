@@ -1,6 +1,6 @@
 #include "decode_png.h"
 
-#define PNG_SILENCE
+// #define PNG_SILENCE
 // #define IGNORE_CRC_CHECKS
 // #define DECODE_PNG_IGNORE_ASSERTS
 // true/false/ignoreasserts are undef'd at EOF
@@ -567,6 +567,7 @@ DecodedImage * decode_PNG(
     free(png_signature);
     
     // these pointers are initted below
+    IHDRBody * ihdr_body = NULL;
     uint8_t * compressed_data = NULL;
     uint8_t * compressed_data_begin = NULL;
     uint32_t compressed_data_stream_size = 0;
@@ -630,8 +631,11 @@ DecodedImage * decode_PNG(
                     compressed_data_stream,
                 /* compr_size_bytes: */
                     compressed_data_stream_size - 4);
-
+            
             if (inflate_result != 0) {
+                #ifndef PNG_SILENCE
+                printf("INFLATE algorithm failed\n");
+                #endif
                 return_value->good = false;
                 return return_value;
             }
@@ -696,7 +700,7 @@ DecodedImage * decode_PNG(
             #ifndef DECODE_PNG_IGNORE_ASSERTS
 	    assert(entire_file->bits_left == 0);
             #endif
-            IHDRBody * ihdr_body = consume_struct(
+            ihdr_body = consume_struct(
                 /* type: */ IHDRBody,
                 /* entire_file: */ entire_file);
             #ifndef DECODE_PNG_IGNORE_ASSERTS
@@ -717,16 +721,31 @@ DecodedImage * decode_PNG(
             // There are many other formats (greyscale
             // illustrations etc.) found in .png files that we
             // are not supporting for now. 
-            if (ihdr_body->bit_depth != 8
-                || ihdr_body->color_type != 6)
+            if (ihdr_body->bit_depth != 8)
             {
                 #ifndef PNG_SILENCE
-                printf("unsupported PNG bit depth / color type");
+                printf(
+                    "unsupported PNG bit depth %u\n",
+                    ihdr_body->bit_depth);
                 #endif
                 return_value->good = false;
                 return return_value;
             }
-           
+
+            // color type 2: each pixel is RGB
+            // color type 6: each pixel is RGBA
+            if (ihdr_body->color_type != 6
+                && ihdr_body->color_type != 2)
+            {
+                #ifndef PNG_SILENCE
+                printf(
+                    "unsupported PNG color type: %u (expected 2 or 6)\n",
+                    ihdr_body->color_type);
+                #endif
+                return_value->good = false;
+                return return_value;
+            }
+            
             #ifndef PNG_SILENCE 
             printf(
                 "\twidth: %u\n",
@@ -798,7 +817,6 @@ DecodedImage * decode_PNG(
                 (uint8_t *)malloc(decompressed_size);
             compressed_data_begin = compressed_data;
             decoded_stream_start = decoded_stream;
-	    free(ihdr_body);
         }  else if (are_equal_strings(
             chunk_header->type,
             "IDAT",
@@ -1065,23 +1083,37 @@ DecodedImage * decode_PNG(
     b = the byte in the previous scanline
     c = the byte in the pixel immediately
         before the pixel containing b 
-
+    
     [c][b]
     [a][x]
     */
+    uint8_t bytes_per_channel =
+        ihdr_body->color_type == 2 ? 3 : 4;
+    #ifndef PNG_SILENCE
+    printf(
+        "bytes per channel: %u because ihdr_body->color_type was: %u\n",
+        bytes_per_channel,
+        ihdr_body->color_type);
+    #endif
     uint8_t * a_previous_pixel = return_value->rgba_values - 4;
     uint8_t * b_previous_scanline =
         return_value->rgba_values
-        - (return_value->width * 4);
+        - (return_value->width * bytes_per_channel);
     uint8_t * c_previous_scanline_previous_pixel = 
-        b_previous_scanline - 4;
+        b_previous_scanline - bytes_per_channel;
     
     for (uint32_t h = 0; h < return_value->height; h++) {
        	
         uint8_t filter_type = *decoded_stream++; 
         #ifndef DECODE_PNG_IGNORE_ASSERTS
-        assert(filter_type >= 0);
-        assert(filter_type <= 4);
+        if (filter_type > 4) {
+            #ifndef DECODE_PNG_SILENCE
+            printf(
+                "ERROR - unexpected filter_type of %u\n",
+                filter_type);
+            #endif
+            assert(filter_type <= 4);
+        }
         #endif
         
         for (uint32_t w = 0; w < return_value->width; w++) {
@@ -1089,33 +1121,40 @@ DecodedImage * decode_PNG(
 	    // repeat this 4x, once for every byte in pixel
             // (R, G, B & A) 
             for (int _ = 0; _ < 4; _++) {
-                // when a/b/c are out of bounds,
-                // we have to use a 0 instead
-                uint8_t a = w > 0 ?
-                    *a_previous_pixel : 0; 
-                uint8_t b = h > 0 ?
-                    *b_previous_scanline : 0;
-                uint8_t c = h > 0 && w > 0 ?
-                    *c_previous_scanline_previous_pixel : 0;
-                
-		*rgba_at++ = undo_PNG_filter(
-		    /* filter_type: */
-                        filter_type,
-		    /* original_value: */
-                        *decoded_stream,
-                    /* a_previous_pixel: */
-                        a,
-		    /* b_previous_scanline: */
-                        b,
-		    /* c_previous_scanline_previous_pixel: */
-                        c);
-                
-		return_value->rgba_values_size++;
-                a_previous_pixel++;
-                b_previous_scanline++;
-                c_previous_scanline_previous_pixel++;
-                
-		decoded_stream++;
+                if (_ == 3 && ihdr_body->color_type == 2) {
+                    // this color type has no alpha channel
+                    // add a filler alpha value of 1
+                    *rgba_at++ = 255;
+                    return_value->rgba_values_size++;
+                } else {
+                    // when a/b/c are out of bounds,
+                    // we have to use a 0 instead
+                    uint8_t a = w > 0 ?
+                        *a_previous_pixel : 0; 
+                    uint8_t b = h > 0 ?
+                        *b_previous_scanline : 0;
+                    uint8_t c = h > 0 && w > 0 ?
+                        *c_previous_scanline_previous_pixel : 0;
+                    
+                    *rgba_at++ = undo_PNG_filter(
+                        /* filter_type: */
+                            filter_type,
+                        /* original_value: */
+                            *decoded_stream,
+                        /* a_previous_pixel: */
+                            a,
+                        /* b_previous_scanline: */
+                            b,
+                        /* c_previous_scanline_previous_pixel: */
+                            c);
+                    
+                    return_value->rgba_values_size++;
+                    a_previous_pixel++;
+                    b_previous_scanline++;
+                    c_previous_scanline_previous_pixel++;
+                    
+                    decoded_stream++;
+                }
             }
         }
     }
@@ -1127,12 +1166,12 @@ DecodedImage * decode_PNG(
     #endif
     
     return_value->good = true;
+
+    free(ihdr_body);
     free(decoded_stream_start);
     
     return return_value;
 }
 
-#undef true
-#undef false
 #undef DECODE_PNG_IGNORE_ASSERTS
 
