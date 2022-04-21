@@ -638,9 +638,17 @@ DecodedImage * decode_PNG(
                 #endif
                 return_value->good = false;
                 return return_value;
+            } else {
+                #ifndef PNG_SILENCE
+                printf("INFLATE succesful\n");
+                #endif
             }
 	    
-            free(compressed_data_begin);
+            #ifndef PNG_SILENCE
+            printf(
+                "free compressed_data_stream: %u\n",
+                compressed_data_stream);
+            #endif
             free(compressed_data_stream);
         }
         
@@ -812,7 +820,7 @@ DecodedImage * decode_PNG(
             // across multiple chunks with useless header data
             // & checksums sprinkled in between
             // we'll concatenate all the data into compressed_data
-            // first, then DEFLATE afterwards
+            // first, then INFLATE afterwards
             compressed_data =
                 (uint8_t *)malloc(decompressed_size);
             compressed_data_begin = compressed_data;

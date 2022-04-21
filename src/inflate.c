@@ -825,7 +825,7 @@ uint32_t inflate(
     #endif
     uint8_t * started_at = data_stream->data;
     uint8_t * recipient_at = recipient;
-   
+    
     #ifndef INFLATE_IGNORE_ASSERTS 
     assert(data_stream->size_left >= compressed_size_bytes);
     assert(data_stream->bits_left == 0);
