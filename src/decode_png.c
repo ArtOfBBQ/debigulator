@@ -513,6 +513,83 @@ static uint8_t undo_PNG_filter(
     return 0;
 }
 
+void get_PNG_width_height(
+    uint8_t * compressed_bytes,
+    uint32_t compressed_bytes_size,
+    uint32_t * width_out,
+    uint32_t * height_out)
+{
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    assert(compressed_bytes_size > 0);
+    #endif
+
+    DataStream * entire_file = NULL;
+    entire_file = (DataStream *)malloc(sizeof(DataStream));
+    entire_file->data = compressed_bytes;
+    entire_file->size_left = compressed_bytes_size;
+    entire_file->bits_left = 0;
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    assert(entire_file->bits_left == 0);
+    #endif
+
+    PNGSignature * png_signature =
+        consume_struct(
+            /* type: */ PNGSignature,
+            /* from: */ entire_file);
+
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    assert(entire_file->bits_left == 0);
+    #endif
+
+    if (!are_equal_strings(
+        /* string 1: */ png_signature->png_string,
+        /* string 2: */ "PNG",
+        /* string length: */ 3))
+    {
+        #ifndef PNG_SILENCE
+        printf("aborting - not a PNG file\n");
+        #endif
+        assert(0);
+    }
+
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    assert(entire_file->bits_left == 0);
+    #endif
+    free(png_signature);
+
+    // these pointers are initted below
+    IHDRBody * ihdr_body = NULL;
+
+    PNGChunkHeader * chunk_header = consume_struct(
+        /* type: */   PNGChunkHeader,
+        /* buffer: */ entire_file);
+    flip_endian(&chunk_header->length);
+
+    assert(
+        are_equal_strings(
+            chunk_header->type,
+            "IHDR",
+            4));
+
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    assert(entire_file->bits_left == 0);
+    #endif
+    ihdr_body = consume_struct(
+        /* type: */ IHDRBody,
+        /* entire_file: */ entire_file);
+
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    assert(entire_file->bits_left < 8);
+    #endif
+    flip_endian(&ihdr_body->width);
+    flip_endian(&ihdr_body->height);
+
+    *width_out = ihdr_body->width;
+    *height_out = ihdr_body->height;
+
+    free(ihdr_body);
+}
+
 DecodedImage * decode_PNG(
     uint8_t * compressed_bytes,
     uint32_t compressed_bytes_size)

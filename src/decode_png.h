@@ -32,6 +32,12 @@ All other code in the .c file is implementation detail.
 #include "inflate.h"
 #include "inttypes.h"
 
+void get_PNG_width_height(
+    uint8_t * compressed_bytes,
+    uint32_t compressed_bytes_size,
+    uint32_t * width_out,
+    uint32_t * height_out);
+
 DecodedImage * decode_PNG(
     uint8_t * compressed_bytes,
     uint32_t compressed_bytes_size);
