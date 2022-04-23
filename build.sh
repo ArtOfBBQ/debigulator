@@ -1,6 +1,6 @@
 APP_NAME="hellopng"
-INPUT_FILE="backgrounddetailed1" ## try gzipsample or gimp_test
-INPUT_EXTENSION="png" ## try gimp_test, fs_angrymob or gzipsample.gz
+INPUT_FILE="backgrounddetailed1"
+INPUT_EXTENSION="png"
 ADDITIONAL_SOURCES="src/decode_png.c src/inflate.c src/decode_gz.c"
 
 echo "Building $APP_NAME... (this shell script must be run from the app's root directory)"

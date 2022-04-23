@@ -1180,7 +1180,8 @@ DecodedImage * decode_PNG(
         bytes_per_channel,
         ihdr_body->color_type);
     #endif
-    uint8_t * a_previous_pixel = return_value->rgba_values - 4;
+    uint8_t * a_previous_pixel =
+        return_value->rgba_values - bytes_per_channel;
     uint8_t * b_previous_scanline =
         return_value->rgba_values
         - (return_value->width * bytes_per_channel);
@@ -1203,43 +1204,36 @@ DecodedImage * decode_PNG(
         
         for (uint32_t w = 0; w < return_value->width; w++) {
 	    
-	    // repeat this 4x, once for every byte in pixel
-            // (R, G, B & A) 
-            for (int _ = 0; _ < 4; _++) {
-                if (_ == 3 && ihdr_body->color_type == 2) {
-                    // this color type has no alpha channel
-                    // add a filler alpha value of 1
-                    *rgba_at++ = 255;
-                    return_value->rgba_values_size++;
-                } else {
-                    // when a/b/c are out of bounds,
-                    // we have to use a 0 instead
-                    uint8_t a = w > 0 ?
-                        *a_previous_pixel : 0; 
-                    uint8_t b = h > 0 ?
-                        *b_previous_scanline : 0;
-                    uint8_t c = h > 0 && w > 0 ?
-                        *c_previous_scanline_previous_pixel : 0;
-                    
-                    *rgba_at++ = undo_PNG_filter(
-                        /* filter_type: */
-                            filter_type,
-                        /* original_value: */
-                            *decoded_stream,
-                        /* a_previous_pixel: */
-                            a,
-                        /* b_previous_scanline: */
-                            b,
-                        /* c_previous_scanline_previous_pixel: */
-                            c);
-                    
-                    return_value->rgba_values_size++;
-                    a_previous_pixel++;
-                    b_previous_scanline++;
-                    c_previous_scanline_previous_pixel++;
-                    
-                    decoded_stream++;
-                }
+	    // repeat this 3x or 4x, once for every byte in pixel
+            // (RGB or R, G, B & A) 
+            for (int _ = 0; _ < bytes_per_channel; _++) {
+                // when a/b/c are out of bounds,
+                // we have to use a 0 instead
+                uint8_t a = w > 0 ?
+                    *a_previous_pixel : 0; 
+                uint8_t b = h > 0 ?
+                    *b_previous_scanline : 0;
+                uint8_t c = h > 0 && w > 0 ?
+                    *c_previous_scanline_previous_pixel : 0;
+                
+                *rgba_at++ = undo_PNG_filter(
+                    /* filter_type: */
+                        filter_type,
+                    /* original_value: */
+                        *decoded_stream,
+                    /* a_previous_pixel: */
+                        a,
+                    /* b_previous_scanline: */
+                        b,
+                    /* c_previous_scanline_previous_pixel: */
+                        c);
+                
+                return_value->rgba_values_size++;
+                a_previous_pixel++;
+                b_previous_scanline++;
+                c_previous_scanline_previous_pixel++;
+                
+                decoded_stream++;
             }
         }
     }
@@ -1247,11 +1241,43 @@ DecodedImage * decode_PNG(
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(
         return_value->rgba_values_size
-            == return_value->pixel_count * 4);
+            == return_value->pixel_count * bytes_per_channel);
     #endif
+
+    // If we have less than 4 channels, forcibly convert to 4
+    // channels of data by explicitly adding an alpha channel
+    // of 255 to each pixel
+    if (bytes_per_channel == 3) {
+        // we don't need to assign new memory because our current
+        // array already has space for 4 channels per pixel, it
+        // just has 25% empty unitialized values at the end
+        // We can start overwriting at the end (copying from
+        // 25% away from the end) without ever overwriting
+        // anything
+        uint8_t * write_at =
+            return_value->rgba_values +
+                ((return_value->pixel_count * 4) - 1);
+        uint8_t * read_at =
+            return_value->rgba_values +
+                (return_value->rgba_values_size - 1);
+        
+        for (
+            uint32_t p = 0;
+            p < return_value->pixel_count;
+            p++)
+        {
+            *write_at-- = 255;
+            *write_at-- = *read_at--;
+            *write_at-- = *read_at--;
+            *write_at-- = *read_at--;
+        }
+        
+        return_value->rgba_values_size =
+            return_value->pixel_count * 4;
+    }
     
     return_value->good = true;
-
+    
     free(ihdr_body);
     free(decoded_stream_start);
     

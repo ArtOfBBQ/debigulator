@@ -41,8 +41,8 @@ static DecodedImage * downsize_image_to_scalar(
     assert(original->rgba_values_size > 0);
     assert(original->width > 0);
     assert(original->height > 0);
-    assert(
-        original->pixel_count == original->rgba_values_size / 4);
+    // assert(
+    //     original->pixel_count == original->rgba_values_size / 4);
     #endif
     
     DecodedImage * return_value =
@@ -117,8 +117,8 @@ static DecodedImage * downsize_image_to_scalar(
                     
                     #ifndef DECODED_IMAGE_IGNORE_ASSERTS
                     assert(idx >= 0);
-                    assert(
-                        (idx + 3) < original->rgba_values_size);
+                    // assert(
+                    //     (idx + 3) < original->rgba_values_size);
                     #endif
                     
                     sum_val_r += original->rgba_values[idx];
