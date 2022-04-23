@@ -1,6 +1,6 @@
 #include "decode_png.h"
 
-// #define PNG_SILENCE
+#define PNG_SILENCE
 // #define IGNORE_CRC_CHECKS
 // #define DECODE_PNG_IGNORE_ASSERTS
 // true/false/ignoreasserts are undef'd at EOF

@@ -4,7 +4,7 @@
 #define true 1  // undefined at end of file
 #define bool32_t uint32_t
 
-// #define INFLATE_SILENCE
+#define INFLATE_SILENCE
 // #define INFLATE_IGNORE_ASSERTS
 
 #define NUM_UNIQUE_CODELENGTHS 19
