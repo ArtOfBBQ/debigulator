@@ -11,26 +11,10 @@ header to read pixels from a .png file.
 
 // #define HELLOPNG_SILENCE
 
-int main(int argc, const char * argv[]) 
-{
-    if (argc != 2) {
-        #ifndef HELLOPNG_SILENCE
-        printf("Please supply 1 argument (png file name)\n");
-        printf("Got:");
-        for (int i = 0; i < argc; i++) {
-            
-            printf(" %s", argv[i]);
-        }
-        #endif
-        return 1;
-    }
-    
-    #ifndef HELLOPNG_SILENCE
-    printf("Inspecting file: %s\n", argv[1]);
-    #endif
-    
+DecodedImage * read_png_from_disk(const char * filename) {
+    printf("read from disk: %s\n", filename);
     FILE * imgfile = fopen(
-        argv[1],
+        filename,
         "rb");
     
     fseek(imgfile, 0, SEEK_END);
@@ -51,7 +35,9 @@ int main(int argc, const char * argv[])
             imgfile);
     
     #ifndef HELLOPNG_SILENCE
-    printf("bytes read from raw file: %zu\n", bytes_read);
+    printf(
+        "bytes read from raw file: %zu\n",
+        bytes_read);
     #endif
     
     fclose(imgfile);
@@ -64,11 +50,48 @@ int main(int argc, const char * argv[])
     
     uint8_t * buffer_copy = start_of_buffer;
     
-    DecodedImage * decoded_png =
-        decode_PNG(
-            /* compressed_bytes: */ buffer_copy,
-            /* compressed_bytes_size: */ (uint32_t)bytes_read);
+    DecodedImage * return_value = decode_PNG(
+        /* compressed_bytes: */
+            buffer_copy,
+        /* compressed_bytes_size: */
+            (uint32_t)bytes_read);
+    
+    free(buffer);
+    
+    return return_value;
+}
 
+int main(int argc, const char * argv[]) 
+{
+    if (argc != 2) {
+        #ifndef HELLOPNG_SILENCE
+        printf("Please supply 1 argument (png file name)\n");
+        printf("Got:");
+        for (int i = 0; i < argc; i++) {
+            
+            printf(" %s", argv[i]);
+        }
+        #endif
+        return 1;
+    }
+    
+    #ifndef HELLOPNG_SILENCE
+    printf("Inspecting file: %s\n", argv[1]);
+    #endif
+    
+    DecodedImage * decoded_png = read_png_from_disk(argv[1]);
+    
+    DecodedImage * recipient = read_png_from_disk("receiver.png");
+    
+    overwrite_subregion(
+        /* whole_image: */ recipient,
+        /* new_image: */ decoded_png,
+        /* column_count: */ 3,
+        /* row_count : */ 2,
+        /* at_column: */ 3,
+        /* at_row: */ 2);
+    
+    
     #ifndef HELLOPNG_SILENCE 
     printf(
         "finished decode_PNG, result was: %s\n",
@@ -92,8 +115,8 @@ int main(int argc, const char * argv[])
             decoded_png->rgba_values_size); 
     // let's write the PNG using stb_write
     uint32_t stride_in_bytes =
-        decoded_png->rgba_values_size /
-                decoded_png->height;
+        recipient->rgba_values_size /
+                recipient->height;
     printf(
         "\nstarting stb_write... stride: %u\n",
         stride_in_bytes);
@@ -101,81 +124,82 @@ int main(int argc, const char * argv[])
         /* char const * filename : */
             "output.png",
         /* int w : */
-            decoded_png->width,
+            recipient->width,
         /* int h : */
-            decoded_png->height,
+            recipient->height,
         /* int comp : */
             4,
         /* const void *data : */
-            decoded_png->rgba_values,
+            recipient->rgba_values,
         /* int stride_in_bytes : */
             stride_in_bytes);
     printf("stb_write result: %i\n", result);
-
-    //if (decoded_png->good) {
-    //    uint32_t avg_r = 0;
-    //    uint32_t avg_g = 0;
-    //    uint32_t avg_b = 0;
-    //    uint32_t avg_alpha = 0;
-    //    for (
-    //        uint32_t i = 0;
-    //        (i+3) < decoded_png->rgba_values_size;
-    //        i += 4)
-    //    {
-    //        avg_r += decoded_png->rgba_values[i];
-    //        avg_g += decoded_png->rgba_values[i+1];
-    //        avg_b += decoded_png->rgba_values[i+2];
-    //        avg_alpha += decoded_png->rgba_values[i+3];
-    //    }
-    //    printf(
-    //        "average pixel: [%u,%u,%u,%u]\n",
-    //        avg_r / decoded_png->pixel_count,
-    //        avg_g / decoded_png->pixel_count,
-    //        avg_b / decoded_png->pixel_count,
-    //        avg_alpha / decoded_png->pixel_count);
-    //    #endif
-    //    
-    //    DecodedImage * resized_img =
-    //        resize_image_to_width(
-    //            /* original  : */ decoded_png,
-    //            /* new_width : */ 40);
-    //    
-    //    // assert(
-    //    //     resized_img->pixel_count
-    //    //         == resized_img->rgba_values_size / 4);
-    //    
-    //    #ifndef HELLOPNG_SILENCE
-    //    // let's print the PNG to the screen in crappy
-    //    // unicode characters
-    //    uint8_t * printfeed = resized_img->rgba_values;
-    //    for (uint32_t h = 0; h < resized_img->height; h++) {
-    //        printf("\n");
-    //        for (uint32_t w = 0; w < resized_img->width; w++) {
-    //            // average of rgb
-    //            uint32_t pixel_strength =
-    //                (printfeed[0] + printfeed[1] + printfeed[2])
-    //                    / 3;
-    //            // apply alpha as brigthness
-    //            pixel_strength =
-    //                (pixel_strength * printfeed[3]) / 255;
-    //            
-    //            if (pixel_strength < 30) {
-    //                printf("  "); 
-    //            } else if (pixel_strength < 70) {
-    //                printf("░░");
-    //            } else if (pixel_strength < 110) {
-    //                printf("▒▒");
-    //            } else if (pixel_strength < 150) {
-    //                printf("▓▓");
-    //            } else {
-    //                printf("██");
-    //            }
-    //            
-    //            printfeed += 4;
-    //        }
-    //    }
-    //    #endif
-    // }
+    
+    if (decoded_png->good) {
+        uint32_t avg_r = 0;
+        uint32_t avg_g = 0;
+        uint32_t avg_b = 0;
+        uint32_t avg_alpha = 0;
+        for (
+            uint32_t i = 0;
+            (i+3) < decoded_png->rgba_values_size;
+            i += 4)
+        {
+            avg_r += decoded_png->rgba_values[i];
+            avg_g += decoded_png->rgba_values[i+1];
+            avg_b += decoded_png->rgba_values[i+2];
+            avg_alpha += decoded_png->rgba_values[i+3];
+        }
+        #ifndef HELLOPNG_SILENCE
+        printf(
+            "average pixel: [%u,%u,%u,%u]\n",
+            avg_r / decoded_png->pixel_count,
+            avg_g / decoded_png->pixel_count,
+            avg_b / decoded_png->pixel_count,
+            avg_alpha / decoded_png->pixel_count);
+        #endif
+        
+        DecodedImage resized_img =
+            resize_image_to_width(
+                /* original  : */ decoded_png,
+                /* new_width : */ 40);
+        
+        // assert(
+        //     resized_img.pixel_count
+        //         == resized_img.rgba_values_size / 4);
+        
+        #ifndef HELLOPNG_SILENCE
+        // let's print the PNG to the screen in crappy
+        // unicode characters
+        uint8_t * printfeed = resized_img.rgba_values;
+        for (uint32_t h = 0; h < resized_img.height; h++) {
+            printf("\n");
+            for (uint32_t w = 0; w < resized_img.width; w++) {
+                // average of rgb
+                uint32_t pixel_strength =
+                    (printfeed[0] + printfeed[1] + printfeed[2])
+                        / 3;
+                // apply alpha as brigthness
+                pixel_strength =
+                    (pixel_strength * printfeed[3]) / 255;
+                
+                if (pixel_strength < 30) {
+                    printf("  "); 
+                } else if (pixel_strength < 70) {
+                    printf("░░");
+                } else if (pixel_strength < 110) {
+                    printf("▒▒");
+                } else if (pixel_strength < 150) {
+                    printf("▓▓");
+                } else {
+                    printf("██");
+                }
+                
+                printfeed += 4;
+            }
+        }
+        #endif
+    }
     
     return 0;
 }

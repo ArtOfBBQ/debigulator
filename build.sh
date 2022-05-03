@@ -1,7 +1,7 @@
 APP_NAME="hellopng"
-INPUT_FILE="backgrounddetailed1"
+INPUT_FILE="fs_angrymob"
 INPUT_EXTENSION="png"
-ADDITIONAL_SOURCES="src/decode_png.c src/inflate.c src/decode_gz.c"
+ADDITIONAL_SOURCES="src/decodedimage.c src/decode_png.c src/inflate.c src/decode_gz.c"
 
 echo "Building $APP_NAME... (this shell script must be run from the app's root directory)"
 
@@ -13,6 +13,7 @@ mkdir build
 
 echo "copying resources..."
 cp resources/$INPUT_FILE.$INPUT_EXTENSION build/$INPUT_FILE.$INPUT_EXTENSION
+cp resources/receiver.png build/receiver.png
 
 echo "Compiling $APP_NAME..."
 clang -g -Weverything -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
