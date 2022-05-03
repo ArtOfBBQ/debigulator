@@ -233,15 +233,19 @@ void overwrite_subregion(
 }
 
 DecodedImage concatenate_images(
-    const DecodedImage * images_to_concat,
+    const DecodedImage ** images_to_concat,
     const uint32_t images_to_concat_size)
 {
     DecodedImage return_value;
     
     uint32_t sprite_rows = 0;
     uint32_t sprite_columns = 0;
-    uint32_t base_height = 50;
-    uint32_t base_width = 50;
+    uint32_t base_height = images_to_concat[0]->height;
+    uint32_t base_width = images_to_concat[0]->width;
+    printf(
+        "expecting images with height/width: [%u,%u]\n",
+        base_height,
+        base_width);
     
     while (1)
     {
@@ -278,19 +282,32 @@ DecodedImage concatenate_images(
     return_value.rgba_values =
         malloc(return_value.rgba_values_size); 
     
+    printf(
+        "created return_value [width,height] = [%u,%u] with rgba_values_size: %u\n",
+        return_value.width,
+        return_value.height,
+        return_value.rgba_values_size);
+    
     uint32_t i = 0; 
     for (uint32_t at_y = 1; at_y <= sprite_rows; at_y++) {
         for (uint32_t at_x = 1; at_x <= sprite_columns; at_x++) {
             if (i >= images_to_concat_size) {
                 break;
             }
-            // fill_in_image(
-            //     /* texture_slice: */ images_to_concat[i],
-            //     /* whole_texture: */ return_value,
-            //     /* at_x: */ at_x,
-            //     /* at_y: */ at_y);
+            
+            assert(images_to_concat[i]->height == base_height);
+            assert(images_to_concat[i]->width == base_width);
+            overwrite_subregion(
+                /* whole_image: */ &return_value,
+                /* new_image: */ images_to_concat[i],
+                /* column_count: */ sprite_columns,
+                /* row_count: */ sprite_rows,
+                /* at_x: */ at_x,
+                /* at_y: */ at_y);
             i++;
         }
     }
+
+    return return_value;
 }
 

@@ -53,7 +53,7 @@ void overwrite_subregion(
     const uint32_t at_row);
 
 DecodedImage concatenate_images(
-    const DecodedImage * to_concat,
+    const DecodedImage ** to_concat,
     const uint32_t to_concat_size);
 
 #endif
