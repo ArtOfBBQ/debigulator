@@ -18,6 +18,9 @@ cp resources/fs_bribery.png build/fs_bribery.png
 cp resources/fs_bridge.png build/fs_bridge.png
 cp resources/fs_cannon.png build/fs_cannon.png
 cp resources/fs_birdmystic.png build/fs_birdmystic.png
+cp resources/structuredart1.png build/structuredart1.png
+cp resources/structuredart2.png build/structuredart2.png
+cp resources/structuredart3.png build/structuredart3.png
 
 echo "Compiling $APP_NAME..."
 clang -g -Weverything -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES

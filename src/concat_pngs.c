@@ -56,16 +56,14 @@ DecodedImage * read_png_from_disk(const char * filename) {
 int main() {
     printf("concat_pngs main()\n");
 
-    DecodedImage * to_concat[5];
-    uint32_t to_concat_size = 5;
+    DecodedImage * to_concat[3];
+    uint32_t to_concat_size = 3;
     
-    to_concat[0] = read_png_from_disk("fs_angrymob.png");
+    to_concat[0] = read_png_from_disk("structuredart1.png");
     printf("fs_angrymob height: %u\n", to_concat[0]->height);
-    to_concat[1] = read_png_from_disk("fs_birdmystic.png");
-    to_concat[2] = read_png_from_disk("fs_bribery.png");
-    to_concat[3] = read_png_from_disk("fs_bridge.png");
-    to_concat[4] = read_png_from_disk("fs_cannon.png");
-
+    to_concat[1] = read_png_from_disk("structuredart2.png");
+    to_concat[2] = read_png_from_disk("structuredart3.png");
+    
     DecodedImage recipient = concatenate_images(
         /* to_concat: */ &to_concat,
         /* to_concat_size: */ to_concat_size);

@@ -171,6 +171,8 @@ void overwrite_subregion(
     assert(at_row <= row_count);
     uint32_t expected_width = whole_image->width / column_count;
     uint32_t expected_height = whole_image->height / row_count;
+    assert(expected_width * column_count == whole_image->width);
+    assert(expected_height * row_count == whole_image->height);
     if (
         (new_image->width != expected_width)
         ||
@@ -210,7 +212,7 @@ void overwrite_subregion(
     uint32_t i = 0;
     for (
         uint32_t cur_y = start_y;
-        cur_y < end_y;
+        cur_y <= end_y;
         cur_y++)
     {
         // printf("cur_y: %u\n", cur_y);
