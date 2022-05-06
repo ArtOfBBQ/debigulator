@@ -236,12 +236,19 @@ void overwrite_subregion(
 
 DecodedImage concatenate_images(
     const DecodedImage ** images_to_concat,
-    const uint32_t images_to_concat_size)
+    const uint32_t images_to_concat_size,
+    uint32_t * out_sprite_rows,
+    uint32_t * out_sprite_columns)
 {
     DecodedImage return_value;
     
-    uint32_t sprite_rows = 0;
-    uint32_t sprite_columns = 0;
+    if (images_to_concat_size == 1) {
+        *out_sprite_rows = 1;
+        *out_sprite_columns = 1;
+        return_value = *images_to_concat[0];
+        return return_value;
+    }
+    
     uint32_t base_height = images_to_concat[0]->height;
     uint32_t base_width = images_to_concat[0]->width;
     printf(
@@ -251,35 +258,30 @@ DecodedImage concatenate_images(
     
     while (1)
     {
-       sprite_columns += 1;
-       if (sprite_columns * sprite_rows
+       *out_sprite_columns += 1;
+       if (*out_sprite_columns * *out_sprite_rows
             >= images_to_concat_size)
        {
             break;
        }
        
-       sprite_rows += 1;
-       if (sprite_columns * sprite_rows
+       *out_sprite_rows += 1;
+       if (*out_sprite_columns * *out_sprite_rows
             >= images_to_concat_size)
        {
             break;
        }
     }
     
-    printf(
-        "sprite_columns: %u\n",
-        sprite_columns);
-    printf(
-        "sprite_rows: %u\n",
-        sprite_rows);
     return_value.width =
-        sprite_columns * base_width;
+        (*out_sprite_columns) * base_width;
     return_value.height =
-        sprite_rows * base_height;
+        (*out_sprite_rows) * base_height;
     
     return_value.rgba_values_size =
         base_width * base_height
-        * sprite_rows * sprite_columns
+        * (*out_sprite_rows)
+        * (*out_sprite_columns)
         * 4;
     return_value.rgba_values =
         (uint8_t *)malloc(return_value.rgba_values_size); 
@@ -291,8 +293,16 @@ DecodedImage concatenate_images(
         return_value.rgba_values_size);
     
     uint32_t i = 0; 
-    for (uint32_t at_y = 1; at_y <= sprite_rows; at_y++) {
-        for (uint32_t at_x = 1; at_x <= sprite_columns; at_x++) {
+    for (
+        uint32_t at_y = 1;
+        at_y <= *out_sprite_rows;
+        at_y++)
+    {
+        for (
+            uint32_t at_x = 1;
+            at_x <= *out_sprite_columns;
+            at_x++)
+        {
             if (i >= images_to_concat_size) {
                 break;
             }
@@ -302,14 +312,14 @@ DecodedImage concatenate_images(
             overwrite_subregion(
                 /* whole_image: */ &return_value,
                 /* new_image: */ images_to_concat[i],
-                /* column_count: */ sprite_columns,
-                /* row_count: */ sprite_rows,
+                /* column_count: */ *out_sprite_columns,
+                /* row_count: */ *out_sprite_rows,
                 /* at_x: */ at_x,
                 /* at_y: */ at_y);
             i++;
         }
     }
-
+    
     return return_value;
 }
 
