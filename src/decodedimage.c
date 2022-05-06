@@ -282,7 +282,7 @@ DecodedImage concatenate_images(
         * sprite_rows * sprite_columns
         * 4;
     return_value.rgba_values =
-        malloc(return_value.rgba_values_size); 
+        (uint8_t *)malloc(return_value.rgba_values_size); 
     
     printf(
         "created return_value [width,height] = [%u,%u] with rgba_values_size: %u\n",
