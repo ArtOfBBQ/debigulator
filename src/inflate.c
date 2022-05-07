@@ -1,7 +1,5 @@
 #include "inflate.h"
 
-#define false 0 // undefined at end of file
-#define true 1  // undefined at end of file
 #define bool32_t uint32_t
 
 #define INFLATE_SILENCE
@@ -335,7 +333,7 @@ static void free_hashed_huff(HashedHuffman * dict)
     if (dict == NULL) { return; }
     
     for (int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++) {
-        while (true)
+        while (1)
         {
             if (dict->entries[i] == NULL) { break; }
             if (dict->entries[i]->next_neighbor == NULL) {
@@ -501,7 +499,7 @@ static HashedHuffman * huffman_to_hashmap(
     
     for (unsigned int i = 0; i < orig_huff_size; i++)
     {
-        if (orig_huff[i].used == false) {
+        if (orig_huff[i].used == 0) {
             continue;
         }
         
@@ -611,7 +609,7 @@ static HuffmanEntry * unpack_huffman(
         unpacked_dict[i].value = i;
         unpacked_dict[i].code_length = array[i];
         unpacked_dict[i].key = 1234543;
-        unpacked_dict[i].used = false;
+        unpacked_dict[i].used = 0;
     }
     
     // 1) Count the number of codes for each code length.  Let
@@ -676,10 +674,10 @@ static HuffmanEntry * unpack_huffman(
         // happen when the PNG is corrupted and the code lengths
         // are wrong (too many small code lengths)
         if (smallest_code[bits] >= (1 << bits)) {
-            bool32_t actually_used = false;
+            bool32_t actually_used = 0;
             for (uint32_t i = 0; i < array_size; i++) {
                 if (unpacked_dict[i].code_length == bits) {
-                    actually_used = true;
+                    actually_used = 1;
                 }
             }
             
@@ -708,7 +706,7 @@ static HuffmanEntry * unpack_huffman(
         
         if (len >= min_code_length) {
             unpacked_dict[n].key = smallest_code[len];
-            unpacked_dict[n].used = true;
+            unpacked_dict[n].used = 1;
             
             smallest_code[len]++;
         }
@@ -831,7 +829,7 @@ uint32_t inflate(
     assert(data_stream->bits_left == 0);
     #endif
     
-    int read_more_deflate_blocks = true;
+    int read_more_deflate_blocks = 1;
     
     while (read_more_deflate_blocks) {
         #ifndef INFLATE_SILENCE
@@ -872,7 +870,7 @@ uint32_t inflate(
             "\t\t\tBFINAL (flag for final block): %u\n",
             BFINAL);
         #endif
-        if (BFINAL) { read_more_deflate_blocks = false; }
+        if (BFINAL) { read_more_deflate_blocks = 0; }
         
         uint32_t BTYPE = consume_bits(
             /* buffer: */ data_stream,
@@ -1183,7 +1181,7 @@ uint32_t inflate(
                     i < NUM_UNIQUE_CODELENGTHS;
                     i++)
                 {
-                    if (codelengths_huffman[i].used == true) {
+                    if (codelengths_huffman[i].used == 1) {
                         #ifndef INFLATE_IGNORE_ASSERTS
                         assert(
                           codelengths_huffman[i].key >= 0);
@@ -1344,7 +1342,7 @@ uint32_t inflate(
                 #endif
                 
                 for (uint32_t i = 0; i < HLIT; i++) {
-                    if (literal_length_huffman[i].used == true) {
+                    if (literal_length_huffman[i].used == 1) {
                         #ifndef INFLATE_IGNORE_ASSERTS
                         assert(
                             literal_length_huffman[i].value
@@ -1372,7 +1370,7 @@ uint32_t inflate(
                 #endif
                 
                 for (uint32_t i = 0; i < HDIST; i++) {
-                    if (distance_huffman[i].used == true) {
+                    if (distance_huffman[i].used == 1) {
                         #ifndef INFLATE_IGNORE_ASSERTS
                         assert(distance_huffman[i].value == i);
                         assert(distance_huffman[i].key < 99999);
@@ -1425,7 +1423,7 @@ uint32_t inflate(
                         "\t\tcompressed_size_bytes was: %u\n",
                         compressed_size_bytes);
                     #endif
-                    read_more_deflate_blocks = false;
+                    read_more_deflate_blocks = 0;
                     break;
                 }
                 
@@ -1610,8 +1608,4 @@ uint32_t inflate(
 
     return 0;
 }
-
-#undef true
-#undef false
-#undef bool32_t
 

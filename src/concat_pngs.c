@@ -63,11 +63,15 @@ int main() {
     printf("fs_angrymob height: %u\n", to_concat[0]->height);
     to_concat[1] = read_png_from_disk("structuredart2.png");
     to_concat[2] = read_png_from_disk("structuredart3.png");
-    
+   
+    uint32_t sprite_rows;
+    uint32_t sprite_columns; 
     DecodedImage recipient = concatenate_images(
         /* to_concat: */ &to_concat,
-        /* to_concat_size: */ to_concat_size);
-
+        /* to_concat_size: */ to_concat_size,
+        /* out_sprite_rows: */ &sprite_rows,
+        /* out_sprite_columns: */ &sprite_columns);
+    
     assert(recipient.width > 0);
     assert(recipient.height > 0);
     assert(recipient.rgba_values_size > 0);

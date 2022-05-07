@@ -45,7 +45,7 @@ DecodedImage * read_png_from_disk(const char * filename) {
         #ifndef HELLOPNG_SILENCE
         printf("Error - expected bytes read equal to fsize\n");
         #endif
-        return 1;
+        return NULL;
     }
     
     uint8_t * buffer_copy = start_of_buffer;
@@ -81,17 +81,6 @@ int main(int argc, const char * argv[])
     
     DecodedImage * decoded_png = read_png_from_disk(argv[1]);
     
-    DecodedImage * recipient = read_png_from_disk("receiver.png");
-    
-    overwrite_subregion(
-        /* whole_image: */ recipient,
-        /* new_image: */ decoded_png,
-        /* column_count: */ 3,
-        /* row_count : */ 2,
-        /* at_column: */ 3,
-        /* at_row: */ 2);
-    
-    
     #ifndef HELLOPNG_SILENCE 
     printf(
         "finished decode_PNG, result was: %s\n",
@@ -113,27 +102,6 @@ int main(int argc, const char * argv[])
     assert(
         decoded_png->width * decoded_png->height * 4 ==
             decoded_png->rgba_values_size); 
-    // let's write the PNG using stb_write
-    uint32_t stride_in_bytes =
-        recipient->rgba_values_size /
-                recipient->height;
-    printf(
-        "\nstarting stb_write... stride: %u\n",
-        stride_in_bytes);
-    int result = stbi_write_png(
-        /* char const * filename : */
-            "output.png",
-        /* int w : */
-            recipient->width,
-        /* int h : */
-            recipient->height,
-        /* int comp : */
-            4,
-        /* const void *data : */
-            recipient->rgba_values,
-        /* int stride_in_bytes : */
-            stride_in_bytes);
-    printf("stb_write result: %i\n", result);
     
     if (decoded_png->good) {
         uint32_t avg_r = 0;

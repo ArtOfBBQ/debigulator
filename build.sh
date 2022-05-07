@@ -1,5 +1,5 @@
-APP_NAME="concat_pngs"
-INPUT_FILE="fs_angrymob"
+APP_NAME="hellopng"
+INPUT_FILE="purpleback"
 INPUT_EXTENSION="png"
 ADDITIONAL_SOURCES="src/decodedimage.c src/decode_png.c src/inflate.c src/decode_gz.c"
 
@@ -13,6 +13,7 @@ mkdir build
 
 echo "copying resources..."
 # cp resources/$INPUT_FILE.$INPUT_EXTENSION build/$INPUT_FILE.$INPUT_EXTENSION
+cp resources/purpleback.png build/purpleback.png
 cp resources/fs_angrymob.png build/fs_angrymob.png
 cp resources/fs_bribery.png build/fs_bribery.png
 cp resources/fs_bridge.png build/fs_bridge.png
@@ -23,8 +24,8 @@ cp resources/structuredart2.png build/structuredart2.png
 cp resources/structuredart3.png build/structuredart3.png
 
 echo "Compiling $APP_NAME..."
-clang -g -Weverything -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES
-# clang++ -std="c++17" -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
+# clang -g -Weverything -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES
+clang++ -std="c++17" -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
 # gcc -fsanitize=undefined -g -o3 $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
 
 # echo "Running $APP_NAME"

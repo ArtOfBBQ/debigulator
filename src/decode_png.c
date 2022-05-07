@@ -800,6 +800,19 @@ DecodedImage * decode_PNG(
                 ihdr_body->width
                     * ihdr_body->height
                     * 5;
+
+            #ifndef PNG_SILENCE
+            printf(
+                "ihdr_body->width: %u\n", ihdr_body->width);
+            printf(
+                "ihdr_body->height: %u\n", ihdr_body->height);
+            printf(
+                "ihdr_body->bit_depth: %u\n",
+                ihdr_body->bit_depth);
+            printf(
+                "ihdr_body->color_type: %u\n",
+                ihdr_body->color_type);
+            #endif
             
             // (below) These PNG setting assert the RGBA
             // color space.
@@ -816,8 +829,9 @@ DecodedImage * decode_PNG(
                 return_value->good = false;
                 return return_value;
             }
-
+            
             // color type 2: each pixel is RGB
+            // color type 3: indexed color? (unsupported)
             // color type 6: each pixel is RGBA
             if (ihdr_body->color_type != 6
                 && ihdr_body->color_type != 2)
