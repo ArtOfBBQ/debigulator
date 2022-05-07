@@ -240,6 +240,10 @@ DecodedImage concatenate_images(
     uint32_t * out_sprite_rows,
     uint32_t * out_sprite_columns)
 {
+    assert(images_to_concat_size > 0);
+    assert(images_to_concat != NULL);
+    assert(images_to_concat[0] != NULL);
+    
     DecodedImage return_value;
     
     if (images_to_concat_size == 1) {
