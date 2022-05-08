@@ -146,7 +146,6 @@ void overwrite_subregion(
     const uint32_t at_column,
     const uint32_t at_row)
 {
-    printf("overwriting image at [%u,%u]\n", at_column, at_row);
     assert(at_column > 0);
     assert(at_row > 0);
     
