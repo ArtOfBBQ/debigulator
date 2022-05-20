@@ -312,6 +312,7 @@ DecodedImage concatenate_images(
             
             assert(images_to_concat[i]->height == base_height);
             assert(images_to_concat[i]->width == base_width);
+            
             overwrite_subregion(
                 /* whole_image: */ &return_value,
                 /* new_image: */ images_to_concat[i],
@@ -322,6 +323,10 @@ DecodedImage concatenate_images(
             i++;
         }
     }
+    printf(
+        "overwrote subregions, concatenation complete. New dimensions: [%u,%u]\n",
+        return_value.width,
+        return_value.height);
     
     return return_value;
 }

@@ -260,23 +260,6 @@ void discard_bits(
     }
 }
 
-// TODO: this seems silly, let's get rid of this
-static void copy_memory(
-    void * from,
-    void * to,
-    size_t size)
-{
-    uint8_t * fromu8 = (uint8_t *)from;
-    uint8_t * tou8 = (uint8_t *)to;
-    
-    while (size > 0) {
-        *tou8 = *fromu8;
-        fromu8++;
-        tou8++;
-        size--;
-    }
-}
-
 /*
 Grab data from our data stream and immediately cast it
 to one of our structs or an 8-bit int
@@ -290,12 +273,7 @@ uint8_t * consume_chunk(
     assert(from->size_left >= size_to_consume);
     #endif
     
-    uint8_t * return_value = (uint8_t *)malloc(size_to_consume);
-    
-    copy_memory(
-        /* from: */   from->data,
-        /* to: */     return_value,
-        /* size: */   size_to_consume);
+    uint8_t * return_value = (uint8_t *)from->data;
     
     from->data += size_to_consume;
     from->size_left -= size_to_consume;
@@ -798,9 +776,9 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 // returns 1 when failed, 0 when succesful
 uint32_t inflate(
     uint8_t * recipient,
-    uint32_t recipient_size,
+    const uint32_t recipient_size,
     DataStream * data_stream,
-    unsigned int compressed_size_bytes) 
+    const uint32_t compressed_size_bytes) 
 {
     if (recipient == NULL
         || recipient_size < compressed_size_bytes

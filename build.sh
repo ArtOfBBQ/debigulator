@@ -1,5 +1,5 @@
-APP_NAME="hellopng"
-INPUT_FILE="purpleback"
+APP_NAME="concat_pngs"
+INPUT_FILE="fs_bribery"
 INPUT_EXTENSION="png"
 ADDITIONAL_SOURCES="src/decodedimage.c src/decode_png.c src/inflate.c src/decode_gz.c"
 
@@ -24,12 +24,12 @@ cp resources/structuredart2.png build/structuredart2.png
 cp resources/structuredart3.png build/structuredart3.png
 
 echo "Compiling $APP_NAME..."
-# clang -g -Weverything -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES
-clang++ -std="c++17" -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
+clang -g -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES
+# clang++ -g -std="c++17" -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
 # gcc -fsanitize=undefined -g -o3 $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
 
 # echo "Running $APP_NAME"
-(cd build && time ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
+(cd build && ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
 
 # debugging with gdb
 # sudo chmod +x build/$APP_NAME

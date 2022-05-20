@@ -11,7 +11,10 @@ header to read pixels from a .png file.
 
 // #define HELLOPNG_SILENCE
 
-DecodedImage * read_png_from_disk(const char * filename) {
+DecodedImage read_png_from_disk(const char * filename) {
+    DecodedImage return_value;
+    return_value.good = false;
+    
     printf("read from disk: %s\n", filename);
     FILE * imgfile = fopen(
         filename,
@@ -45,18 +48,44 @@ DecodedImage * read_png_from_disk(const char * filename) {
         #ifndef HELLOPNG_SILENCE
         printf("Error - expected bytes read equal to fsize\n");
         #endif
-        return NULL;
+        return return_value;
     }
     
     uint8_t * buffer_copy = start_of_buffer;
+
+    uint32_t png_width;
+    uint32_t png_height;
+    get_PNG_width_height(
+        /* uint8_t * compressed_bytes: */
+            buffer_copy,
+        /* uint32_t compressed_bytes_size: */
+            bytes_read,
+        /* uint32_t * width_out: */
+            &png_width,
+        /* uint32_t * height_out: */
+            &png_height);
     
-    DecodedImage * return_value = decode_PNG(
+    assert(png_width > 0);
+    assert(png_height > 0);
+    
+    return_value.rgba_values_size =
+        png_width * png_height * 4;
+    printf(
+        "allocating %u bytes for rgba_values because [w/h] was: [%u,%u]\n",
+        return_value.rgba_values_size,
+        png_width,
+        png_height);
+    return_value.rgba_values =
+        (uint8_t *)malloc(return_value.rgba_values_size);
+    
+    assert(buffer_copy == start_of_buffer);
+    decode_PNG(
         /* compressed_bytes: */
             buffer_copy,
         /* compressed_bytes_size: */
-            (uint32_t)bytes_read);
-    
-    free(buffer);
+            bytes_read,
+        /* DecodedImage * out_preallocated_png: */
+            &return_value);
     
     return return_value;
 }
@@ -79,57 +108,57 @@ int main(int argc, const char * argv[])
     printf("Inspecting file: %s\n", argv[1]);
     #endif
     
-    DecodedImage * decoded_png = read_png_from_disk(argv[1]);
+    DecodedImage decoded_png = read_png_from_disk(argv[1]);
     
     #ifndef HELLOPNG_SILENCE 
     printf(
         "finished decode_PNG, result was: %s\n",
-        decoded_png->good ? "SUCCESS" : "FAILURE");
+        decoded_png.good ? "SUCCESS" : "FAILURE");
     printf(
         "rgba values in image: %u\n",
-        decoded_png->rgba_values_size);
+        decoded_png.rgba_values_size);
     printf(
         "pixels in image (info from image header): %u\n",
-        decoded_png->pixel_count);
+        decoded_png.pixel_count);
     printf(
         "image width: %u\n",
-        decoded_png->width);
+        decoded_png.width);
     printf(
         "image height: %u\n",
-        decoded_png->height);
+        decoded_png.height);
     #endif
     
     assert(
-        decoded_png->width * decoded_png->height * 4 ==
-            decoded_png->rgba_values_size); 
+        decoded_png.width * decoded_png.height * 4 ==
+            decoded_png.rgba_values_size); 
     
-    if (decoded_png->good) {
+    if (decoded_png.good) {
         uint32_t avg_r = 0;
         uint32_t avg_g = 0;
         uint32_t avg_b = 0;
         uint32_t avg_alpha = 0;
         for (
             uint32_t i = 0;
-            (i+3) < decoded_png->rgba_values_size;
+            (i+3) < decoded_png.rgba_values_size;
             i += 4)
         {
-            avg_r += decoded_png->rgba_values[i];
-            avg_g += decoded_png->rgba_values[i+1];
-            avg_b += decoded_png->rgba_values[i+2];
-            avg_alpha += decoded_png->rgba_values[i+3];
+            avg_r += decoded_png.rgba_values[i];
+            avg_g += decoded_png.rgba_values[i+1];
+            avg_b += decoded_png.rgba_values[i+2];
+            avg_alpha += decoded_png.rgba_values[i+3];
         }
         #ifndef HELLOPNG_SILENCE
         printf(
             "average pixel: [%u,%u,%u,%u]\n",
-            avg_r / decoded_png->pixel_count,
-            avg_g / decoded_png->pixel_count,
-            avg_b / decoded_png->pixel_count,
-            avg_alpha / decoded_png->pixel_count);
+            avg_r / decoded_png.pixel_count,
+            avg_g / decoded_png.pixel_count,
+            avg_b / decoded_png.pixel_count,
+            avg_alpha / decoded_png.pixel_count);
         #endif
         
         DecodedImage resized_img =
             resize_image_to_width(
-                /* original  : */ decoded_png,
+                /* original  : */ &decoded_png,
                 /* new_width : */ 40);
         
         // assert(

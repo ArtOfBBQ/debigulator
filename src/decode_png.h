@@ -33,14 +33,21 @@ All other code in the .c file is implementation detail.
 #include "inttypes.h"
 
 void get_PNG_width_height(
-    uint8_t * compressed_bytes,
-    uint32_t compressed_bytes_size,
-    uint32_t * width_out,
-    uint32_t * height_out);
+    const uint8_t * compressed_bytes,
+    const uint32_t compressed_bytes_size,
+    uint32_t * out_width,
+    uint32_t * out_height);
 
-DecodedImage * decode_PNG(
-    uint8_t * compressed_bytes,
-    uint32_t compressed_bytes_size);
+// This function expects you to allocate memory for
+// a DecodedImage and the rgba_values inside. The function
+// will 'fill in' the results.
+//
+// DecodedImage->good will be set to 0 if the decoding was
+// unsuccesful, and to 1 if the decoding was succesful.
+void decode_PNG(
+    const uint8_t * compressed_bytes,
+    const uint32_t compressed_bytes_size,
+    DecodedImage * out_preallocated_png);
 
 #endif
 

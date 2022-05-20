@@ -32,7 +32,6 @@ uint8_t * consume_chunk(
     DataStream * from,
     const size_t size_to_consume);
 
-
 // TODO: remove this, API should show only inflate()
 void discard_bits(
     DataStream * from,
@@ -40,9 +39,9 @@ void discard_bits(
 
 uint32_t inflate(
     uint8_t * recipient,
-    uint32_t recipient_size,
+    const uint32_t recipient_size,
     DataStream * data_stream,
-    unsigned int compressed_size_bytes);
+    const uint32_t compressed_size_bytes);
 
 #endif
 

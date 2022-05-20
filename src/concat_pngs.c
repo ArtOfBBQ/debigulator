@@ -37,16 +37,39 @@ DecodedImage * read_png_from_disk(const char * filename) {
         #ifndef HELLOPNG_SILENCE
         printf("Error - expected bytes read equal to fsize\n");
         #endif
-        return 1;
+        return NULL;
     }
     
     uint8_t * buffer_copy = start_of_buffer;
     
-    DecodedImage * return_value = decode_PNG(
+    DecodedImage * return_value = malloc(sizeof(DecodedImage));
+    uint32_t png_width;
+    uint32_t png_height;
+    get_PNG_width_height(
+        /* uint8_t * compressed_bytes: */
+            buffer_copy,
+        /* uint32_t compressed_bytes_size: */
+            bytes_read,
+        /* uint32_t * width_out: */
+            &png_width,
+        /* uint32_t * height_out: */
+            &png_height);
+    assert(png_width > 0);
+    assert(png_height > 0);
+    
+    return_value->rgba_values_size =
+        png_width * png_height * 4;
+    return_value->rgba_values =
+        (uint8_t *)malloc(return_value->rgba_values_size);
+    
+    assert(buffer_copy == start_of_buffer);
+    decode_PNG(
         /* compressed_bytes: */
             buffer_copy,
         /* compressed_bytes_size: */
-            (uint32_t)bytes_read);
+            bytes_read,
+        /* DecodedImage * out_preallocated_png: */
+            return_value);
     
     free(buffer);
     
@@ -55,7 +78,7 @@ DecodedImage * read_png_from_disk(const char * filename) {
 
 int main() {
     printf("concat_pngs main()\n");
-
+    
     DecodedImage * to_concat[3];
     uint32_t to_concat_size = 3;
     
@@ -63,7 +86,7 @@ int main() {
     printf("fs_angrymob height: %u\n", to_concat[0]->height);
     to_concat[1] = read_png_from_disk("structuredart2.png");
     to_concat[2] = read_png_from_disk("structuredart3.png");
-   
+    
     uint32_t sprite_rows;
     uint32_t sprite_columns; 
     DecodedImage recipient = concatenate_images(
