@@ -1,9 +1,9 @@
-APP_NAME="concat_pngs"
-INPUT_FILE="fs_bribery"
+APP_NAME="hellopng"
+INPUT_FILE="structuredart1.png"
 INPUT_EXTENSION="png"
 ADDITIONAL_SOURCES="src/decodedimage.c src/decode_png.c src/inflate.c src/decode_gz.c"
 
-echo "Building $APP_NAME... (this shell script must be run from the app's root directory)"
+echo "Building $APP_NAME... (this shell script must be run from the app's root directory"
 
 echo "deleting previous build..."
 rm -r -f build
@@ -24,9 +24,8 @@ cp resources/structuredart2.png build/structuredart2.png
 cp resources/structuredart3.png build/structuredart3.png
 
 echo "Compiling $APP_NAME..."
-clang -g -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES
-# clang++ -g -std="c++17" -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
-# gcc -fsanitize=undefined -g -o3 $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
+clang -g -Wall -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES
+# clang++ -g -Wall -lstdc++ -std="c++17" -o3 -o build/$APP_NAME -x c++ src/concat_pngs.c $ADDITIONAL_SOURCES
 
 # echo "Running $APP_NAME"
 (cd build && ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)

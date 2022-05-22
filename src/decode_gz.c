@@ -3,6 +3,7 @@
 #define true 1
 #define false 0
 
+#ifndef DECODE_GZ_SILENCE
 static char * consume_till_terminate(
     DataStream * from,
     const uint32_t max_size,
@@ -40,6 +41,7 @@ static char * consume_till_terminate(
     
     return return_value;
 }
+#endif
 
 #pragma pack(push, 1)
 /*
@@ -164,12 +166,13 @@ DecodedData * decode_gz(
         #ifndef DECODE_GZ_SILENCE
         printf("original filename was included, reading...\n");
         #endif
+
+        #ifndef DECODE_GZ_SILENCE
         char * filename = consume_till_terminate(
             /* from: */ data_stream,
             /* max_size: */ data_stream->size_left,
             /* terminator: */ (char)0);
         
-        #ifndef DECODE_GZ_SILENCE
         printf(
             "original filename: %s\n",
             filename);
@@ -184,12 +187,12 @@ DecodedData * decode_gz(
     +===================================+ 
     */
     if (gzip_header->FLG >> 4 & 1) {
+        #ifndef DECODE_GZ_SILENCE
         char * comment = consume_till_terminate(
             /* from: */ data_stream,
             /* max_size: */ data_stream->size_left,
             /* terminator: */ (char)0);
         
-        #ifndef DECODE_GZ_SILENCE
         printf("comment: %s\n", comment);
         #endif
     }

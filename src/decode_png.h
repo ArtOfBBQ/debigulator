@@ -32,21 +32,31 @@ All other code in the .c file is implementation detail.
 #include "inflate.h"
 #include "inttypes.h"
 
+/*
+You can find out the width and height of a PNG by inspecting
+only the first 26 bytes of a file.
+
+You can run this before running decode_PNG() to find out
+exactly how much memory your preallocated DecodedImage *
+struct needs
+*/
 void get_PNG_width_height(
     const uint8_t * compressed_bytes,
     const uint32_t compressed_bytes_size,
     uint32_t * out_width,
     uint32_t * out_height);
 
-// This function expects you to allocate memory for
-// a DecodedImage and the rgba_values inside. The function
-// will 'fill in' the results.
-//
-// DecodedImage->good will be set to 0 if the decoding was
-// unsuccesful, and to 1 if the decoding was succesful.
+/*
+This function expects you to allocate memory for
+a DecodedImage and the rgba_values inside. The function
+will 'fill in' the results.
+
+DecodedImage->good will be set to 0 if the decoding was
+unsuccesful, and to 1 if the decoding was succesful.
+*/
 void decode_PNG(
     const uint8_t * compressed_bytes,
-    const uint32_t compressed_bytes_size,
+    const uint64_t compressed_bytes_size,
     DecodedImage * out_preallocated_png);
 
 #endif

@@ -193,10 +193,6 @@ void overwrite_subregion(
         return;
     }
     
-    uint32_t slice_size =
-        whole_image->rgba_values_size
-            / column_count
-            / row_count;
     uint32_t slice_width =
         whole_image->width / column_count;
     uint32_t slice_height =
@@ -214,9 +210,6 @@ void overwrite_subregion(
         cur_y <= end_y;
         cur_y++)
     {
-        // printf("cur_y: %u\n", cur_y);
-        // get the pixel that's at [start_x, cur_y]
-        // copcur_y slice_width pixels
         uint32_t pixel_i =
             ((start_x - 1) * 4)
                 + ((cur_y - 1) * whole_image->width * 4);
@@ -234,7 +227,7 @@ void overwrite_subregion(
 }
 
 DecodedImage concatenate_images(
-    const DecodedImage ** images_to_concat,
+    DecodedImage ** images_to_concat,
     const uint32_t images_to_concat_size,
     uint32_t * out_sprite_rows,
     uint32_t * out_sprite_columns)
@@ -242,6 +235,8 @@ DecodedImage concatenate_images(
     assert(images_to_concat_size > 0);
     assert(images_to_concat != NULL);
     assert(images_to_concat[0] != NULL);
+    assert(images_to_concat[0]->width > 0);
+    assert(images_to_concat[0]->height > 0);
     
     DecodedImage return_value;
     
@@ -252,8 +247,11 @@ DecodedImage concatenate_images(
         return return_value;
     }
     
-    uint32_t base_height = images_to_concat[0]->height;
-    uint32_t base_width = images_to_concat[0]->width;
+    uint32_t base_height =
+        images_to_concat[0]->height;
+    uint32_t base_width =
+        images_to_concat[0]->width;
+    
     printf(
         "expecting images with height/width: [%u,%u]\n",
         base_height,
@@ -310,8 +308,20 @@ DecodedImage concatenate_images(
                 break;
             }
             
-            assert(images_to_concat[i]->height == base_height);
-            assert(images_to_concat[i]->width == base_width);
+            if (
+                images_to_concat[i]->height != base_height
+                || images_to_concat[i]->width != base_width)
+            {
+                printf(
+                    "ERROR: images_to_concat[%u]->height of %u mismatched images_to_concat[0]->height of %u AND/OR images_to_concat[%u]->width of %u mismatched images_to_concat[0]->width of %u\n",
+                    i,
+                    images_to_concat[i]->height,
+                    images_to_concat[0]->height,
+                    i,
+                    images_to_concat[i]->width,
+                    images_to_concat[0]->width);
+                assert(0);
+            }
             
             overwrite_subregion(
                 /* whole_image: */ &return_value,

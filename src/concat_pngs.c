@@ -42,7 +42,8 @@ DecodedImage * read_png_from_disk(const char * filename) {
     
     uint8_t * buffer_copy = start_of_buffer;
     
-    DecodedImage * return_value = malloc(sizeof(DecodedImage));
+    DecodedImage * return_value =
+        (DecodedImage *)malloc(sizeof(DecodedImage));
     uint32_t png_width;
     uint32_t png_height;
     get_PNG_width_height(
@@ -90,7 +91,7 @@ int main() {
     uint32_t sprite_rows;
     uint32_t sprite_columns; 
     DecodedImage recipient = concatenate_images(
-        /* to_concat: */ &to_concat,
+        /* to_concat: */ to_concat,
         /* to_concat_size: */ to_concat_size,
         /* out_sprite_rows: */ &sprite_rows,
         /* out_sprite_columns: */ &sprite_columns);
@@ -117,5 +118,6 @@ int main() {
         /* int stride_in_bytes : */
             recipient.rgba_values_size /
                     recipient.height);
+    printf("stbi_write result: %i\n", result);
 }
 
