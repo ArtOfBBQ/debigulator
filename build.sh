@@ -26,7 +26,7 @@ cp resources/structuredart3.png build/structuredart3.png
 echo "Compiling $APP_NAME..."
 # clang -g -Wall -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES
 # clang++ -g -Wall -lstdc++ -std="c++17" -o3 -o build/$APP_NAME -x c++ src/concat_pngs.c $ADDITIONAL_SOURCES
-gcc -g -Wall -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES
+gcc -g -Wall -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/hellopng.c $ADDITIONAL_SOURCES
 
 # echo "Running $APP_NAME"
 (cd build && ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
@@ -46,5 +46,5 @@ gcc -g -Wall -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDIT
 
 # this tool seems awesome but it doesn't work on macos thx apple
 # (cd build && valgrind --leak-check=full --track-origins=yes ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
-(cd build && valgrind --leak-check=full --track-origins=yes ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
+# (cd build && valgrind --leak-check=full --track-origins=yes ./$APP_NAME $INPUT_FILE.$INPUT_EXTENSION)
 
