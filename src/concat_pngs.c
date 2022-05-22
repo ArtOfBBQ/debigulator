@@ -119,5 +119,13 @@ int main() {
             recipient.rgba_values_size /
                     recipient.height);
     printf("stbi_write result: %i\n", result);
+
+    // note to self: you're adding manual free() calls because
+    // you want to verify leaks with valgrind
+    free(recipient.rgba_values);
+    for (uint32_t i = 0; i < 3; i++) {
+	free(to_concat[i]->rgba_values);
+	free(to_concat[i]);
+    }
 }
 

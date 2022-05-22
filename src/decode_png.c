@@ -3,11 +3,6 @@
 #define PNG_SILENCE
 // #define IGNORE_CRC_CHECKS
 // #define DECODE_PNG_IGNORE_ASSERTS
-// true/false/ignoreasserts are undef'd at EOF
-
-#define true 1
-#define false 0
-#define bool32_t uint32_t
 
 #ifndef PNG_SILENCE
 #include "stdio.h"
@@ -398,18 +393,18 @@ uint32_t flip_endian(const uint32_t to_flip) {
     return return_value;
 }
 
-static bool32_t are_equal_strings(
+static uint32_t are_equal_strings(
     char * str1,
     char * str2,
     size_t len)
 {
     for (size_t i = 0; i < len; i++) {
         if (str1[i] != str2[i]) {
-            return false;
+            return 0;
         }
     }
     
-    return true;
+    return 1;
 }
 
 /*
@@ -603,7 +598,7 @@ void decode_PNG(
     DecodedImage * out_preallocated_png)
 {
     DecodedImage * return_value = out_preallocated_png;
-    return_value->good = false;
+    return_value->good = 0;
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(compressed_bytes_size > 0);
@@ -658,8 +653,8 @@ void decode_PNG(
     uint8_t * decoded_stream_start = NULL;
     unsigned int decompressed_size = 0;
     
-    bool32_t found_first_IDAT = false;
-    bool32_t found_IHDR = false;
+    uint32_t found_first_IDAT = 0;
+    uint32_t found_IHDR = 0;
     
     while (
         entire_file.size_left >= 12)
@@ -728,7 +723,7 @@ void decode_PNG(
                 #ifndef PNG_SILENCE
                 printf("INFLATE algorithm failed\n");
                 #endif
-                return_value->good = false;
+                return_value->good = 0;
                 return;
             } else {
                 #ifndef PNG_SILENCE
@@ -758,7 +753,7 @@ void decode_PNG(
         
         if (chunk_header.length >= entire_file.size_left) {
         
-            return_value->good = false;
+            return_value->good = 0;
         #ifndef PNG_SILENCE 
         printf(
         "failing to decode PNG, [%s] chunk of length %u is larger than remaining file size of %u\n",
@@ -781,7 +776,7 @@ void decode_PNG(
             "failing to decode PNG. [%s] chunk should never appear before [IHDR] chunk\n",
             chunk_header.type);
         #endif
-                return_value->good = false;
+                return_value->good = 0;
                 return;
             }
         } else if (are_equal_strings(
@@ -789,7 +784,7 @@ void decode_PNG(
             (char *)"IHDR",
             4))
         {
-            found_IHDR = true;
+            found_IHDR = 1;
             #ifndef DECODE_PNG_IGNORE_ASSERTS
         assert(entire_file.bits_left == 0);
             #endif
@@ -821,7 +816,7 @@ void decode_PNG(
                     "unsupported PNG bit depth %u\n",
                     ihdr_body->bit_depth);
                 #endif
-                return_value->good = false;
+                return_value->good = 0;
                 return;
             }
             
@@ -836,7 +831,7 @@ void decode_PNG(
                     "unsupported PNG color type: %u (expected 2 or 6)\n",
                     ihdr_body->color_type);
                 #endif
-                return_value->good = false;
+                return_value->good = 0;
                 return;
             }
             
@@ -863,7 +858,7 @@ void decode_PNG(
         printf(
             "failing to decode PNG. filter method in [IHDR] chunk must be 0\n");
         #endif
-                return_value->good = false;
+                return_value->good = 0;
                 return;
             }
             
@@ -876,14 +871,14 @@ void decode_PNG(
             entire_file.size_left,
             entire_file.bits_left);
         #endif
-                return_value->good = false;
+                return_value->good = 0;
                 return;
             }
        
             #ifndef DECODE_PNG_IGNORE_ASSERTS
-        assert(decoded_stream == NULL);
+	    assert(decoded_stream == NULL);
             #endif
-        
+	    
             decoded_stream =
                 (uint8_t *)malloc(decompressed_size);
             // this copy (compressed_data) is necessary because
@@ -908,7 +903,7 @@ void decode_PNG(
         #ifndef PNG_SILENCE
         printf("failing to decode PNG - no [IHDR] chunk was found, yet already in [IDAT] chunk\n");
         #endif
-                return_value->good = false;
+                return_value->good = 0;
                 return;
             }
             
@@ -919,7 +914,7 @@ void decode_PNG(
                 #ifndef PNG_SILENCE
                 printf("\t1st IDAT chunk, read zlib headers..\n");
                 #endif
-                found_first_IDAT = true;
+                found_first_IDAT = 1;
                 
                 ZLIBHeader zlib_header =
                     *consume_struct(
@@ -947,7 +942,7 @@ void decode_PNG(
                     compression_info);
                 #endif
                 if (compression_method != 8) {
-                    return_value->good = false;
+                    return_value->good = 0;
                     return;
                 }
                 
@@ -977,7 +972,7 @@ void decode_PNG(
                 if (full_check_value == 0
                     || full_check_value % 31 != 0)
                 {
-                    return_value->good = false;
+                    return_value->good = 0;
                     return;
                 }
                 
@@ -1021,7 +1016,7 @@ void decode_PNG(
                 recompression might be worthwhile.
                 */
                 if (FDICT != 0) {
-                    return_value->good = false;
+                    return_value->good = 0;
                     return;
                 }
                 
@@ -1044,7 +1039,7 @@ void decode_PNG(
                 chunk_data_length);
             #endif
             if (entire_file.bits_left != 0) {
-                return_value->good = false;
+                return_value->good = 0;
                 return;
             }
             
@@ -1062,7 +1057,7 @@ void decode_PNG(
             4))
         {
             if (decoded_stream == NULL) {
-                return_value->good = false;
+                return_value->good = 0;
                 return;
             }
             
@@ -1097,7 +1092,7 @@ void decode_PNG(
         entire_file.size_left,
         entire_file.bits_left);
         #endif
-            return_value->good = false;
+            return_value->good = 0;
             return;
         }
         
@@ -1279,9 +1274,10 @@ void decode_PNG(
         return_value->rgba_values_size =
             return_value->pixel_count * 4;
     }
-    
-    return_value->good = true;
-}
 
-#undef DECODE_PNG_IGNORE_ASSERTS
+    free(decoded_stream_start);	
+    free(compressed_data_begin);
+    
+    return_value->good = 1;
+}
 

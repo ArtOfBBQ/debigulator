@@ -1,7 +1,5 @@
 #include "inflate.h"
 
-#define bool32_t uint32_t
-
 #define INFLATE_SILENCE
 // #define INFLATE_IGNORE_ASSERTS
 
@@ -24,7 +22,7 @@ typedef struct HuffmanEntry {
     uint32_t key;
     uint32_t code_length;
     uint32_t value;
-    bool32_t used;
+    uint32_t used;
 } HuffmanEntry;
 
 /*
@@ -652,7 +650,7 @@ static HuffmanEntry * unpack_huffman(
         // happen when the PNG is corrupted and the code lengths
         // are wrong (too many small code lengths)
         if (smallest_code[bits] >= (1 << bits)) {
-            bool32_t actually_used = 0;
+            uint32_t actually_used = 0;
             for (uint32_t i = 0; i < array_size; i++) {
                 if (unpacked_dict[i].code_length == bits) {
                     actually_used = 1;
