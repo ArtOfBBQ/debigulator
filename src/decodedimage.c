@@ -1,143 +1,5 @@
 #include "decodedimage.h"
 
-DecodedImage downsize_image_to_scalar(
-    DecodedImage * original,
-    float x_scalar,
-    float y_scalar)
-{
-    #ifndef DECODED_IMAGE_IGNORE_ASSERTS
-    assert(x_scalar < 1);
-    assert(y_scalar < 1);
-    assert(original != NULL);
-    assert(original->rgba_values != NULL);
-    assert(original->rgba_values_size > 0);
-    assert(original->width > 0);
-    assert(original->height > 0);
-    #endif
-    
-    DecodedImage return_value;
-    
-    return_value.width =
-        (uint32_t)((float)original->width * x_scalar);
-    return_value.height =
-        (uint32_t)((float)original->height * y_scalar);
-    #ifndef DECODED_IMAGE_IGNORE_ASSERTS
-    assert(return_value.width > 0);
-    assert(return_value.height > 0);
-    #endif
-    return_value.pixel_count =
-        return_value.width * return_value.height;
-    return_value.rgba_values_size =
-        return_value.pixel_count * 4;
-    return_value.rgba_values =
-        (uint8_t *)malloc(sizeof(return_value.rgba_values_size));
-    
-    float pixels_per_x = original->width / return_value.width;
-    float pixels_per_y = original->height / return_value.height;
-    
-    // w,h is the width, height position in the new image
-    for (uint32_t w = 0; w < return_value.width; w++) {
-        for (uint32_t h = 0; h < return_value.height; h++) {
-            
-            // first_x, last_x etc. are the positions
-            // of the relevant pixels in the original image
-            uint32_t first_x =
-                (uint32_t)((float)w * pixels_per_x);
-            uint32_t last_x =
-                (uint32_t)((float)(w + 1) * pixels_per_x);
-            uint32_t first_y =
-                (uint32_t)((float)h * pixels_per_y);
-            uint32_t last_y =
-                (uint32_t)((float)(h + 1) * pixels_per_y);
-            uint32_t pixels_per_pixel = 1;
-            #ifndef DECODED_IMAGE_IGNORE_ASSERTS
-            assert(first_x >= 0);
-            assert(last_x <= original->width);
-            assert(first_y >= 0);
-            assert(last_y <= original->height);
-            #endif
-            
-            uint32_t sum_val_r = 0;
-            uint32_t sum_val_g = 0;
-            uint32_t sum_val_b = 0;
-            uint32_t sum_val_a = 0;
-           
-            for (
-                uint32_t orig_x = first_x;
-                orig_x <= last_x;
-                orig_x++) 
-            {
-                for (
-                    uint32_t orig_y = first_y;
-                    orig_y <= last_y;
-                    orig_y++) 
-                {
-                    uint32_t orig_pixel =
-                        (orig_y * original->width)
-                        + orig_x;
-                    if (orig_pixel >= original->pixel_count) {
-                        orig_pixel = original->pixel_count - 1;
-                    }
-                    #ifndef DECODED_IMAGE_IGNORE_ASSERTS
-                    assert(orig_pixel >= 0);
-                    assert(orig_pixel < original->pixel_count);
-                    #endif
-                    uint32_t idx = orig_pixel * 4;
-                    
-                    #ifndef DECODED_IMAGE_IGNORE_ASSERTS
-                    assert(idx >= 0);
-                    // assert(
-                    //     (idx + 3) < original->rgba_values_size);
-                    #endif
-                    
-                    sum_val_r += original->rgba_values[idx];
-                    sum_val_g += original->rgba_values[idx + 1];
-                    sum_val_b += original->rgba_values[idx + 2];
-                    sum_val_a += original->rgba_values[idx + 3];
-                }
-            }
-            
-            uint32_t rv_pixel =
-                (h * return_value.width)
-                + w;
-            #ifndef DECODED_IMAGE_IGNORE_ASSERTS
-            assert(rv_pixel >= 0);
-            assert(rv_pixel < return_value.pixel_count);
-            #endif
-            uint32_t i = rv_pixel * 4;
-            #ifndef DECODED_IMAGE_IGNORE_ASSERTS
-            assert(i >= 0);
-            assert((i + 3) < return_value.rgba_values_size);
-            #endif
-           
-            return_value.rgba_values[i] =
-                (uint8_t)(sum_val_r / pixels_per_pixel);
-            return_value.rgba_values[i+1] =
-                (uint8_t)(sum_val_g / pixels_per_pixel);
-            return_value.rgba_values[i+2] =
-                (uint8_t)(sum_val_b / pixels_per_pixel);
-            return_value.rgba_values[i+3] =
-                (uint8_t)(sum_val_a / pixels_per_pixel);
-        }
-    }
-    
-    return return_value;
-}
-
-DecodedImage resize_image_to_width(
-    DecodedImage * original,
-    uint32_t new_width)
-{
-    float x_scalar = (float)new_width / (float)original->width;
-    
-    DecodedImage return_value = downsize_image_to_scalar(
-        /* original      : */ original,
-        /* float x_scalar: */ x_scalar,
-        /* float y_scalar: */ x_scalar);
-    
-    return return_value;
-}
-
 void overwrite_subregion(
     DecodedImage * whole_image,
     const DecodedImage * new_image,
@@ -210,9 +72,6 @@ void overwrite_subregion(
         cur_y <= end_y;
         cur_y++)
     {
-        // printf("cur_y: %u\n", cur_y);
-        // get the pixel that's at [start_x, cur_y]
-        // copcur_y slice_width pixels
         uint32_t pixel_i =
             ((start_x - 1) * 4)
                 + ((cur_y - 1) * whole_image->width * 4);
@@ -238,6 +97,8 @@ DecodedImage concatenate_images(
     assert(images_to_concat_size > 0);
     assert(images_to_concat != NULL);
     assert(images_to_concat[0] != NULL);
+    assert(images_to_concat[0]->width > 0);
+    assert(images_to_concat[0]->height > 0);
     
     DecodedImage return_value;
     
@@ -248,8 +109,11 @@ DecodedImage concatenate_images(
         return return_value;
     }
     
-    uint32_t base_height = images_to_concat[0]->height;
-    uint32_t base_width = images_to_concat[0]->width;
+    uint32_t base_height =
+        images_to_concat[0]->height;
+    uint32_t base_width =
+        images_to_concat[0]->width;
+    
     printf(
         "expecting images with height/width: [%u,%u]\n",
         base_height,
@@ -306,8 +170,20 @@ DecodedImage concatenate_images(
                 break;
             }
             
-            assert(images_to_concat[i]->height == base_height);
-            assert(images_to_concat[i]->width == base_width);
+            if (
+                images_to_concat[i]->height != base_height
+                || images_to_concat[i]->width != base_width)
+            {
+                printf(
+                    "ERROR: images_to_concat[%u]->height of %u mismatched images_to_concat[0]->height of %u AND/OR images_to_concat[%u]->width of %u mismatched images_to_concat[0]->width of %u\n",
+                    i,
+                    images_to_concat[i]->height,
+                    images_to_concat[0]->height,
+                    i,
+                    images_to_concat[i]->width,
+                    images_to_concat[0]->width);
+                assert(0);
+            }
             
             overwrite_subregion(
                 /* whole_image: */ &return_value,

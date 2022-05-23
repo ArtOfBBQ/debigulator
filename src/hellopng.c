@@ -157,22 +157,13 @@ int main(int argc, const char * argv[])
             avg_alpha / decoded_png.pixel_count);
         #endif
         
-        DecodedImage resized_img =
-            resize_image_to_width(
-                /* original  : */ &decoded_png,
-                /* new_width : */ 40);
-        
-        // assert(
-        //     resized_img.pixel_count
-        //         == resized_img.rgba_values_size / 4);
-        
         #ifndef HELLOPNG_SILENCE
         // let's print the PNG to the screen in crappy
         // unicode characters
-        uint8_t * printfeed = resized_img.rgba_values;
-        for (uint32_t h = 0; h < resized_img.height; h++) {
+        uint8_t * printfeed = decoded_png.rgba_values;
+        for (uint32_t h = 0; h < decoded_png.height; h++) {
             printf("\n");
-            for (uint32_t w = 0; w < resized_img.width; w++) {
+            for (uint32_t w = 0; w < decoded_png.width; w++) {
                 // average of rgb
                 uint32_t pixel_strength =
                     (printfeed[0] + printfeed[1] + printfeed[2])

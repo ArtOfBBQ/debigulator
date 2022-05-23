@@ -28,15 +28,6 @@ typedef struct DecodedImage {
     bool32_t good;
 } DecodedImage;
 
-DecodedImage downsize_image_to_scalar(
-    DecodedImage * original,
-    float x_scalar,
-    float y_scalar);
-
-DecodedImage resize_image_to_width(
-    DecodedImage * original,
-    uint32_t new_width);
-
 /*
 you would overwrite the right half of the image by setting:
 row_count=1
