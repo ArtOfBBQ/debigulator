@@ -4,6 +4,7 @@ header to read pixels from a .png file.
 */
 
 #include "decode_png.h"
+#include "decodedimage.h"
 #include "stdio.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
