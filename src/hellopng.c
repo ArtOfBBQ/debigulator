@@ -4,6 +4,7 @@ header to read pixels from a .png file.
 */
 
 #include "decode_png.h"
+#include "decodedimage.h"
 #include "stdio.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -13,7 +14,7 @@ header to read pixels from a .png file.
 
 DecodedImage read_png_from_disk(const char * filename) {
     DecodedImage return_value;
-    return_value.good = false;
+    return_value.good = 0;
     
     printf("read from disk: %s\n", filename);
     FILE * imgfile = fopen(

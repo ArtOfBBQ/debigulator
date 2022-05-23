@@ -193,10 +193,6 @@ void overwrite_subregion(
         return;
     }
     
-    uint32_t slice_size =
-        whole_image->rgba_values_size
-            / column_count
-            / row_count;
     uint32_t slice_width =
         whole_image->width / column_count;
     uint32_t slice_height =
@@ -234,7 +230,7 @@ void overwrite_subregion(
 }
 
 DecodedImage concatenate_images(
-    const DecodedImage ** images_to_concat,
+    DecodedImage ** images_to_concat,
     const uint32_t images_to_concat_size,
     uint32_t * out_sprite_rows,
     uint32_t * out_sprite_columns)
