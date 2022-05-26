@@ -114,11 +114,6 @@ DecodedImage concatenate_images(
     uint32_t base_width =
         images_to_concat[0]->width;
     
-    printf(
-        "expecting images with height/width: [%u,%u]\n",
-        base_height,
-        base_width);
-    
     while (1)
     {
        *out_sprite_columns += 1;
@@ -148,12 +143,6 @@ DecodedImage concatenate_images(
         * 4;
     return_value.rgba_values =
         (uint8_t *)malloc(return_value.rgba_values_size); 
-    
-    printf(
-        "created return_value [width,height] = [%u,%u] with rgba_values_size: %u\n",
-        return_value.width,
-        return_value.height,
-        return_value.rgba_values_size);
     
     uint32_t i = 0; 
     for (
@@ -195,10 +184,6 @@ DecodedImage concatenate_images(
             i++;
         }
     }
-    printf(
-        "overwrote subregions, concatenation complete. New dimensions: [%u,%u]\n",
-        return_value.width,
-        return_value.height);
     
     return return_value;
 }
