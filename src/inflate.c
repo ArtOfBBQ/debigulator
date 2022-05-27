@@ -202,16 +202,6 @@ static uint32_t peek_bits(
     return return_value;
 }
 
-// TODO: handle error paths instead of just crashing
-static void crash_program() {
-    #ifndef INFLATE_SILENCE
-    printf("intentionally crashing program...\n");
-    #endif
-    uint8_t * bad_memory_access = NULL;
-    *bad_memory_access = 0;
-    return;
-}
-
 /*
 For our hashmaps, we need a hash function to index them
 given the key & code length we're looking for
@@ -447,7 +437,7 @@ static uint32_t hashed_huffman_decode(
         bitcount);
     #endif
     
-    crash_program();
+    assert(0);
     
     return 0;
 }
@@ -576,6 +566,8 @@ static HuffmanEntry * unpack_huffman(
     uint32_t * array,
     const uint32_t array_size)
 {
+    assert(array_size > 0);
+    
     HuffmanEntry * unpacked_dict =
         (HuffmanEntry *)malloc(
             sizeof(HuffmanEntry) * array_size);
@@ -664,7 +656,7 @@ static HuffmanEntry * unpack_huffman(
                     " - value can't fit in that few bits!\n");
                 #endif
                 
-                crash_program();
+                assert(0);
             }
         }
     }
@@ -901,7 +893,7 @@ uint32_t inflate(
                 "\t\t\tERROR - unexpected deflate BTYPE %u\n",
                 BTYPE);
             #endif
-            crash_program();
+            assert(0);
         } else {
             #ifndef INFLATE_IGNORE_ASSERTS
             assert(BTYPE >= 1 && BTYPE <= 2);
@@ -1284,7 +1276,7 @@ uint32_t inflate(
                             "ERROR : encoded_len %u\n",
                             encoded_len);
                         #endif
-                        crash_program();
+                        assert(0);
                     }
                 }
                 

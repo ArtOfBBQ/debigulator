@@ -377,7 +377,7 @@ typedef struct ZLIBFooter {
 PNG files have many 4-byte big endian values
 We need to able to flip them to little endian
 */
-uint32_t flip_endian(const uint32_t to_flip) {
+static uint32_t flip_endian(const uint32_t to_flip) {
     
     uint32_t byte_1 = ((to_flip >> 0) & 255);
     uint32_t byte_2 = ((to_flip >> 8) & 255);
@@ -1152,6 +1152,7 @@ void decode_PNG(
     [c][b]
     [a][x]
     */
+    assert(ihdr_body != NULL);
     uint8_t bytes_per_channel =
         ihdr_body->color_type == 2 ? 3 : 4;
     #ifndef PNG_SILENCE
