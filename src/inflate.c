@@ -590,8 +590,7 @@ static HuffmanEntry * unpack_huffman(
     
     // 1) Count the number of codes for each code length.  Let
     // bl_count[N] be the number of codes of length N, N >= 1.
-    uint32_t * bl_count = (uint32_t *)malloc(
-        array_size * sizeof(uint32_t));
+    uint32_t bl_count[array_size];
     unsigned int unique_code_lengths = 0;
     unsigned int min_code_length = 123454321;
     unsigned int max_code_length = 0;
@@ -615,8 +614,7 @@ static HuffmanEntry * unpack_huffman(
     // Spec: 
     // 2) "Find the numerical value of the smallest code for each
     //    code length:"
-    uint32_t * smallest_code =
-        (uint32_t *)malloc(array_size * sizeof(uint32_t));
+    uint32_t smallest_code[array_size];
     
     /*
         this code is yanked straight from the spec
@@ -629,7 +627,7 @@ static HuffmanEntry * unpack_huffman(
     */
     unsigned int code = 0;
     bl_count[0] = 0;
-   
+    
     #ifndef INFLATE_IGNORE_ASSERTS 
     assert(max_code_length < array_size);
     #endif
@@ -687,9 +685,6 @@ static HuffmanEntry * unpack_huffman(
             smallest_code[len]++;
         }
     }
-    
-    free(bl_count);
-    free(smallest_code);
     
     return unpacked_dict;
 }
