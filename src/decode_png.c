@@ -673,7 +673,7 @@ void decode_PNG(
     uint32_t found_IHDR = 0;
     
     while (
-        entire_file.size_left >= 12)
+        entire_file.size_left >= 8)
     {
         #ifndef PNG_SILENCE
         printf(
@@ -684,7 +684,7 @@ void decode_PNG(
         #ifndef IGNORE_CRC_CHECKS
         unsigned long running_crc = 0xffffffffL;
         #endif
-       
+        
         PNGChunkHeader chunk_header = *consume_struct(
             /* type: */   PNGChunkHeader,
             /* buffer: */ &entire_file);
@@ -701,11 +701,10 @@ void decode_PNG(
             chunk_header.length);
         #endif
         
-        char idat_identifier[5] = "IDAT";
         if (
             !are_equal_strings(
                 chunk_header.type,
-                idat_identifier,
+                "IDAT",
                 4)
             && found_first_IDAT)
         {
@@ -763,15 +762,7 @@ void decode_PNG(
                 #endif
             }
         }
-        
-        if (!ran_inflate_algorithm) {
-            #ifndef DECODE_PNG_SILENCE
-            printf("Failed to identify the last iDAT chunk, didn't run inflate algorithm\n");
-            #endif
-            return_value->good = 0;
-            return;
-        }
-        
+         
         #ifndef IGNORE_CRC_CHECKS 
         running_crc = update_crc(
             /* crc: */ running_crc,
@@ -1125,13 +1116,13 @@ void decode_PNG(
         
         if (entire_file.size_left < 4
             || entire_file.bits_left != 0)
-    {
-        #ifndef PNG_SILENCE
-        printf(
-        "failed to decode PNG - unexpected remaining file size of %u and %u bits in buffer\n",
-        entire_file.size_left,
-        entire_file.bits_left);
-        #endif
+        {
+            #ifndef PNG_SILENCE
+            printf(
+            "failed to decode PNG - unexpected remaining file size of %u and %u bits in buffer\n",
+            entire_file.size_left,
+            entire_file.bits_left);
+            #endif
             return_value->good = 0;
             return;
         }
@@ -1158,6 +1149,14 @@ void decode_PNG(
         #endif
     }
     // end of "while size file > pngchunkheader" loop
+    
+    if (!ran_inflate_algorithm) {
+        #ifndef DECODE_PNG_SILENCE
+        printf("Failed to identify the last iDAT chunk, didn't run inflate algorithm\n");
+        #endif
+        return_value->good = 0;
+        return;
+    }
     
     // we've uncompressed the data using DEFLATE
     //
