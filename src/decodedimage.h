@@ -28,6 +28,9 @@ typedef struct DecodedImage {
     bool32_t good;
 } DecodedImage;
 
+uint64_t get_sum_rgba(const DecodedImage * input);
+uint32_t get_avg_rgba(const DecodedImage * input);
+
 /*
 you would overwrite the right half of the image by setting:
 row_count=1

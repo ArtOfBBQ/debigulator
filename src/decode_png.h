@@ -39,6 +39,8 @@ only the first 26 bytes of a file.
 You can run this before running decode_PNG() to find out
 exactly how much memory your preallocated DecodedImage *
 struct needs
+
+Sets out_width and out_height to 0 if unsuccesful
 */
 void get_PNG_width_height(
     const uint8_t * compressed_bytes,

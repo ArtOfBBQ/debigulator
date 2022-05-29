@@ -520,20 +520,22 @@ void get_PNG_width_height(
     uint32_t * width_out,
     uint32_t * height_out)
 {
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
     if (compressed_bytes_size < 26) {
+        #ifndef DECODE_PNG_SILENCE
         printf("ERROR - need 26 bytes for dimension check\n");
+        #endif
+        #ifndef DECODE_PNG_IGNORE_ASSERTS
         assert(0);
+        #endif
+        *width_out = 0;
+        *height_out = 0;
+        return;
     }
-    #endif
     
     DataStream entire_file;
     entire_file.data = (uint8_t *)compressed_bytes;
     entire_file.size_left = compressed_bytes_size;
     entire_file.bits_left = 0;
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(entire_file.bits_left == 0);
-    #endif
     
     // 5 bytes
     PNGSignature png_signature =
@@ -553,8 +555,12 @@ void get_PNG_width_height(
         #ifndef PNG_SILENCE
         printf("aborting - not a PNG file\n");
         #endif
-        #ifndef DECODE_PNG_IGNORE_ASSERTS
-        assert(0);
+        *width_out = 0;
+        *height_out = 0;
+        return;
+    } else {
+        #ifndef PNG_SILENCE
+        printf("found PNG header\n");
         #endif
     }
     
@@ -576,13 +582,15 @@ void get_PNG_width_height(
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(entire_file.bits_left == 0);
     #endif
-
+    
     // again, making a copy to avoid flipping endian in original
     // stream
     // 13 bytes
     IHDRBody ihdr_body = *consume_struct(
-        /* type: */ IHDRBody,
-        /* entire_file: */ &entire_file);
+        /* type: */
+            IHDRBody,
+        /* entire_file: */
+            &entire_file);
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(entire_file.bits_left < 8);
@@ -590,6 +598,12 @@ void get_PNG_width_height(
     
     *width_out = flip_endian(ihdr_body.width);
     *height_out = flip_endian(ihdr_body.height);
+    #ifndef DECODE_PNG_SILENCE
+    printf(
+        "succes! width/height: [%u,%u]\n",
+        *width_out,
+        *height_out);
+    #endif
 }
 
 void decode_PNG(
@@ -597,7 +611,8 @@ void decode_PNG(
     const uint64_t compressed_bytes_size,
     DecodedImage * out_preallocated_png)
 {
-    DecodedImage * return_value = out_preallocated_png;
+    DecodedImage * return_value =
+        out_preallocated_png;
     return_value->good = 0;
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
@@ -639,7 +654,7 @@ void decode_PNG(
         #endif
         return;
     }
-   
+    
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(entire_file.bits_left == 0);
     #endif
@@ -654,6 +669,7 @@ void decode_PNG(
     unsigned int decompressed_size = 0;
     
     uint32_t found_first_IDAT = 0;
+    uint32_t ran_inflate_algorithm = 0;
     uint32_t found_IHDR = 0;
     
     while (
@@ -683,11 +699,14 @@ void decode_PNG(
         printf(
             "after endian flip: %u, ",
             chunk_header.length);
-    #endif
-        if (!are_equal_strings(
-            chunk_header.type,
-            (char *)"IDAT",
-            4)
+        #endif
+        
+        char idat_identifier[5] = "IDAT";
+        if (
+            !are_equal_strings(
+                chunk_header.type,
+                idat_identifier,
+                4)
             && found_first_IDAT)
         {
             #ifndef PNG_SILENCE
@@ -709,6 +728,9 @@ void decode_PNG(
                 "won't INFLATE last 4 bytes because they're an ADLER-32 checksum...\n");
             #endif
             
+            assert(decoded_stream != NULL);
+            assert(compressed_data_stream.data != NULL);
+            ran_inflate_algorithm = 1;
             uint32_t inflate_result = inflate(
                 /* recipient: */
                     decoded_stream,
@@ -726,10 +748,28 @@ void decode_PNG(
                 return_value->good = 0;
                 return;
             } else {
+                uint32_t inflate_checksum = 0;
+                for (
+                    uint32_t i = 0;
+                    i < decompressed_size;
+                    i++)
+                {
+                    inflate_checksum += decoded_stream[i];
+                }
+                assert(inflate_checksum > 0);
+                
                 #ifndef PNG_SILENCE
                 printf("INFLATE succesful\n");
                 #endif
             }
+        }
+        
+        if (!ran_inflate_algorithm) {
+            #ifndef DECODE_PNG_SILENCE
+            printf("Failed to identify the last iDAT chunk, didn't run inflate algorithm\n");
+            #endif
+            return_value->good = 0;
+            return;
         }
         
         #ifndef IGNORE_CRC_CHECKS 
@@ -754,13 +794,13 @@ void decode_PNG(
         if (chunk_header.length >= entire_file.size_left) {
         
             return_value->good = 0;
-        #ifndef PNG_SILENCE 
-        printf(
-        "failing to decode PNG, [%s] chunk of length %u is larger than remaining file size of %u\n",
-        chunk_header.type,
-        chunk_header.length,
-        entire_file.size_left);
-        #endif
+            #ifndef PNG_SILENCE 
+            printf(
+            "failing to decode PNG, [%s] chunk of length %u is larger than remaining file size of %u\n",
+            chunk_header.type,
+            chunk_header.length,
+            entire_file.size_left);
+            #endif
             return;
         }
         
@@ -769,13 +809,13 @@ void decode_PNG(
             (char *)"PLTE",
             4))
         {
-            if (decoded_stream == NULL) {
-
-        #ifndef PNG_SILENCE 
-        printf(
-            "failing to decode PNG. [%s] chunk should never appear before [IHDR] chunk\n",
-            chunk_header.type);
-        #endif
+            if (decoded_stream == NULL)
+            {
+                #ifndef PNG_SILENCE 
+                printf(
+                    "failing to decode PNG. [%s] chunk should never appear before [IHDR] chunk\n",
+                    chunk_header.type);
+                #endif
                 return_value->good = 0;
                 return;
             }
@@ -786,13 +826,13 @@ void decode_PNG(
         {
             found_IHDR = 1;
             #ifndef DECODE_PNG_IGNORE_ASSERTS
-        assert(entire_file.bits_left == 0);
+            assert(entire_file.bits_left == 0);
             #endif
             ihdr_body = consume_struct(
                 /* type: */ IHDRBody,
                 /* entire_file: */ &entire_file);
             #ifndef DECODE_PNG_IGNORE_ASSERTS
-        assert(entire_file.bits_left < 8);
+            assert(entire_file.bits_left < 8);
             #endif
             return_value->width =
                 flip_endian(ihdr_body->width);
@@ -854,10 +894,10 @@ void decode_PNG(
             #endif
             
             if (ihdr_body->filter_method != 0) {
-        #ifndef PNG_SILENCE 
-        printf(
-            "failing to decode PNG. filter method in [IHDR] chunk must be 0\n");
-        #endif
+                #ifndef PNG_SILENCE 
+                printf(
+                    "failing to decode PNG. filter method in [IHDR] chunk must be 0\n");
+                #endif
                 return_value->good = 0;
                 return;
             }
@@ -865,20 +905,20 @@ void decode_PNG(
             if (entire_file.size_left < 4
                 || entire_file.bits_left != 0)
             {
-        #ifndef PNG_SILENCE 
-        printf(
-            "failing to decode PNG - file size left is %u bytes, bits in bit buffer: %u\n",
-            entire_file.size_left,
-            entire_file.bits_left);
-        #endif
+                #ifndef PNG_SILENCE 
+                printf(
+                    "failing to decode PNG - file size left is %u bytes, bits in bit buffer: %u\n",
+                    entire_file.size_left,
+                    entire_file.bits_left);
+                #endif
                 return_value->good = 0;
                 return;
             }
-       
+            
             #ifndef DECODE_PNG_IGNORE_ASSERTS
-	    assert(decoded_stream == NULL);
+                assert(decoded_stream == NULL);
             #endif
-	    
+            
             decoded_stream =
                 (uint8_t *)malloc(decompressed_size);
             // this copy (compressed_data) is necessary because
@@ -900,9 +940,9 @@ void decode_PNG(
                 || decoded_stream == NULL
                 || compressed_data == NULL)
             {
-        #ifndef PNG_SILENCE
-        printf("failing to decode PNG - no [IHDR] chunk was found, yet already in [IDAT] chunk\n");
-        #endif
+                #ifndef PNG_SILENCE
+                printf("failing to decode PNG - no [IHDR] chunk was found, yet already in [IDAT] chunk\n");
+                #endif
                 return_value->good = 0;
                 return;
             }
@@ -1049,7 +1089,7 @@ void decode_PNG(
                     *(uint8_t *)entire_file.data++;
                 compressed_data_stream_size++;
                 entire_file.size_left--;
-            }    
+            }
         }
         else if (are_equal_strings(
             chunk_header.type,
@@ -1107,6 +1147,8 @@ void decode_PNG(
             #ifndef PNG_SILENCE
             printf("ERROR: CRC checksum mismatch - this PNG file is corrupted.\n");
             #endif
+            free(compressed_data_begin);
+            free(decoded_stream_start);
             return;
         } else {
             #ifndef PNG_SILENCE
@@ -1120,8 +1162,8 @@ void decode_PNG(
     // we've uncompressed the data using DEFLATE
     //
     // now let's undo the filtering methods
-    // we already asserted the IHDR filter method was 0
-    // , filter_type is something else and the first num
+    // we already asserted the IHDR filter method was 0,
+    // filter_type is something else and the first num
     // in the uncompressed datastream
     // "filters" could have been called "transforms",
     // not sure how it's a filter
@@ -1135,6 +1177,15 @@ void decode_PNG(
         return_value->width
             * return_value->height;
     return_value->pixel_count = pixel_count;
+    
+    if (return_value->pixel_count < 1) {
+        #ifndef PNG_SILENCE
+        printf(
+            "image has 0 pixels\n");
+        #endif
+        return_value->good = 0;
+        return;
+    }
     
     decoded_stream = decoded_stream_start;
     uint8_t * rgba_at = return_value->rgba_values;
@@ -1179,7 +1230,8 @@ void decode_PNG(
                 "ERROR - unexpected filter_type of %u\n",
                 filter_type);
             #endif
-            assert(0);
+            return_value->good = 0;
+            return;
         }
         #endif
         
@@ -1220,7 +1272,8 @@ void decode_PNG(
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     if(
         return_value->rgba_values_size
-            != return_value->pixel_count * bytes_per_channel) {
+            != return_value->pixel_count * bytes_per_channel)
+    {
         #ifndef PNG_SILENCE
         printf(
             "ERROR - return_value->rgba_values_size of %u with return_value->pixel_count of %u and %u bytes_per_channel",
@@ -1230,7 +1283,7 @@ void decode_PNG(
         #endif
     }
     #endif
-
+    
     // If we have less than 4 channels, forcibly convert to 4
     // channels of data by explicitly adding an alpha channel
     // of 255 to each pixel
@@ -1265,17 +1318,21 @@ void decode_PNG(
             (return_value->rgba_values_size / 10) >
                 return_value->pixel_count * 4)
         {
+            #ifndef PNG_SILENCE
             printf(
                 "ERROR - you passed %u bytes of memory but the decoded PNG only takes %u bytes, this seems excessive\n",
                 return_value->rgba_values_size,
                 return_value->pixel_count * 4);
+            #endif
+            #ifndef DECODE_PNG_IGNORE_ASSERTS
             assert(0);
+            #endif
         }
         
         return_value->rgba_values_size =
             return_value->pixel_count * 4;
     }
-
+    
     free(decoded_stream_start);	
     free(compressed_data_begin);
     

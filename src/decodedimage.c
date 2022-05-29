@@ -1,5 +1,26 @@
 #include "decodedimage.h"
 
+uint64_t get_sum_rgba(
+    const DecodedImage * input)
+{
+    assert(input->rgba_values_size > 0);
+    
+    uint64_t return_value = 0;
+    for (uint32_t i = 0; i < input->rgba_values_size; i++) {
+        return_value += input->rgba_values[i];
+    }
+    
+    return return_value;
+}
+
+uint32_t get_avg_rgba(
+    const DecodedImage * input)
+{
+    assert(input->rgba_values_size > 0);
+    
+    return (uint32_t)(get_sum_rgba(input) / input->rgba_values_size);
+}
+
 void overwrite_subregion(
     DecodedImage * whole_image,
     const DecodedImage * new_image,
@@ -117,15 +138,17 @@ DecodedImage concatenate_images(
     while (1)
     {
        *out_sprite_columns += 1;
-       if (*out_sprite_columns * *out_sprite_rows
-            >= images_to_concat_size)
+       if (
+           *out_sprite_columns * *out_sprite_rows
+               >= images_to_concat_size)
        {
             break;
        }
        
        *out_sprite_rows += 1;
-       if (*out_sprite_columns * *out_sprite_rows
-            >= images_to_concat_size)
+       if (
+           *out_sprite_columns * *out_sprite_rows
+               >= images_to_concat_size)
        {
             break;
        }
@@ -136,11 +159,10 @@ DecodedImage concatenate_images(
     return_value.height =
         (*out_sprite_rows) * base_height;
     
+    return_value.pixel_count =
+        return_value.width * return_value.height;
     return_value.rgba_values_size =
-        base_width * base_height
-        * (*out_sprite_rows)
-        * (*out_sprite_columns)
-        * 4;
+        return_value.pixel_count * 4;
     return_value.rgba_values =
         (uint8_t *)malloc(return_value.rgba_values_size); 
     
@@ -184,6 +206,14 @@ DecodedImage concatenate_images(
             i++;
         }
     }
+    
+    assert(
+        return_value.width * return_value.height ==
+            return_value.pixel_count);
+    assert(
+        return_value.pixel_count * 4 ==
+            return_value.rgba_values_size);
+    return_value.good = 1;
     
     return return_value;
 }

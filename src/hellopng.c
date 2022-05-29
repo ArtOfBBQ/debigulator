@@ -10,50 +10,168 @@ header to read pixels from a .png file.
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_write.h"
 
+#include <Foundation/foundation.h>
+
 // #define HELLOPNG_SILENCE
 
-DecodedImage read_png_from_disk(const char * filename) {
+typedef struct FileBuffer {
+    uint64_t size;
+    char * contents;
+} FileBuffer;
+
+/*
+Get a file's size. Returns -1 if no such file
+*/
+int64_t platform_get_filesize(const char * filename)
+{
+    NSString * nsfilename = [NSString
+        stringWithUTF8String:filename];
+    
+    NSURL * file_url = [[NSBundle mainBundle]
+        URLForResource:[nsfilename stringByDeletingPathExtension]
+        withExtension: [nsfilename pathExtension]];
+        
+    NSError * error_value = nil;
+    NSNumber * file_size;
+    
+    [file_url
+        getResourceValue:&file_size
+        forKey:NSURLFileSizeKey
+        error:&error_value];
+    
+    if (error_value != nil)
+    {
+        NSLog(@" error => %@ ", [error_value userInfo]);
+        assert(0);
+        return -1;
+    }
+    
+    return file_size.intValue;
+}
+
+void platform_read_file(
+    const char * filename,
+    FileBuffer * out_preallocatedbuffer)
+{
+    printf(
+        "platform_read_file: %s into buffer of size: %llu\n",
+        filename,
+        out_preallocatedbuffer->size);
+    
+    NSString * nsfilename = [NSString
+        stringWithUTF8String:filename];
+    
+    NSURL * file_url = [[NSBundle mainBundle]
+        URLForResource:[nsfilename stringByDeletingPathExtension]
+        withExtension: [nsfilename pathExtension]];
+    
+    if (file_url == NULL) {
+        printf("file_url nil!\n");
+        assert(0);
+    }
+    
+    NSError * error = NULL; 
+    NSData * file_data =
+        [NSData
+            dataWithContentsOfURL:file_url
+            options:NSDataReadingUncached
+            error:&error];
+
+    if (error != NULL) {
+        printf("error while reading NSData from file_url\n");
+        assert(0);
+    }
+    
+    NSString * debug_string = [
+        [NSString alloc]
+            initWithData:file_data
+            encoding:NSASCIIStringEncoding];
+    NSLog(@"read NSData: %@", debug_string);
+    
+    if (file_data == nil) {
+        NSLog(
+            @"error => %@ ",
+            [error userInfo]);
+        assert(0);
+    } else {
+        NSLog(@"Succesfully read data");
+    }
+    
+    if (out_preallocatedbuffer->size >
+        [file_data length])
+    {
+        printf(
+            "adjusting buffer size to: %llu\n",
+            (uint64_t)[file_data length]);
+        out_preallocatedbuffer->size = [file_data length];
+    }
+    
+    [file_data
+        getBytes:out_preallocatedbuffer->contents
+        range:NSMakeRange(0, out_preallocatedbuffer->size)];
+        // length:out_preallocatedbuffer->size];
+    
+    printf(
+        "out_preallocatedbuffer->contents:\n%s\n",
+        out_preallocatedbuffer->contents);
+    
+    printf("\n");
+}
+
+DecodedImage read_png_from_disk(
+    const char * filename)
+{
     DecodedImage return_value;
     return_value.good = 0;
     
     printf("read from disk: %s\n", filename);
-    FILE * imgfile = fopen(
-        filename,
-        "rb");
     
-    fseek(imgfile, 0, SEEK_END);
-    unsigned long fsize = (unsigned long)ftell(imgfile);
-    fseek(imgfile, 0, SEEK_SET);
+    // FILE * imgfile = fopen(
+    //     filename,
+    //     "rb");
+    // 
+    // fseek(imgfile, 0, SEEK_END);
+    // unsigned long fsize = (unsigned long)ftell(imgfile);
+    // fseek(imgfile, 0, SEEK_SET);
+    // 
+    // uint8_t * buffer = (uint8_t *)malloc(fsize);
+    // uint8_t * start_of_buffer = buffer;
+    // 
+    // size_t bytes_read = fread(
+    //     /* ptr: */
+    //         buffer,
+    //     /* size of each element to be read: */
+    //         1,
+    //     /* nmemb (no of members) to read: */
+    //         fsize,
+    //     /* stream: */
+    //         imgfile);
+    //  
+    //  #ifndef HELLOPNG_SILENCE
+    //  printf(
+    //      "bytes read from raw file: %zu\n",
+    //      bytes_read);
+    //  #endif
+    //  
+    //  fclose(imgfile);
+    // if (bytes_read != fsize) {
+    //     #ifndef HELLOPNG_SILENCE
+    //     printf("Error - expected bytes read equal to fsize\n");
+    //     #endif
+    //     return return_value;
+    // }
     
-    uint8_t * buffer = (uint8_t *)malloc(fsize);
-    uint8_t * start_of_buffer = buffer;
+    FileBuffer imgfile;
+    imgfile.size = platform_get_filesize(filename);
+    imgfile.contents = (char *)malloc(sizeof(char) * imgfile.size);
+    platform_read_file(
+        "font.png",
+        &imgfile);
+    int64_t bytes_read = imgfile.size;
     
-    size_t bytes_read = fread(
-        /* ptr: */
-            buffer,
-        /* size of each element to be read: */
-            1,
-        /* nmemb (no of members) to read: */
-            fsize,
-        /* stream: */
-            imgfile);
+    // uint8_t * buffer_copy = start_of_buffer;
+    uint8_t * buffer_copy = (uint8_t *)imgfile.contents;
     
-    #ifndef HELLOPNG_SILENCE
-    printf(
-        "bytes read from raw file: %zu\n",
-        bytes_read);
-    #endif
-    
-    fclose(imgfile);
-    if (bytes_read != fsize) {
-        #ifndef HELLOPNG_SILENCE
-        printf("Error - expected bytes read equal to fsize\n");
-        #endif
-        return return_value;
-    }
-    
-    uint8_t * buffer_copy = start_of_buffer;
-
     uint32_t png_width;
     uint32_t png_height;
     get_PNG_width_height(
@@ -79,7 +197,7 @@ DecodedImage read_png_from_disk(const char * filename) {
     return_value.rgba_values =
         (uint8_t *)malloc(return_value.rgba_values_size);
     
-    assert(buffer_copy == start_of_buffer);
+    // assert(buffer_copy == start_of_buffer);
     decode_PNG(
         /* compressed_bytes: */
             buffer_copy,
@@ -87,6 +205,8 @@ DecodedImage read_png_from_disk(const char * filename) {
             bytes_read,
         /* DecodedImage * out_preallocated_png: */
             &return_value);
+
+    free(imgfile.contents);
     
     return return_value;
 }

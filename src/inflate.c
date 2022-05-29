@@ -180,7 +180,7 @@ static uint32_t peek_bits(
         // return value can stay the same but the new byte
         // 's values should be bitshifted left to be bigger
         uint32_t new_byte = *peek_at;
-        return_value |= (new_byte <<= bits_in_return);
+        return_value |= (new_byte << bits_in_return);
         peek_at++;
         bits_to_peek -= 8;
         bits_in_return += 8;
@@ -196,7 +196,8 @@ static uint32_t peek_bits(
             mask_rightmost_bits(
                 /* input: */ *peek_at,
                 /* amount: */ bits_to_peek);
-       return_value |= (partial_new_byte <<= bits_in_return);
+       partial_new_byte <<= bits_in_return;
+       return_value |= partial_new_byte;
     }
     
     return return_value;
