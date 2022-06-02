@@ -704,7 +704,7 @@ void decode_PNG(
         if (
             !are_equal_strings(
                 chunk_header.type,
-                "IDAT",
+                (char *)"IDAT",
                 4)
             && found_first_IDAT)
         {
@@ -745,6 +745,8 @@ void decode_PNG(
                 printf("INFLATE algorithm failed\n");
                 #endif
                 return_value->good = 0;
+                if (decoded_stream) { free(decoded_stream_start); }
+                if (compressed_data) { free(compressed_data_begin); };
                 return;
             } else {
                 uint32_t inflate_checksum = 0;
@@ -783,7 +785,7 @@ void decode_PNG(
         #endif
         
         if (chunk_header.length >= entire_file.size_left) {
-        
+            
             return_value->good = 0;
             #ifndef PNG_SILENCE 
             printf(
@@ -792,6 +794,8 @@ void decode_PNG(
             chunk_header.length,
             entire_file.size_left);
             #endif
+            if (compressed_data) { free(compressed_data_begin); }
+            if (decoded_stream) { free(decoded_stream_start); }
             return;
         }
         
@@ -808,6 +812,8 @@ void decode_PNG(
                     chunk_header.type);
                 #endif
                 return_value->good = 0;
+                if (decoded_stream) { free(decoded_stream_start); }
+                if (compressed_data) { free(compressed_data_begin); };
                 return;
             }
         } else if (are_equal_strings(
@@ -848,6 +854,8 @@ void decode_PNG(
                     ihdr_body->bit_depth);
                 #endif
                 return_value->good = 0;
+                if (decoded_stream) { free(decoded_stream_start); }
+                if (compressed_data) { free(compressed_data_begin); };
                 return;
             }
             
@@ -890,6 +898,8 @@ void decode_PNG(
                     "failing to decode PNG. filter method in [IHDR] chunk must be 0\n");
                 #endif
                 return_value->good = 0;
+                if (decoded_stream) { free(decoded_stream_start); }
+                if (compressed_data) { free(compressed_data_begin); };
                 return;
             }
             
@@ -903,6 +913,8 @@ void decode_PNG(
                     entire_file.bits_left);
                 #endif
                 return_value->good = 0;
+                if (decoded_stream) { free(decoded_stream_start); }
+                if (compressed_data) { free(compressed_data_begin); };
                 return;
             }
             
@@ -935,6 +947,8 @@ void decode_PNG(
                 printf("failing to decode PNG - no [IHDR] chunk was found, yet already in [IDAT] chunk\n");
                 #endif
                 return_value->good = 0;
+                if (decoded_stream) { free(decoded_stream_start); }
+                if (compressed_data) { free(compressed_data_begin); };
                 return;
             }
             
@@ -1124,6 +1138,8 @@ void decode_PNG(
             entire_file.bits_left);
             #endif
             return_value->good = 0;
+            if (decoded_stream) { free(decoded_stream_start); }
+            if (compressed_data) { free(compressed_data_begin); };
             return;
         }
         
@@ -1154,6 +1170,9 @@ void decode_PNG(
         #ifndef DECODE_PNG_SILENCE
         printf("Failed to identify the last iDAT chunk, didn't run inflate algorithm\n");
         #endif
+        
+        if (decoded_stream) { free(decoded_stream_start); }
+        if (compressed_data) { free(compressed_data_begin); };
         return_value->good = 0;
         return;
     }
