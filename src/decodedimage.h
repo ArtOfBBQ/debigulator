@@ -8,8 +8,8 @@ to play with it.
 
 #define bool32_t uint32_t
 
+#include <stdlib.h>
 #include "inttypes.h"
-#include "stdlib.h"
 
 #ifndef DECODED_IMAGE_SILENCE
 #include "stdio.h"

@@ -1,6 +1,6 @@
 #include "decode_png.h"
 
-#define DECODE_PNG_SILENCE
+// #define DECODE_PNG_SILENCE
 // #define IGNORE_CRC_CHECKS
 // #define DECODE_PNG_IGNORE_ASSERTS
 
@@ -688,18 +688,7 @@ void decode_PNG(
         PNGChunkHeader chunk_header = *consume_struct(
             /* type: */   PNGChunkHeader,
             /* buffer: */ &entire_file);
-        #ifndef DECODE_PNG_SILENCE
-        printf(
-            "%s chunk length before endian flip: %u, ",
-            chunk_header.type,
-            chunk_header.length);
-        #endif
         chunk_header.length = flip_endian(chunk_header.length);
-        #ifndef DECODE_PNG_SILENCE
-        printf(
-            "after endian flip: %u, ",
-            chunk_header.length);
-        #endif
         
         if (
             !are_equal_strings(
@@ -723,8 +712,8 @@ void decode_PNG(
             printf(
                 "created concatenated datastream of %u bytes\n",
                 compressed_data_stream.size_left);
-            printf(
-                "won't INFLATE last 4 bytes because they're an ADLER-32 checksum...\n");
+            printf("won't INFLATE last 4 bytes - ");
+            printf("they're an ADLER-32 checksum...\n");
             #endif
             
             assert(decoded_stream != NULL);
@@ -871,6 +860,8 @@ void decode_PNG(
                     ihdr_body->color_type);
                 #endif
                 return_value->good = 0;
+                if (decoded_stream) { free(decoded_stream_start); }
+                if (compressed_data) { free(compressed_data_begin); };
                 return;
             }
             
@@ -919,11 +910,13 @@ void decode_PNG(
             }
             
             #ifndef DECODE_PNG_IGNORE_ASSERTS
-                assert(decoded_stream == NULL);
+            assert(decoded_stream == NULL);
             #endif
             
             decoded_stream =
                 (uint8_t *)malloc(decompressed_size);
+            decoded_stream_start = decoded_stream;
+            
             // this copy (compressed_data) is necessary because
             // the data needed for DEFLATE is likely spread
             // across multiple chunks with useless header data
@@ -933,7 +926,6 @@ void decode_PNG(
             compressed_data =
                 (uint8_t *)malloc(decompressed_size);
             compressed_data_begin = compressed_data;
-            decoded_stream_start = decoded_stream;
         }  else if (are_equal_strings(
             chunk_header.type,
             (char *)"IDAT",
@@ -988,6 +980,8 @@ void decode_PNG(
                 #endif
                 if (compression_method != 8) {
                     return_value->good = 0;
+                    if (decoded_stream) { free(decoded_stream_start); }
+                    if (compressed_data) { free(compressed_data_begin); };
                     return;
                 }
                 
@@ -1018,6 +1012,8 @@ void decode_PNG(
                     || full_check_value % 31 != 0)
                 {
                     return_value->good = 0;
+                    if (decoded_stream) { free(decoded_stream_start); }
+                    if (compressed_data) { free(compressed_data_begin); };
                     return;
                 }
                 
@@ -1062,6 +1058,8 @@ void decode_PNG(
                 */
                 if (FDICT != 0) {
                     return_value->good = 0;
+                    if (decoded_stream) { free(decoded_stream_start); }
+                    if (compressed_data) { free(compressed_data_begin); };
                     return;
                 }
                 
@@ -1085,6 +1083,8 @@ void decode_PNG(
             #endif
             if (entire_file.bits_left != 0) {
                 return_value->good = 0;
+                if (decoded_stream) { free(decoded_stream_start); }
+                if (compressed_data) { free(compressed_data_begin); };
                 return;
             }
             
@@ -1103,6 +1103,8 @@ void decode_PNG(
         {
             if (decoded_stream == NULL) {
                 return_value->good = 0;
+                if (decoded_stream) { free(decoded_stream_start); }
+                if (compressed_data) { free(compressed_data_begin); };
                 return;
             }
             
@@ -1125,6 +1127,8 @@ void decode_PNG(
                 "ERROR: unhandled critical chunk header: %s\n",
                 chunk_header.type);
             #endif
+            if (decoded_stream) { free(decoded_stream_start); }
+            if (compressed_data) { free(compressed_data_begin); };
             return;
         }
         
@@ -1154,8 +1158,8 @@ void decode_PNG(
             #ifndef DECODE_PNG_SILENCE
             printf("ERROR: CRC checksum mismatch - this PNG file is corrupted.\n");
             #endif
-            free(compressed_data_begin);
-            free(decoded_stream_start);
+            if (decoded_stream) { free(decoded_stream_start); }
+            if (compressed_data) { free(compressed_data_begin); };
             return;
         } else {
             #ifndef DECODE_PNG_SILENCE
@@ -1171,9 +1175,9 @@ void decode_PNG(
         printf("Failed to identify the last iDAT chunk, didn't run inflate algorithm\n");
         #endif
         
+        return_value->good = 0;
         if (decoded_stream) { free(decoded_stream_start); }
         if (compressed_data) { free(compressed_data_begin); };
-        return_value->good = 0;
         return;
     }
     
@@ -1202,6 +1206,8 @@ void decode_PNG(
             "image has 0 pixels\n");
         #endif
         return_value->good = 0;
+        if (decoded_stream) { free(decoded_stream_start); }
+        if (compressed_data) { free(compressed_data_begin); };
         return;
     }
     
@@ -1249,6 +1255,8 @@ void decode_PNG(
                 filter_type);
             #endif
             return_value->good = 0;
+            if (decoded_stream) { free(decoded_stream_start); }
+            if (compressed_data) { free(compressed_data_begin); };
             return;
         }
         #endif
