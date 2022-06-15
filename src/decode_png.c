@@ -1,8 +1,8 @@
 #include "decode_png.h"
 
-// #define DECODE_PNG_SILENCE
+#define DECODE_PNG_SILENCE
 // #define IGNORE_CRC_CHECKS
-// #define DECODE_PNG_IGNORE_ASSERTS
+#define DECODE_PNG_IGNORE_ASSERTS
 
 #ifndef DECODE_PNG_SILENCE
 #include "stdio.h"

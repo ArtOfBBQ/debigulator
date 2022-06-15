@@ -1,7 +1,7 @@
 #include "inflate.h"
 
-// #define INFLATE_SILENCE
-// #define INFLATE_IGNORE_ASSERTS
+#define INFLATE_SILENCE
+#define INFLATE_IGNORE_ASSERTS
 
 #define NUM_UNIQUE_CODELENGTHS 19
 #define HUFFMAN_HASHMAP_SIZE 1023
@@ -581,8 +581,10 @@ static HuffmanEntry * unpack_huffman(
     const uint32_t array_size,
     uint32_t * good)
 {
+    #ifndef INFLATE_IGNORE_ASSERTS
     assert(array != NULL);
     assert(array_size > 0);
+    #endif
     
     HuffmanEntry * unpacked_dict =
         (HuffmanEntry *)malloc(
@@ -680,7 +682,9 @@ static HuffmanEntry * unpack_huffman(
                     " - value can't fit in that few bits!\n");
                 #endif
                 
+                #ifndef INFLATE_IGNORE_ASSERTS
                 assert(0);
+                #endif
             }
         }
     }
@@ -922,7 +926,9 @@ uint32_t inflate(
                 "\t\t\tERROR - unexpected deflate BTYPE %u\n",
                 BTYPE);
             #endif
+            #ifndef INFLATE_IGNORE_ASSERTS
             assert(0);
+            #endif
         } else {
             #ifndef INFLATE_IGNORE_ASSERTS
             assert(BTYPE >= 1 && BTYPE <= 2);
@@ -1336,7 +1342,9 @@ uint32_t inflate(
                             "ERROR : encoded_len %u\n",
                             encoded_len);
                         #endif
+                        #ifndef INFLATE_IGNORE_ASSERTS
                         assert(0);
+                        #endif
                     }
                 }
                 
