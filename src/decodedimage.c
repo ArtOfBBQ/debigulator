@@ -33,20 +33,24 @@ void overwrite_subregion(
     assert(at_row > 0);
     
     if (at_column > column_count) {
+        #ifndef DECODED_IMAGE_SILENCE
         printf(
             "can't write at [%u,%u], if only %u total columns\n",
             at_column,
             at_row,
             column_count);
+        #endif
         return;
     }
     
     if (at_row > row_count) {
+        #ifndef DECODED_IMAGE_SILENCE
         printf(
             "can't write at [%u,%u], if only %u total rows\n",
             at_column,
             at_row,
             row_count);
+        #endif
         return;
     }
     
@@ -60,6 +64,7 @@ void overwrite_subregion(
         ||
         (new_image->height != expected_height))
     {
+        #ifndef DECODED_IMAGE_SILENCE
         printf(
             "Error - can't overwrite chunk [%u,%u] of dimensions [%u,%u] for image (%u x %u) with new subimage sized [%u,%u], expected size [%u,%u]\n",
             at_column,
@@ -72,6 +77,7 @@ void overwrite_subregion(
             new_image->height,
             expected_width,
             expected_height);
+        #endif
         
         return;
     }
@@ -185,6 +191,7 @@ DecodedImage concatenate_images(
                 images_to_concat[i]->height != base_height
                 || images_to_concat[i]->width != base_width)
             {
+                #ifndef DECODED_IMAGE_SILENCE
                 printf(
                     "ERROR: images_to_concat[%u]->height of %u mismatched images_to_concat[0]->height of %u AND/OR images_to_concat[%u]->width of %u mismatched images_to_concat[0]->width of %u\n",
                     i,
@@ -193,7 +200,9 @@ DecodedImage concatenate_images(
                     i,
                     images_to_concat[i]->width,
                     images_to_concat[0]->width);
-                assert(0);
+                #endif
+                return_value.good = 0;
+                return return_value;
             }
             
             overwrite_subregion(
@@ -207,12 +216,6 @@ DecodedImage concatenate_images(
         }
     }
     
-    assert(
-        return_value.width * return_value.height ==
-            return_value.pixel_count);
-    assert(
-        return_value.pixel_count * 4 ==
-            return_value.rgba_values_size);
     return_value.good = 1;
     
     return return_value;

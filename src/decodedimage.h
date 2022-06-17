@@ -11,6 +11,7 @@ to play with it.
 #include <stdlib.h>
 #include "inttypes.h"
 
+#define DECODED_IMAGE_SILENCE
 #ifndef DECODED_IMAGE_SILENCE
 #include "stdio.h"
 #endif
