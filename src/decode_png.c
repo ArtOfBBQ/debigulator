@@ -1,7 +1,7 @@
 #include "decode_png.h"
 
 #define DECODE_PNG_SILENCE
-// #define IGNORE_CRC_CHECKS
+// #define DECODE_PNG_IGNORE_CRC_CHECKS
 #define DECODE_PNG_IGNORE_ASSERTS
 
 #ifndef DECODE_PNG_SILENCE
@@ -17,7 +17,7 @@ PNG files include CRC 'cyclic redundancy checks', a kind
 of checksum to make sure each block is valid data.
 */
 
-#ifndef IGNORE_CRC_CHECKS
+#ifndef DECODE_PNG_IGNORE_CRC_CHECKS
 /*
 Table of CRCs of all 8-bit messages.
 
@@ -309,7 +309,7 @@ static unsigned long update_crc(
     
     return c;
 }
-#endif // IGNORE_CRC_CHECKS
+#endif // DECODE_PNG_IGNORE_CRC_CHECKS
 
 /*
 A PNG file starts with an 8-byte signature
@@ -515,37 +515,28 @@ static uint8_t undo_PNG_filter(
 }
 
 void get_PNG_width_height(
-    const uint8_t * compressed_bytes,
-    const uint32_t compressed_bytes_size,
-    uint32_t * width_out,
-    uint32_t * height_out)
+    const uint8_t * compressed_input,
+    const uint64_t compressed_input_size,
+    uint32_t * out_width,
+    uint32_t * out_height,
+    uint32_t * out_good)
 {
-    if (compressed_bytes_size < 26) {
+    if (compressed_input_size < 26) {
         #ifndef DECODE_PNG_SILENCE
         printf("ERROR - need 26 bytes for dimension check\n");
         #endif
         #ifndef DECODE_PNG_IGNORE_ASSERTS
         assert(0);
         #endif
-        *width_out = 0;
-        *height_out = 0;
+        *out_width = 0;
+        *out_height = 0;
+        *out_good = 0;
         return;
     }
     
-    DataStream entire_file;
-    entire_file.data = (uint8_t *)compressed_bytes;
-    entire_file.size_left = compressed_bytes_size;
-    entire_file.bits_left = 0;
-    
     // 5 bytes
-    PNGSignature png_signature =
-        *consume_struct(
-            /* type: */ PNGSignature,
-            /* from: */ &entire_file);
-    
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(entire_file.bits_left == 0);
-    #endif
+    PNGSignature png_signature = *(PNGSignature *)compressed_input;
+    compressed_input += sizeof(PNGSignature);
     
     if (!are_equal_strings(
         /* string 1: */ png_signature.png_string,
@@ -555,8 +546,9 @@ void get_PNG_width_height(
         #ifndef DECODE_PNG_SILENCE
         printf("aborting - not a PNG file\n");
         #endif
-        *width_out = 0;
-        *height_out = 0;
+        *out_width = 0;
+        *out_height = 0;
+        *out_good = 0;
         return;
     } else {
         #ifndef DECODE_PNG_SILENCE
@@ -569,9 +561,8 @@ void get_PNG_width_height(
     #endif
     
     // 8 bytes
-    PNGChunkHeader chunk_header = *consume_struct(
-        /* type: */   PNGChunkHeader,
-        /* buffer: */ &entire_file);
+    PNGChunkHeader chunk_header = *(PNGChunkHeader *)compressed_input;
+    compressed_input += sizeof(PNGChunkHeader);
     
     assert(
         are_equal_strings(
@@ -579,62 +570,48 @@ void get_PNG_width_height(
             (char *)"IHDR",
             4));
     
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(entire_file.bits_left == 0);
-    #endif
-    
-    // again, making a copy to avoid flipping endian in original
-    // stream
     // 13 bytes
-    IHDRBody ihdr_body = *consume_struct(
-        /* type: */
-            IHDRBody,
-        /* entire_file: */
-            &entire_file);
+    IHDRBody ihdr_body = *(IHDRBody *)compressed_input;
+    compressed_input += sizeof(IHDRBody);
     
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(entire_file.bits_left < 8);
-    #endif
-    
-    *width_out = flip_endian(ihdr_body.width);
-    *height_out = flip_endian(ihdr_body.height);
+    *out_width = flip_endian(ihdr_body.width);
+    *out_height = flip_endian(ihdr_body.height);
     #ifndef DECODE_PNG_SILENCE
     printf(
         "succes! width/height: [%u,%u]\n",
-        *width_out,
-        *height_out);
+        *out_width,
+        *out_height);
     #endif
+    
+    *out_good = 1;
 }
 
 void decode_PNG(
-    const uint8_t * compressed_bytes,
-    const uint64_t compressed_bytes_size,
-    DecodedImage * out_preallocated_png)
+    const uint8_t * compressed_input,
+    const uint64_t compressed_input_size,
+    uint8_t * out_rgba_values,
+    uint64_t rgba_values_size,
+    uint32_t * out_width,
+    uint32_t * out_height,
+    uint32_t * out_good)
 {
-    DecodedImage * return_value =
-        out_preallocated_png;
-    return_value->good = 0;
+    /*
+        We start out with compressed_input (allocated)
+        We have out_rgba_values_size allocated in
+        out_rgba_values.
+    */
+    *out_good = 0;
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(compressed_bytes_size > 0);
+    assert(compressed_input_size > 0);
     #endif
     
-    DataStream entire_file;
-    entire_file.data = (uint8_t *)compressed_bytes;
-    entire_file.size_left = (uint32_t)compressed_bytes_size;
-    entire_file.bits_left = 0;
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(entire_file.bits_left == 0);
-    #endif
+    uint64_t compressed_input_size_left =
+        compressed_input_size;
     
     PNGSignature png_signature =
-        *consume_struct(
-            /* type: */ PNGSignature,
-            /* from: */ &entire_file);
-    
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(entire_file.bits_left == 0);
-    #endif
+        *(PNGSignature *)compressed_input;
+    compressed_input += sizeof(PNGSignature);
     
     #ifndef DECODE_PNG_SILENCE
     printf(
@@ -644,26 +621,24 @@ void decode_PNG(
         png_signature.png_string[2]);
     #endif
     
-    if (!are_equal_strings(
-        /* string 1: */ png_signature.png_string,
-        /* string 2: */ (char *)"PNG",
-        /* string length: */ 3))
+    if (
+        !are_equal_strings(
+            /* string 1: */ png_signature.png_string,
+            /* string 2: */ (char *)"PNG",
+            /* string length: */ 3))
     {
         #ifndef DECODE_PNG_SILENCE
         printf("aborting - not a PNG file\n");
         #endif
+        *out_good = 0;
         return;
     }
     
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(entire_file.bits_left == 0);
-    #endif
-    
     // these pointers are initted below
-    IHDRBody * ihdr_body = NULL;
-    uint8_t * compressed_data = NULL;
-    uint8_t * compressed_data_begin = NULL;
-    uint32_t compressed_data_stream_size = 0;
+    IHDRBody ihdr_body;
+    uint8_t * headerless_compressed_data = NULL;
+    uint8_t * headerless_compressed_data_begin = NULL;
+    uint32_t headerless_compressed_data_stream_size = 0;
     uint8_t * decoded_stream = NULL;
     uint8_t * decoded_stream_start = NULL;
     unsigned int decompressed_size = 0;
@@ -671,23 +646,25 @@ void decode_PNG(
     uint32_t found_first_IDAT = 0;
     uint32_t ran_inflate_algorithm = 0;
     uint32_t found_IHDR = 0;
+    uint32_t found_IEND = 0;
     
     while (
-        entire_file.size_left >= 8)
+        compressed_input_size_left >= 8
+        && !found_IEND)
     {
         #ifndef DECODE_PNG_SILENCE
         printf(
             "%u bytes left in file, read another PNG chunk..\n",
-            entire_file.size_left);
+            compressed_input_size_left);
         #endif
         
-        #ifndef IGNORE_CRC_CHECKS
+        #ifndef DECODE_PNG_IGNORE_CRC_CHECKS
         unsigned long running_crc = 0xffffffffL;
         #endif
         
-        PNGChunkHeader chunk_header = *consume_struct(
-            /* type: */   PNGChunkHeader,
-            /* buffer: */ &entire_file);
+        PNGChunkHeader chunk_header = *(PNGChunkHeader *)compressed_input;
+        compressed_input += sizeof(PNGChunkHeader);
+        
         chunk_header.length = flip_endian(chunk_header.length);
         
         if (
@@ -702,66 +679,45 @@ void decode_PNG(
             printf("so all compressed data was collected.\n");
             #endif
             
-            DataStream compressed_data_stream;
-            compressed_data_stream.data = compressed_data_begin;
-            compressed_data_stream.size_left =
-                compressed_data_stream_size;
-            compressed_data_stream.bits_left = 0;
-            
-            #ifndef DECODE_PNG_SILENCE
-            printf(
-                "created concatenated datastream of %u bytes\n",
-                compressed_data_stream.size_left);
-            printf("won't INFLATE last 4 bytes - ");
-            printf("they're an ADLER-32 checksum...\n");
-            #endif
-            
             assert(decoded_stream != NULL);
-            assert(compressed_data_stream.data != NULL);
+            assert(headerless_compressed_data_stream_size > 4);
             ran_inflate_algorithm = 1;
-            uint32_t inflate_result = inflate(
+            uint32_t inflate_result = 0;
+            inflate(
                 /* recipient: */
                     decoded_stream,
                 /* recipient_size: */
                     decompressed_size,
-                /* datastream: */
-                    &compressed_data_stream,
-                /* compr_size_bytes: */
-                    compressed_data_stream_size - 4);
+                /* compressed_input: */
+                    headerless_compressed_data_begin,
+                /* compressed_input_size: */
+                    headerless_compressed_data_stream_size - 4,
+                /* good: */
+                    &inflate_result);
             
-            if (inflate_result != 0) {
+            if (inflate_result == 0) {
                 #ifndef DECODE_PNG_SILENCE
                 printf("INFLATE algorithm failed\n");
                 #endif
-                return_value->good = 0;
+                *out_good = 0;
                 if (decoded_stream) { free(decoded_stream_start); }
-                if (compressed_data) { free(compressed_data_begin); };
+                if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                 return;
             } else {
-                uint32_t inflate_checksum = 0;
-                for (
-                    uint32_t i = 0;
-                    i < decompressed_size;
-                    i++)
-                {
-                    inflate_checksum += decoded_stream[i];
-                }
-                assert(inflate_checksum > 0);
-                
                 #ifndef DECODE_PNG_SILENCE
                 printf("INFLATE succesful\n");
                 #endif
             }
         }
-         
-        #ifndef IGNORE_CRC_CHECKS 
+        
+        #ifndef DECODE_PNG_IGNORE_CRC_CHECKS
         running_crc = update_crc(
             /* crc: */ running_crc,
             /* buffer: */ (unsigned char *)&(chunk_header.type),
             /* length: */ 4);
         running_crc = update_crc(
             /* crc: */ running_crc,
-            /* buffer: */ (unsigned char *)entire_file.data,
+            /* buffer: */ (unsigned char *)compressed_input,
             /* length: */ chunk_header.length);
         running_crc = running_crc ^ 0xffffffffL;
         #endif
@@ -773,18 +729,18 @@ void decode_PNG(
             chunk_header.length);
         #endif
         
-        if (chunk_header.length >= entire_file.size_left) {
+        if (chunk_header.length >= compressed_input_size_left) {
             
-            return_value->good = 0;
             #ifndef DECODE_PNG_SILENCE 
             printf(
             "failing to decode PNG, [%s] chunk of length %u is larger than remaining file size of %u\n",
             chunk_header.type,
             chunk_header.length,
-            entire_file.size_left);
+            compressed_input_size_left);
             #endif
-            if (compressed_data) { free(compressed_data_begin); }
+            if (headerless_compressed_data) { free(headerless_compressed_data_begin); }
             if (decoded_stream) { free(decoded_stream_start); }
+            *out_good = 0;
             return;
         }
         
@@ -800,9 +756,9 @@ void decode_PNG(
                     "failing to decode PNG. [%s] chunk should never appear before [IHDR] chunk\n",
                     chunk_header.type);
                 #endif
-                return_value->good = 0;
+                *out_good = 0;
                 if (decoded_stream) { free(decoded_stream_start); }
-                if (compressed_data) { free(compressed_data_begin); };
+                if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                 return;
             }
         } else if (are_equal_strings(
@@ -814,20 +770,19 @@ void decode_PNG(
             #ifndef DECODE_PNG_IGNORE_ASSERTS
             assert(entire_file.bits_left == 0);
             #endif
-            ihdr_body = consume_struct(
-                /* type: */ IHDRBody,
-                /* entire_file: */ &entire_file);
+            ihdr_body = *(IHDRBody *)compressed_input;
+            compressed_input += sizeof(IHDRBody);
             #ifndef DECODE_PNG_IGNORE_ASSERTS
             assert(entire_file.bits_left < 8);
             #endif
-            return_value->width =
-                flip_endian(ihdr_body->width);
-            return_value->height =
-                flip_endian(ihdr_body->height);
+            *out_width =
+                flip_endian(ihdr_body.width);
+            *out_height =
+                flip_endian(ihdr_body.height);
             
             decompressed_size =
-                return_value->width
-                    * return_value->height
+                (*out_width)
+                    * (*out_height)
                     * 5;
             
             // (below) These PNG setting assert the RGBA
@@ -835,38 +790,38 @@ void decode_PNG(
             // There are many other formats (greyscale
             // illustrations etc.) found in .png files that we
             // are not supporting for now. 
-            if (ihdr_body->bit_depth != 8)
+            if (ihdr_body.bit_depth != 8)
             {
                 #ifndef DECODE_PNG_SILENCE
                 printf(
                     "unsupported PNG bit depth %u\n",
-                    ihdr_body->bit_depth);
+                    ihdr_body.bit_depth);
                 #endif
-                return_value->good = 0;
+                *out_good = 0;
                 if (decoded_stream) { free(decoded_stream_start); }
-                if (compressed_data) { free(compressed_data_begin); };
+                if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                 return;
             }
             
             // color type 2: each pixel is RGB
             // color type 3: indexed color? (unsupported)
             // color type 6: each pixel is RGBA
-            if (ihdr_body->color_type != 6
-                && ihdr_body->color_type != 2)
+            if (ihdr_body.color_type != 6
+                && ihdr_body.color_type != 2)
             {
                 #ifndef DECODE_PNG_SILENCE
                 printf(
                     "unsupported PNG color type: %u (expected 2 or 6)\n",
-                    ihdr_body->color_type);
+                    ihdr_body.color_type);
                 #endif
-                return_value->good = 0;
+                *out_good = 0;
                 if (decoded_stream) { free(decoded_stream_start); }
-                if (compressed_data) { free(compressed_data_begin); };
+                if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                 return;
             }
             
             #ifndef DECODE_PNG_SILENCE
-            if (ihdr_body->color_type != 6) {
+            if (ihdr_body.color_type != 6) {
                 printf("error - only color type 6 is supported");
             } else {
                 printf("\t\t(Truecolor with alpha)\n");
@@ -874,38 +829,36 @@ void decode_PNG(
             
             printf(
                 "\tcompression_method: %u\n",
-                ihdr_body->compression_method);
+                ihdr_body.compression_method);
             printf(
                 "\tfilter_method: %u\n",
-                ihdr_body->filter_method);
+                ihdr_body.filter_method);
             printf(
                 "\tinterlace_method: %u\n",
-                ihdr_body->interlace_method);
+                ihdr_body.interlace_method);
             #endif
             
-            if (ihdr_body->filter_method != 0) {
+            if (ihdr_body.filter_method != 0) {
                 #ifndef DECODE_PNG_SILENCE 
                 printf(
                     "failing to decode PNG. filter method in [IHDR] chunk must be 0\n");
                 #endif
-                return_value->good = 0;
+                *out_good = 0;
                 if (decoded_stream) { free(decoded_stream_start); }
-                if (compressed_data) { free(compressed_data_begin); };
+                if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                 return;
             }
             
-            if (entire_file.size_left < 4
-                || entire_file.bits_left != 0)
+            if (compressed_input_size_left < 4)
             {
                 #ifndef DECODE_PNG_SILENCE 
                 printf(
-                    "failing to decode PNG - file size left is %u bytes, bits in bit buffer: %u\n",
-                    entire_file.size_left,
-                    entire_file.bits_left);
+                    "failing to decode PNG - file size left is %u bytes\n",
+                    compressed_input_size_left);
                 #endif
-                return_value->good = 0;
                 if (decoded_stream) { free(decoded_stream_start); }
-                if (compressed_data) { free(compressed_data_begin); };
+                if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
+                *out_good = 0;
                 return;
             }
             
@@ -917,15 +870,15 @@ void decode_PNG(
                 (uint8_t *)malloc(decompressed_size);
             decoded_stream_start = decoded_stream;
             
-            // this copy (compressed_data) is necessary because
+            // this copy (headerless_compressed_data) is necessary because
             // the data needed for DEFLATE is likely spread
             // across multiple chunks with useless header data
             // & checksums sprinkled in between
-            // we'll concatenate all the data into compressed_data
+            // we'll concatenate all the data into headerless_compressed_data
             // first, then INFLATE afterwards
-            compressed_data =
+            headerless_compressed_data =
                 (uint8_t *)malloc(decompressed_size);
-            compressed_data_begin = compressed_data;
+            headerless_compressed_data_begin = headerless_compressed_data;
         }  else if (are_equal_strings(
             chunk_header.type,
             (char *)"IDAT",
@@ -933,14 +886,14 @@ void decode_PNG(
         {
             if (!found_IHDR
                 || decoded_stream == NULL
-                || compressed_data == NULL)
+                || headerless_compressed_data == NULL)
             {
                 #ifndef DECODE_PNG_SILENCE
                 printf("failing to decode PNG - no [IHDR] chunk was found, yet already in [IDAT] chunk\n");
                 #endif
-                return_value->good = 0;
+                *out_good = 0;
                 if (decoded_stream) { free(decoded_stream_start); }
-                if (compressed_data) { free(compressed_data_begin); };
+                if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                 return;
             }
             
@@ -953,12 +906,10 @@ void decode_PNG(
                 #endif
                 found_first_IDAT = 1;
                 
-                ZLIBHeader zlib_header =
-                    *consume_struct(
-                        /* type: */ ZLIBHeader,
-                        /* from: */ &entire_file);
+                ZLIBHeader zlib_header = *(ZLIBHeader *)compressed_input;
+                compressed_input += sizeof(ZLIBHeader);
                 chunk_data_length -= sizeof(ZLIBHeader);
-               
+                
                 // to mask the rightmost 4 bits we need 00001111 
                 //                                          8421
                 //                                    8+4+2+1=15
@@ -979,9 +930,9 @@ void decode_PNG(
                     compression_info);
                 #endif
                 if (compression_method != 8) {
-                    return_value->good = 0;
+                    *out_good = 0;
                     if (decoded_stream) { free(decoded_stream_start); }
-                    if (compressed_data) { free(compressed_data_begin); };
+                    if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                     return;
                 }
                 
@@ -1011,9 +962,9 @@ void decode_PNG(
                 if (full_check_value == 0
                     || full_check_value % 31 != 0)
                 {
-                    return_value->good = 0;
+                    *out_good = 0;
                     if (decoded_stream) { free(decoded_stream_start); }
-                    if (compressed_data) { free(compressed_data_begin); };
+                    if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                     return;
                 }
                 
@@ -1037,7 +988,8 @@ void decode_PNG(
                     #ifndef DECODE_PNG_SILENCE
                     printf("\t\tdiscarding FDICT... (4 bytes)\n");
                     #endif
-                    discard_bits(&entire_file, 32);
+                    compressed_input += 4;
+                    compressed_input_size_left -= 4;
                     chunk_data_length -= 4;
                 }
                 
@@ -1057,9 +1009,9 @@ void decode_PNG(
                 recompression might be worthwhile.
                 */
                 if (FDICT != 0) {
-                    return_value->good = 0;
+                    *out_good = 0;
                     if (decoded_stream) { free(decoded_stream_start); }
-                    if (compressed_data) { free(compressed_data_begin); };
+                    if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                     return;
                 }
                 
@@ -1081,19 +1033,13 @@ void decode_PNG(
                 "\t\tcopying %u bytes to compressed stream...\n",
                 chunk_data_length);
             #endif
-            if (entire_file.bits_left != 0) {
-                return_value->good = 0;
-                if (decoded_stream) { free(decoded_stream_start); }
-                if (compressed_data) { free(compressed_data_begin); };
-                return;
-            }
             
             for (uint32_t _ = 0; _ < chunk_data_length; _++)
             {
-                *compressed_data++ =
-                    *(uint8_t *)entire_file.data++;
-                compressed_data_stream_size++;
-                entire_file.size_left--;
+                *headerless_compressed_data++ =
+                    *(uint8_t *)compressed_input++;
+                headerless_compressed_data_stream_size++;
+                compressed_input_size_left--;
             }
         }
         else if (are_equal_strings(
@@ -1102,9 +1048,9 @@ void decode_PNG(
             4))
         {
             if (decoded_stream == NULL) {
-                return_value->good = 0;
+                *out_good = 0;
                 if (decoded_stream) { free(decoded_stream_start); }
-                if (compressed_data) { free(compressed_data_begin); };
+                if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
                 return;
             }
             
@@ -1112,6 +1058,7 @@ void decode_PNG(
             #ifndef DECODE_PNG_SILENCE
             printf("found IEND header\n");
             #endif
+            found_IEND = 1;
         }
         else if ((char)chunk_header.type[0] > 'Z')
         {
@@ -1119,8 +1066,8 @@ void decode_PNG(
             printf(
                 "\tskipping unhandled non-critical chunk...\n");
             #endif
-            entire_file.data += chunk_header.length;
-            entire_file.size_left -= chunk_header.length;
+            compressed_input += chunk_header.length;
+            compressed_input_size_left -= chunk_header.length;
         } else {
             #ifndef DECODE_PNG_SILENCE
             printf(
@@ -1128,38 +1075,36 @@ void decode_PNG(
                 chunk_header.type);
             #endif
             if (decoded_stream) { free(decoded_stream_start); }
-            if (compressed_data) { free(compressed_data_begin); };
+            if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
+            *out_good = 0;
             return;
         }
         
-        if (entire_file.size_left < 4
-            || entire_file.bits_left != 0)
+        if (compressed_input_size_left < 4)
         {
             #ifndef DECODE_PNG_SILENCE
             printf(
-            "failed to decode PNG - unexpected remaining file size of %u and %u bits in buffer\n",
-            entire_file.size_left,
-            entire_file.bits_left);
+                "failed to decode PNG - unexpected remaining file size of %u\n",
+                compressed_input_size_left);
             #endif
-            return_value->good = 0;
+            *out_good = 0;
             if (decoded_stream) { free(decoded_stream_start); }
-            if (compressed_data) { free(compressed_data_begin); };
+            if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
             return;
         }
         
-        PNGFooter block_footer =
-            *consume_struct(
-                PNGFooter,
-                &entire_file);
+        PNGFooter block_footer = *(PNGFooter *)compressed_input;
+        compressed_input += sizeof(PNGFooter);
         
-        #ifndef IGNORE_CRC_CHECKS
+        #ifndef DECODE_PNG_IGNORE_CRC_CHECKS
         block_footer.CRC = flip_endian(block_footer.CRC);
         if (running_crc != block_footer.CRC) {
             #ifndef DECODE_PNG_SILENCE
             printf("ERROR: CRC checksum mismatch - this PNG file is corrupted.\n");
             #endif
             if (decoded_stream) { free(decoded_stream_start); }
-            if (compressed_data) { free(compressed_data_begin); };
+            if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
+            *out_good = 0;
             return;
         } else {
             #ifndef DECODE_PNG_SILENCE
@@ -1175,9 +1120,9 @@ void decode_PNG(
         printf("Failed to identify the last iDAT chunk, didn't run inflate algorithm\n");
         #endif
         
-        return_value->good = 0;
+        *out_good = 0;
         if (decoded_stream) { free(decoded_stream_start); }
-        if (compressed_data) { free(compressed_data_begin); };
+        if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
         return;
     }
     
@@ -1196,23 +1141,23 @@ void decode_PNG(
     #endif
     
     uint32_t pixel_count =
-        return_value->width
-            * return_value->height;
-    return_value->pixel_count = pixel_count;
+        (*out_width) * (*out_height);
     
-    if (return_value->pixel_count < 1) {
+    if (*out_width < 1 || *out_height < 1) {
         #ifndef DECODE_PNG_SILENCE
         printf(
-            "image has 0 pixels\n");
+            "ERROR - image width/height was [%u,%u]\n",
+            *out_width,
+            *out_height);
         #endif
-        return_value->good = 0;
+        *out_good = 0;
         if (decoded_stream) { free(decoded_stream_start); }
-        if (compressed_data) { free(compressed_data_begin); };
+        if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
         return;
     }
     
     decoded_stream = decoded_stream_start;
-    uint8_t * rgba_at = return_value->rgba_values;
+    uint8_t * rgba_at = out_rgba_values;
     
     /*
     The spec tells us to track these values:
@@ -1227,24 +1172,23 @@ void decode_PNG(
     [c][b]
     [a][x]
     */
-    assert(ihdr_body != NULL);
     uint8_t bytes_per_channel =
-        ihdr_body->color_type == 2 ? 3 : 4;
+        ihdr_body.color_type == 2 ? 3 : 4;
     #ifndef DECODE_PNG_SILENCE
     printf(
-        "bytes per channel: %u because ihdr_body->color_type was: %u\n",
+        "bytes per channel: %u because ihdr_body.color_type was: %u\n",
         bytes_per_channel,
-        ihdr_body->color_type);
+        ihdr_body.color_type);
     #endif
     uint8_t * a_previous_pixel =
-        return_value->rgba_values - bytes_per_channel;
+        out_rgba_values - bytes_per_channel;
     uint8_t * b_previous_scanline =
-        return_value->rgba_values
-        - (return_value->width * bytes_per_channel);
+        out_rgba_values
+        - (*out_width * bytes_per_channel);
     uint8_t * c_previous_scanline_previous_pixel = 
         b_previous_scanline - bytes_per_channel;
     
-    for (uint32_t h = 0; h < return_value->height; h++) {
+    for (uint32_t h = 0; h < *out_height; h++) {
         
         uint8_t filter_type = *decoded_stream++; 
         #ifndef DECODE_PNG_IGNORE_ASSERTS
@@ -1254,14 +1198,14 @@ void decode_PNG(
                 "ERROR - unexpected filter_type of %u\n",
                 filter_type);
             #endif
-            return_value->good = 0;
+            *out_good = 0;
             if (decoded_stream) { free(decoded_stream_start); }
-            if (compressed_data) { free(compressed_data_begin); };
+            if (headerless_compressed_data) { free(headerless_compressed_data_begin); };
             return;
         }
         #endif
         
-        for (uint32_t w = 0; w < return_value->width; w++) {
+        for (uint32_t w = 0; w < *out_width; w++) {
             // repeat this 3x or 4x, once for every byte in pixel
             // (RGB or R, G, B & A) 
             for (int _ = 0; _ < bytes_per_channel; _++) {
@@ -1297,14 +1241,14 @@ void decode_PNG(
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     if(
-        return_value->rgba_values_size
-            != return_value->pixel_count * bytes_per_channel)
+        out_rgba_values_size
+            != pixel_count * bytes_per_channel)
     {
         #ifndef DECODE_PNG_SILENCE
         printf(
-            "ERROR - return_value->rgba_values_size of %u with return_value->pixel_count of %u and %u bytes_per_channel",
-            return_value->rgba_values_size,
-            return_value->pixel_count,
+            "ERROR - out_rgba_values_size of %u with pixel_count of %u and %u bytes_per_channel",
+            out_rgba_values_size,
+            pixel_count,
             bytes_per_channel);
         #endif
     }
@@ -1321,15 +1265,15 @@ void decode_PNG(
         // 25% away from the end) without ever overwriting
         // anything
         uint8_t * write_at =
-            return_value->rgba_values +
-                ((return_value->pixel_count * 4) - 1);
+            out_rgba_values +
+                ((pixel_count * 4) - 1);
         uint8_t * read_at =
-            return_value->rgba_values +
-                (return_value->rgba_values_size - 1);
+            out_rgba_values +
+                (rgba_values_size - 1);
         
         for (
             uint32_t p = 0;
-            p < return_value->pixel_count;
+            p < pixel_count;
             p++)
         {
             *write_at-- = 255;
@@ -1338,30 +1282,28 @@ void decode_PNG(
             *write_at-- = *read_at--;
         }
         
-        assert(return_value->rgba_values_size >=
-            return_value->pixel_count * 4);
+        assert(rgba_values_size >=
+            pixel_count * 4);
         if (
-            (return_value->rgba_values_size / 10) >
-                return_value->pixel_count * 4)
+            (rgba_values_size / 10) >
+                pixel_count * 4)
         {
             #ifndef DECODE_PNG_SILENCE
             printf(
                 "ERROR - you passed %u bytes of memory but the decoded PNG only takes %u bytes, this seems excessive\n",
-                return_value->rgba_values_size,
-                return_value->pixel_count * 4);
+                out_rgba_values_size,
+                pixel_count * 4);
             #endif
             #ifndef DECODE_PNG_IGNORE_ASSERTS
             assert(0);
             #endif
         }
         
-        return_value->rgba_values_size =
-            return_value->pixel_count * 4;
+        rgba_values_size = pixel_count * 4;
     }
     
     free(decoded_stream_start);	
-    free(compressed_data_begin);
+    free(headerless_compressed_data_begin);
     
-    return_value->good = 1;
+    *out_good = 1;
 }
-

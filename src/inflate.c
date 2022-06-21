@@ -14,6 +14,22 @@
 #include "assert.h"
 #endif
 
+/*
+Since we need to consume partial bytes (and leave remaining bits
+in a buffer), we're using this data structure.
+*/
+typedef struct DataStream {
+    uint8_t * data;
+    
+    uint32_t bits_left;
+    uint8_t bit_buffer;
+    
+    uint64_t size_left;
+} DataStream;
+
+static void discard_bits(
+    DataStream * from,
+    const unsigned int amount);
 
 /*
 'Huffman encoding' is a famous compression algorithm
@@ -37,8 +53,8 @@ typedef struct HashedHuffmanEntry {
 
 typedef struct HashedHuffman {
     HashedHuffmanEntry * entries[HUFFMAN_HASHMAP_SIZE];
-    unsigned int min_code_length;
-    unsigned int max_code_length;
+    uint32_t min_code_length;
+    uint32_t max_code_length;
 } HashedHuffman;
 
 static uint32_t
@@ -251,27 +267,6 @@ void discard_bits(
         from->bits_left = (8 - discards_left);
         from->bit_buffer >>= discards_left;
     }
-}
-
-/*
-Grab data from our data stream and immediately cast it
-to one of our structs or an 8-bit int
-*/
-uint8_t * consume_chunk(
-    DataStream * from,
-    const size_t size_to_consume)
-{
-    #ifndef INFLATE_IGNORE_ASSERTS
-    assert(from->bits_left == 0);
-    assert(from->size_left >= size_to_consume);
-    #endif
-    
-    uint8_t * return_value = (uint8_t *)from->data;
-    
-    from->data += size_to_consume;
-    from->size_left -= size_to_consume;
-    
-    return return_value;
 }
 
 static uint32_t consume_bits(
@@ -789,37 +784,44 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 // or 'zlib' algorithm, you can 'INFLATE' it back 
 // to the original
 // returns 1 when failed, 0 when succesful
-uint32_t inflate(
+void inflate(
     uint8_t * recipient,
-    const uint32_t recipient_size,
-    DataStream * data_stream,
-    const uint32_t compressed_size_bytes) 
+    const uint64_t recipient_size,
+    const uint8_t * compressed_bytes,
+    const uint64_t compressed_input_size,
+    uint32_t * out_good)
 {
     if (recipient == NULL
-        || recipient_size < compressed_size_bytes
-        || data_stream == NULL
-        || data_stream->data == NULL
-        || data_stream->size_left < 1
-        || compressed_size_bytes < 1)
+        || recipient_size < compressed_input_size
+        || compressed_bytes == NULL
+        || compressed_input_size < 1)
     {
         #ifndef INFLATE_SILENCE
         printf(
             "inflate() ERROR: was passed nonsense datastream\n");
         #endif
-        return 1;
+        *out_good = 0;
+        return;
     }
     
     #ifndef INFLATE_SILENCE
     printf(
         "\t\tstart INFLATE expecting %u bytes of compr. data\n",
-        compressed_size_bytes);
+        compressed_input_size);
     #endif
-    uint8_t * started_at = data_stream->data;
+    uint8_t * started_at = (uint8_t *)compressed_bytes;
     uint8_t * recipient_at = recipient;
     
-    #ifndef INFLATE_IGNORE_ASSERTS 
-    assert(data_stream->size_left >= compressed_size_bytes);
-    assert(data_stream->bits_left == 0);
+    DataStream data_stream;
+    data_stream.data = (uint8_t *)compressed_bytes;
+    data_stream.size_left = compressed_input_size;
+    data_stream.bits_left = 0;
+    data_stream.bit_buffer = 0;
+    
+    #ifndef INFLATE_IGNORE_ASSERTS
+    assert(data_stream.data != NULL); 
+    assert(data_stream.size_left >= compressed_input_size);
+    assert(data_stream.bits_left == 0);
     #endif
     
     int read_more_deflate_blocks = 1;
@@ -852,7 +854,7 @@ uint32_t inflate(
         11 - reserved (error) 
         */
         uint32_t BFINAL = consume_bits(
-            /* buffer: */ data_stream,
+            /* buffer: */ &data_stream,
             /* size  : */ 1);
         #ifndef INFLATE_IGNORE_ASSERTS
         assert(BFINAL < 2);
@@ -866,7 +868,7 @@ uint32_t inflate(
         if (BFINAL) { read_more_deflate_blocks = 0; }
         
         uint32_t BTYPE = consume_bits(
-            /* buffer: */ data_stream,
+            /* buffer: */ &data_stream,
             /* size  : */ 2);
         
         if (BTYPE == 0) {
@@ -875,24 +877,24 @@ uint32_t inflate(
             #endif
             
             // spec says to ditch remaining bits
-            if (data_stream->bits_left > 0) {
+            if (data_stream.bits_left > 0) {
                 #ifndef INFLATE_SILENCE
                 printf(
                     "\t\t\tditching a byte with %u%s\n",
-                    data_stream->bits_left,
+                    data_stream.bits_left,
                     " bits left...");
                 #endif
                 
                 discard_bits(
-                    /* from: */ data_stream,
-                    /* amount: */ data_stream->bits_left);
+                    /* from: */ &data_stream,
+                    /* amount: */ data_stream.bits_left);
                 #ifndef INFLATE_IGNORE_ASSERTS
-                assert(data_stream->bits_left == 0);
+                assert(data_stream.bits_left == 0);
                 #endif
             }
             
             uint16_t LEN =
-                (uint16_t)consume_bits(data_stream, 16);
+                (uint16_t)consume_bits(&data_stream, 16);
             #ifndef INFLATE_SILENCE
             printf(
                 "\t\t\tuncompr. block has LEN: %u bytes\n",
@@ -900,25 +902,26 @@ uint32_t inflate(
             #endif
             
             uint16_t NLEN =
-                (uint16_t)consume_bits(data_stream, 16);
+                (uint16_t)consume_bits(&data_stream, 16);
             if ((uint16_t)LEN != (uint16_t)~NLEN) {
                 #ifndef INFLATE_SILENCE
                 printf(
                     "inflate() ERROR: LEN didn't match NLEN\n");
                 #endif
-                return 1;
+                *out_good = 0;
+                return;
             }
             
             for (int _ = 0; _ < LEN; _++) {
-                *recipient_at = *(uint8_t *)data_stream->data;
+                *recipient_at = *(uint8_t *)data_stream.data;
                 recipient_at++;
                 #ifndef INFLATE_IGNORE_ASSERTS
                 assert(
                     (recipient_at - recipient)
                         <= recipient_size);
                 #endif
-                data_stream->data++;
-                data_stream->size_left--;
+                data_stream.data++;
+                data_stream.size_left--;
             }
         } else if (BTYPE > 2) {
             #ifndef INFLATE_SILENCE
@@ -1001,7 +1004,8 @@ uint32_t inflate(
                     #ifndef INFLATE_SILENCE
                     printf("INFLATE failed, bad literal length huffman unpack\n");
                     #endif
-                    return 1;
+                    *out_good = 0;
+                    return;
                 }
                
                 #ifndef INFLATE_IGNORE_ASSERTS 
@@ -1070,7 +1074,7 @@ uint32_t inflate(
                 // number of Literal/Length codes - 257
                 // (257 - 286)
                 HLIT = consume_bits(
-                    /* from: */ data_stream,
+                    /* from: */ &data_stream,
                     /* size: */ 5)
                         + 257;
                 
@@ -1088,7 +1092,7 @@ uint32_t inflate(
                 // # of Distance codes - 1
                 // (1 - 32)
                 HDIST = consume_bits(
-                    /* from: */ data_stream,
+                    /* from: */ &data_stream,
                     /* size: */ 5)
                         + 1;
                 
@@ -1097,7 +1101,7 @@ uint32_t inflate(
                     "\t\t\tHDIST: %u (expect 1-32)\n",
                     HDIST);
                 #endif
-
+                
                 #ifndef INFLATE_IGNORE_ASSERTS
                 assert(HDIST >= 1 && HDIST <= 32);
                 #endif
@@ -1106,7 +1110,7 @@ uint32_t inflate(
                 // # of Code Length codes - 4
                 // (4 - 19)
                 uint32_t HCLEN = consume_bits(
-                    /* from: */ data_stream,
+                    /* from: */ &data_stream,
                     /* size: */ 4)
                         + 4;
                 
@@ -1151,7 +1155,7 @@ uint32_t inflate(
                     
                     HCLEN_table[swizzle[i]] =
                             consume_bits(
-                                /* from: */ data_stream,
+                                /* from: */ &data_stream,
                                 /* size: */ 3);
                     
                     #ifndef INFLATE_IGNORE_ASSERTS
@@ -1171,7 +1175,7 @@ uint32_t inflate(
                 
                 // TODO: should I do NUM_UNIQUE_CODELGNTHS
                 // or only HCLEN? 
-                uint32_t good = 0;
+                uint32_t cl_good = 0;
                 HuffmanEntry * codelengths_huffman =
                     unpack_huffman(
                         /* array:     : */
@@ -1179,12 +1183,13 @@ uint32_t inflate(
                         /* array_size : */
                             NUM_UNIQUE_CODELENGTHS,
                         /* good: */
-                            &good);
-                if (!good) {
+                            &cl_good);
+                if (!cl_good) {
                     #ifndef INFLATE_SILENCE
                     printf("INFLATE failed, bad huffman unpack\n");
                     #endif
-                    return 1;
+                    *out_good = 0;
+                    return;
                 }
                 HashedHuffman * hashed_clen_huffman =
                     huffman_to_hashmap(
@@ -1239,7 +1244,7 @@ uint32_t inflate(
                             /* dict: */
                                 hashed_clen_huffman,
                             /* raw data: */
-                                data_stream,
+                                &data_stream,
                             /* good: */
                                 &clen_good);
                     
@@ -1248,7 +1253,8 @@ uint32_t inflate(
                         printf(
                             "inflate() failed, bad huffman decode\n");
                         #endif
-                        return 1;
+                        *out_good = 0;
+                        return;
                     }
                     
                     if (encoded_len <= 15) {
@@ -1263,7 +1269,7 @@ uint32_t inflate(
                         */
                         uint32_t extra_bits_repeat =
                             consume_bits(
-                                /* from: */ data_stream,
+                                /* from: */ &data_stream,
                                 /* size: */ 2);
                         uint32_t repeats =
                             extra_bits_repeat + 3;
@@ -1291,7 +1297,7 @@ uint32_t inflate(
                         */
                         uint32_t extra_bits_repeat =
                             consume_bits(
-                                /* from: */ data_stream,
+                                /* from: */ &data_stream,
                                 /* size: */ 3);
                         uint32_t repeats =
                             extra_bits_repeat + 3;
@@ -1318,7 +1324,7 @@ uint32_t inflate(
                         */
                         uint32_t extra_bits_repeat =
                             consume_bits(
-                                /* from: */ data_stream,
+                                /* from: */ &data_stream,
                                 /* size: */ 7);
                         uint32_t repeats =
                             extra_bits_repeat + 11;
@@ -1369,7 +1375,8 @@ uint32_t inflate(
                     #ifndef INFLATE_SILENCE
                     printf("INFLATE failed, bad huffman unpack\n");
                     #endif
-                    return 1;
+                    *out_good = 0;
+                    return;
                 }
                 hashed_litlen_huffman =
                     huffman_to_hashmap(
@@ -1407,7 +1414,8 @@ uint32_t inflate(
                     #ifndef INFLATE_SILENCE
                     printf("INFLATE failed, bad huffman unpack\n");
                     #endif
-                    return 1;
+                    *out_good = 0;
+                    return;
                 }
                 
                 hashed_dist_huffman =
@@ -1468,35 +1476,36 @@ uint32_t inflate(
                 // because we hit the magical value 256,
                 // not because of running out of bytes
                 
-                if (data_stream->data - started_at
-                    >= compressed_size_bytes)
+                if (data_stream.data - started_at
+                    >= compressed_input_size)
                 {
                     #ifndef INFLATE_SILENCE
                     printf(
                         "\t\tWarning: breaking from DEFLATE preemptively because %li bytes were read\n",
-                        data_stream->data - started_at);
+                        data_stream.data - started_at);
                     printf(
-                        "\t\tcompressed_size_bytes was: %u\n",
-                        compressed_size_bytes);
+                        "\t\tcompressed_input_size was: %u\n",
+                        compressed_input_size);
                     #endif
                     read_more_deflate_blocks = 0;
                     break;
                 }
                
-                uint32_t good = 0; 
+                uint32_t litlen_good = 0; 
                 uint32_t litlenvalue = hashed_huffman_decode(
                     /* dict: */
                         hashed_litlen_huffman,
                     /* raw data: */
-                        data_stream,
+                        &data_stream,
                     /* good: */
-                        &good);
-                if (!good) {
+                        &litlen_good);
+                if (!litlen_good) {
                     #ifndef INFLATE_SILENCE
                     printf(
                         "inflate() failed, bad huffman decode\n");
                     #endif
-                    return 1;
+                    *out_good = 0;
+                    return;
                 }
                 
                 if (litlenvalue < 256) {
@@ -1533,7 +1542,7 @@ uint32_t inflate(
                     uint32_t extra_length =
                         extra_bits > 0 ?
                             consume_bits(
-                                /* from: */ data_stream,
+                                /* from: */ &data_stream,
                                 /* size: */ extra_bits)
                         : 0;
                     uint32_t total_length =
@@ -1551,7 +1560,7 @@ uint32_t inflate(
                     if (distance_huffman == NULL) {
                         distvalue = reverse_bit_order(
                             consume_bits(
-                                /* from: */ data_stream,
+                                /* from: */ &data_stream,
                                 /* size: */ 5),
                             5);
                     } else {
@@ -1560,7 +1569,7 @@ uint32_t inflate(
                             /* dict: */
                                 hashed_dist_huffman,
                             /* raw data: */
-                                data_stream,
+                                &data_stream,
                             /* good: */
                                 &hashed_dist_good);
                         if (!hashed_dist_good) { 
@@ -1568,7 +1577,8 @@ uint32_t inflate(
                             printf(
                                 "inflate() failed, bad hashed dist huffman decode\n");
                             #endif
-                            return 1;
+                            *out_good = 0;
+                            return;
                         }
                     }
                     
@@ -1576,7 +1586,8 @@ uint32_t inflate(
                         #ifndef INFLATE_SILENCE
                         printf("distvalue > 29, failing...\n");
                         #endif
-                        return 1;
+                        *out_good = 0;
+                        return;
                     }
                     
                     if (
@@ -1586,7 +1597,8 @@ uint32_t inflate(
                         #ifndef INFLATE_SILENCE
                         printf("extra bits table != distvalue, failing...\n");
                         #endif
-                        return 1;
+                        *out_good = 0;
+                        return;
                     }
                     
                     uint32_t dist_extra_bits =
@@ -1599,7 +1611,7 @@ uint32_t inflate(
                     uint32_t dist_extra_bits_decoded =
                         dist_extra_bits > 0 ?
                             consume_bits(
-                                /* from: */ data_stream,
+                                /* from: */ &data_stream,
                                 /* size: */ dist_extra_bits)
                             : 0;
                     
@@ -1649,54 +1661,55 @@ uint32_t inflate(
         }
     }
 
-    if (data_stream->bits_left != 0) {
+    if (data_stream.bits_left != 0) {
         #ifndef INFLATE_SILENCE
         printf(
             "\t\tpartial byte left after DEFLATE\n");
         printf(
             "\t\tdiscarding: %u bits\n",
-            data_stream->bits_left);
+            data_stream.bits_left);
         #endif
         
         discard_bits(
-            /* from: */ data_stream,
-            /* amount: */ data_stream->bits_left);
+            /* from: */ &data_stream,
+            /* amount: */ data_stream.bits_left);
     }
     
     uint32_t bytes_read =
-        (uint32_t)(data_stream->data - started_at);
+        (uint32_t)(data_stream.data - started_at);
     #ifndef INFLATE_IGNORE_ASSERTS
     assert(bytes_read >= 0);
     #endif
-    if (bytes_read != compressed_size_bytes) {
+    if (bytes_read != compressed_input_size) {
         #ifndef INFLATE_SILENCE
         printf(
             "Warning: expected to read %u bytes but got %u\n",
-            compressed_size_bytes,
+            compressed_input_size,
             bytes_read);
         #endif
         
         #ifndef INFLATE_IGNORE_ASSERTS
-        assert(compressed_size_bytes > bytes_read);
+        assert(compressed_input_size > bytes_read);
         #endif
         
-        uint32_t skip = compressed_size_bytes - bytes_read;
+        uint64_t skip = compressed_input_size -
+            (uint64_t)bytes_read;
         #ifndef INFLATE_SILENCE
         printf("skipping ahead %u bytes...\n", skip);
         #endif
-
+        
         #ifndef INFLATE_IGNORE_ASSERTS
-        assert(data_stream->size_left >= skip);
+        assert(data_stream.size_left >= skip);
         #endif
         
-        data_stream->data += skip;
-        data_stream->size_left -= skip;
+        data_stream.data += skip;
+        data_stream.size_left -= skip;
     }
-   
+    
     #ifndef INFLATE_SILENCE 
     printf("\t\tend of succesful inflate..\n");
     #endif
-
-    return 0;
+    
+    *out_good = 1;
+    return;
 }
-

@@ -37,29 +37,34 @@ You can find out the width and height of a PNG by inspecting
 only the first 26 bytes of a file.
 
 You can run this before running decode_PNG() to find out
-exactly how much memory your preallocated DecodedImage *
-struct needs
+exactly how much memory you need to decode the whole PNG. decode_PNG()
+always returns 4 channels (RGBA) per pixel, so the formula is
+width * height * 4, and you will have exactly enough memory.
 
-Sets out_width and out_height to 0 if unsuccesful
+Make sure to check if good is set to 1 (success) or 0 (parsing error). If
+the first 26 bytes fail, you can immediately avoid all the extra work of
+allocating memory for the image and parsing the entire file.
 */
 void get_PNG_width_height(
-    const uint8_t * compressed_bytes,
-    const uint32_t compressed_bytes_size,
+    const uint8_t * compressed_input,
+    const uint64_t compressed_input_size,
     uint32_t * out_width,
-    uint32_t * out_height);
+    uint32_t * out_height,
+    uint32_t * out_good);
 
 /*
-This function expects you to allocate memory for
-a DecodedImage and the rgba_values inside. The function
-will 'fill in' the results.
+You should use get_PNG_width_height first before using this!
 
 DecodedImage->good will be set to 0 if the decoding was
 unsuccesful, and to 1 if the decoding was succesful.
 */
 void decode_PNG(
-    const uint8_t * compressed_bytes,
-    const uint64_t compressed_bytes_size,
-    DecodedImage * out_preallocated_png);
+    const uint8_t * compressed_input,
+    const uint64_t compressed_input_size,
+    uint8_t * out_rgba_values,
+    uint64_t rgba_values_size,
+    uint32_t * out_width,
+    uint32_t * out_height,
+    uint32_t * out_good);
 
 #endif
-

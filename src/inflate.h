@@ -16,32 +16,11 @@ the data chunk inside a gzip (.gz) file, an IDAT (image data)
 #include "inttypes.h"
 #include "stdlib.h"
 
-// TODO: remove this, API should show only inflate()
-typedef struct DataStream {
-    uint8_t * data;
-    
-    uint32_t bits_left;
-    uint8_t bit_buffer;
-    
-    uint32_t size_left;
-} DataStream;
-
-// TODO: remove this, API should show only inflate()
-#define consume_struct(type, from) (type *)consume_chunk(from, sizeof(type))
-uint8_t * consume_chunk(
-    DataStream * from,
-    const size_t size_to_consume);
-
-// TODO: remove this, API should show only inflate()
-void discard_bits(
-    DataStream * from,
-    const unsigned int amount);
-
-uint32_t inflate(
+void inflate(
     uint8_t * recipient,
-    const uint32_t recipient_size,
-    DataStream * data_stream,
-    const uint32_t compressed_size_bytes);
+    const uint64_t recipient_size,
+    const uint8_t * compressed_input,
+    const uint64_t compressed_input_size,
+    uint32_t * out_good);
 
 #endif
-

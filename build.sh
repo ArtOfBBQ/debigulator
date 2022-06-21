@@ -1,7 +1,7 @@
 APP_NAME="hellopng"
 INPUT_FILE="font"
 INPUT_EXTENSION="png"
-ADDITIONAL_SOURCES="src/decodedimage.c src/decode_png.c src/inflate.c src/decode_gz.c"
+ADDITIONAL_SOURCES="src/decodedimage.c src/decode_png.c src/inflate.c"
 
 MAC_FRAMEWORKS="
     -framework AppKit 
@@ -30,7 +30,7 @@ cp resources/structuredart3.png build/structuredart3.png
 
 echo "Compiling $APP_NAME..."
 # clang -g -Wno-padded -Wno-gnu-empty-initializer -Wno-poison-system-directories -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/concat_pngs.c $ADDITIONAL_SOURCES
-clang++ $MAC_FRAMEWORKS -g -o0 -x objective-c++ -objC -std="c++17" -Wno-padded -Wno-gnu-empty-initializer -lstdc++ -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
+clang++ -fsanitize=address $MAC_FRAMEWORKS -g -o0 -x objective-c++ -objC -std="c++17" -Wno-padded -Wno-gnu-empty-initializer -lstdc++ -o build/$APP_NAME src/hello$INPUT_EXTENSION.c $ADDITIONAL_SOURCES
 # gcc -fsanitize=undefined -g -o3 $MAC_FRAMEWORKS -lstdc++ -std="c99" -o build/$APP_NAME src/hello$INPUT_EXTENSION.c
 # gcc -fsanitize=undefined -g -Wall -lstdc++ -std="c99" -o3 -o build/$APP_NAME src/hellopng.c $ADDITIONAL_SOURCES
 

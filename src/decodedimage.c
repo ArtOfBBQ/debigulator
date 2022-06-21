@@ -220,4 +220,3 @@ DecodedImage concatenate_images(
     
     return return_value;
 }
-
