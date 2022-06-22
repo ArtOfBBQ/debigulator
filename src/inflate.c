@@ -1,10 +1,11 @@
 #include "inflate.h"
 
 #define INFLATE_SILENCE
-#define INFLATE_IGNORE_ASSERTS
+// #define INFLATE_IGNORE_ASSERTS
 
 #define NUM_UNIQUE_CODELENGTHS 19
 #define HUFFMAN_HASHMAP_SIZE 1023
+#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 100
 
 #ifndef INFLATE_SILENCE
 #include "stdio.h"
@@ -48,11 +49,15 @@ typedef struct HashedHuffmanEntry {
    uint32_t key;
    uint32_t code_length;
    uint32_t value;
-   struct HashedHuffmanEntry * next_neighbor; 
 } HashedHuffmanEntry;
 
+typedef struct HashedHuffmanLinkedList {
+   HashedHuffmanEntry entries[HUFFMAN_HASHMAP_LINKEDLIST_SIZE];
+   uint32_t size;
+} HashedHuffmanLinkedList;
+
 typedef struct HashedHuffman {
-    HashedHuffmanEntry * entries[HUFFMAN_HASHMAP_SIZE];
+    HashedHuffmanLinkedList linked_lists[HUFFMAN_HASHMAP_SIZE];
     uint32_t min_code_length;
     uint32_t max_code_length;
 } HashedHuffman;
@@ -294,13 +299,13 @@ static uint32_t consume_bits(
 Our hashmaps are full of pointers to heap memory,
 this frees everything in 1 go
 */
+/*
 static void free_hashed_huff(HashedHuffman * dict)
 {
     if (dict == NULL) { return; }
     
-    for (int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++) {
-        while (1)
-        {
+    for (uint32_t i = 0; i < HUFFMAN_HASHMAP_SIZE; i++) {
+        for (uint32_t l = 0; l < HUFFMAN_HASHMAP_LINKEDLIST_SIZE; l++) { 
             if (dict->entries[i] == NULL) { break; }
             if (dict->entries[i]->next_neighbor == NULL) {
                 break;
@@ -360,10 +365,8 @@ static void free_hashed_huff(HashedHuffman * dict)
             dict->entries[i] = NULL;
         }
     }
-    
-    free(dict);
-    dict = NULL;
 }
+*/
 
 /*
 Given a datastream and a hashmap of huffman codes,
@@ -408,31 +411,17 @@ static uint32_t hashed_huffman_decode(
             /* key: */ raw,
             /* code_length: */ bitcount);
         
-        if (dict->entries[hash] == NULL)
-        {
-            continue;
-        } else if (
-            dict->entries[hash]->key == raw
-            && dict->entries[hash]->code_length == bitcount)
-        {
-            discard_bits(datastream, bitcount);
-            *good = 1;
-            return dict->entries[hash]->value;
-        } else {
-            HashedHuffmanEntry * next_neighbor =
-                dict->entries[hash]->next_neighbor;
-            
-            while (next_neighbor != NULL) {
-                if (next_neighbor->key == raw
-                    && next_neighbor->code_length == bitcount)
-                {
-                    discard_bits(datastream, bitcount);
-                    *good = 1;
-                    return next_neighbor->value;
-                } else {
-                    next_neighbor =
-                        next_neighbor->next_neighbor;
-                }
+        for (uint32_t l = 0; l < dict->linked_lists[hash].size; l++) {
+            #ifndef INFLATE_IGNORE_ASSERTS
+            assert(l < HUFFMAN_HASHMAP_LINKEDLIST_SIZE);
+            #endif
+            if (
+                dict->linked_lists[hash].entries[l].key == raw
+                && dict->linked_lists[hash].entries[l].code_length == bitcount)
+            {
+                discard_bits(datastream, bitcount);
+                *good = 1;
+                return dict->linked_lists[hash].entries[l].value;
             }
         }
     }
@@ -451,115 +440,73 @@ static uint32_t hashed_huffman_decode(
 /*
 Convert an array of huffman codes to a hashmap of huffman codes
 */
-static HashedHuffman * huffman_to_hashmap(
-    HuffmanEntry * orig_huff,
-    uint32_t orig_huff_size)
-{
-    unsigned int longest_conflict = 0;
-   
-    HashedHuffman * hashed_huffman =
-        (HashedHuffman *)malloc(sizeof(HashedHuffman));
+static HashedHuffman huffman_to_hashmap(
+    HuffmanEntry * huffman_input,
+    uint32_t huffman_input_size)
+{    
+    HashedHuffman hashed_huffman;
     
-    // initialize all pointers to NULL 
+    hashed_huffman.min_code_length = 1000;
+    hashed_huffman.max_code_length = 1;
+    
+    // init linked list sizes to 0
     for (unsigned int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++)
     {
-        hashed_huffman->entries[i] = NULL;
+        hashed_huffman.linked_lists[i].size = 0;
     }
     
-    hashed_huffman->min_code_length = 1000;
-    hashed_huffman->max_code_length = 1;
-    
-    for (unsigned int i = 0; i < orig_huff_size; i++)
+    for (unsigned int i = 0; i < huffman_input_size; i++)
     {
-        if (orig_huff[i].used == 0) {
+        if (huffman_input[i].used == 0) {
             continue;
         }
         
         // we'll store the reversed key, so that we don't
         // have to reverse on each lookup
         uint32_t reversed_key = reverse_bit_order(
-            /* raw: */ orig_huff[i].key,
-            /* size: */ orig_huff[i].code_length);
+            /* raw: */ huffman_input[i].key,
+            /* size: */ huffman_input[i].code_length);
         
         uint32_t hash = compute_hash(
             /* key: */ reversed_key,
-            /* code_length: */ orig_huff[i].code_length);
+            /* code_length: */ huffman_input[i].code_length);
         
         #ifndef INFLATE_IGNORE_ASSERTS
         assert(hash <= HUFFMAN_HASHMAP_SIZE);
         assert(hash >= 0);
         #endif
         
-        if (orig_huff[i].code_length
-            < hashed_huffman->min_code_length)
+        if (huffman_input[i].code_length
+            < hashed_huffman.min_code_length)
         {
-            hashed_huffman->min_code_length =
-                orig_huff[i].code_length;
+            hashed_huffman.min_code_length =
+                huffman_input[i].code_length;
         }
         
-        if (orig_huff[i].code_length
-            > hashed_huffman->max_code_length)
+        if (huffman_input[i].code_length
+            > hashed_huffman.max_code_length)
         {
-            hashed_huffman->max_code_length =
-                orig_huff[i].code_length;
+            hashed_huffman.max_code_length =
+                huffman_input[i].code_length;
         }
-       
-        if (
-            hashed_huffman->entries[hash] == NULL)
-        {
-            hashed_huffman->entries[hash] =
-                (HashedHuffmanEntry *)
-                    malloc(sizeof(HashedHuffmanEntry));
-            
-            // first time using this hash
-            hashed_huffman->entries[hash]->key = reversed_key;
-            hashed_huffman->entries[hash]->code_length =
-                orig_huff[i].code_length;
-            hashed_huffman->entries[hash]->value =
-                orig_huff[i].value;
-            hashed_huffman->entries[hash]->next_neighbor = NULL;
-        } else {
-            HashedHuffmanEntry * last_full_link = 
-                hashed_huffman->entries[hash];
-            #ifndef INFLATE_IGNORE_ASSERTS
-            assert(last_full_link != NULL);
-            #endif
-            
-            unsigned current_conflict = 1;
-            
-            while (last_full_link->next_neighbor != NULL)
-            {
-                last_full_link = last_full_link->next_neighbor;
-                current_conflict++;
-            }
-            
-            #ifndef INFLATE_IGNORE_ASSERTS 
-            assert(last_full_link->next_neighbor == NULL);
-            #endif
-           
- 
-            last_full_link->next_neighbor =
-                (HashedHuffmanEntry *)
-                    malloc(sizeof(HashedHuffmanEntry));
-            last_full_link->next_neighbor->next_neighbor =
-                NULL;
-            last_full_link->next_neighbor->key =
-                reversed_key;
-            last_full_link->next_neighbor->code_length =
-                orig_huff[i].code_length;
-            last_full_link->next_neighbor->value =
-                orig_huff[i].value;
-            
-            if (current_conflict > longest_conflict) {
-                longest_conflict = current_conflict;
-            }
-        }
+        
+        uint32_t list_size = hashed_huffman.linked_lists[hash].size;
+        hashed_huffman.linked_lists[hash].entries[list_size].key = reversed_key;
+        hashed_huffman.linked_lists[hash].entries[list_size].code_length =
+            huffman_input[i].code_length;
+        hashed_huffman.linked_lists[hash].entries[list_size].value =
+            huffman_input[i].value;
+        hashed_huffman.linked_lists[hash].size += 1;
+        #ifndef INFLATE_IGNORE_ASSERTS 
+        assert(hashed_huffman.linked_lists[hash].size <
+            HUFFMAN_HASHMAP_LINKEDLIST_SIZE);
+        #endif
     }
     
     #ifndef INFLATE_IGNORE_ASSERTS 
     assert(
-        hashed_huffman->min_code_length
-            <= hashed_huffman->max_code_length);
+           hashed_huffman.min_code_length
+           <= hashed_huffman.max_code_length);
     #endif
     
     return hashed_huffman;
@@ -939,11 +886,11 @@ void inflate(
             
             // used in both dynamic & fixed huffman encoded files
             HuffmanEntry * literal_length_huffman = NULL;
-            HashedHuffman * hashed_litlen_huffman = NULL;
+            HashedHuffman hashed_litlen_huffman;
             
             // only used in dynamic, keep NULL for fixed 
             HuffmanEntry * distance_huffman = NULL;
-            HashedHuffman * hashed_dist_huffman = NULL;
+            HashedHuffman hashed_dist_huffman;
             
             // will be overwritten in dynamic
             // leave 288 for fixed
@@ -1042,7 +989,7 @@ void inflate(
                     literal_length_huffman[287].code_length == 8);
                 assert(literal_length_huffman[287].key == 199);
                 #endif
-
+                
                 hashed_litlen_huffman =
                     huffman_to_hashmap(
                         /* original: */ literal_length_huffman,
@@ -1191,7 +1138,8 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
-                HashedHuffman * hashed_clen_huffman =
+                
+                HashedHuffman hashed_clen_huffman =
                     huffman_to_hashmap(
                         /* original dict: */
                             codelengths_huffman,
@@ -1242,7 +1190,7 @@ void inflate(
                     uint32_t encoded_len =
                         hashed_huffman_decode(
                             /* dict: */
-                                hashed_clen_huffman,
+                                &hashed_clen_huffman,
                             /* raw data: */
                                 &data_stream,
                             /* good: */
@@ -1440,11 +1388,8 @@ void inflate(
                 printf("free memory...\n");
                 #endif
                 free(codelengths_huffman);
-                codelengths_huffman = NULL;
-                free_hashed_huff(hashed_clen_huffman);
-                hashed_clen_huffman = NULL;
+                // free_hashed_huff(&hashed_clen_huffman);
                 free(litlendist_table);
-                litlendist_table = NULL;
             }
             
             // the remaining part of the algorithm is mostly the
@@ -1494,7 +1439,7 @@ void inflate(
                 uint32_t litlen_good = 0; 
                 uint32_t litlenvalue = hashed_huffman_decode(
                     /* dict: */
-                        hashed_litlen_huffman,
+                        &hashed_litlen_huffman,
                     /* raw data: */
                         &data_stream,
                     /* good: */
@@ -1567,7 +1512,7 @@ void inflate(
                         uint32_t hashed_dist_good = 0;
                         distvalue = hashed_huffman_decode(
                             /* dict: */
-                                hashed_dist_huffman,
+                                &hashed_dist_huffman,
                             /* raw data: */
                                 &data_stream,
                             /* good: */
@@ -1654,13 +1599,13 @@ void inflate(
             
             free(literal_length_huffman);
             literal_length_huffman = NULL;
-            free_hashed_huff(hashed_litlen_huffman);
-	    free(distance_huffman);
+            // free_hashed_huff(&hashed_litlen_huffman);
+            free(distance_huffman);
             distance_huffman = NULL;
-	    free_hashed_huff(hashed_dist_huffman);
+            // free_hashed_huff(&hashed_dist_huffman);
         }
     }
-
+    
     if (data_stream.bits_left != 0) {
         #ifndef INFLATE_SILENCE
         printf(
