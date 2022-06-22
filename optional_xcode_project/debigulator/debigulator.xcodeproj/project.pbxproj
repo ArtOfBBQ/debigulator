@@ -1,0 +1,360 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 55;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		601128E32863049000F92967 /* hellopng.c in Sources */ = {isa = PBXBuildFile; fileRef = 601128DE2863049000F92967 /* hellopng.c */; };
+		601128E42863049000F92967 /* inflate.h in Sources */ = {isa = PBXBuildFile; fileRef = 601128DF2863049000F92967 /* inflate.h */; };
+		601128E52863049000F92967 /* inflate.c in Sources */ = {isa = PBXBuildFile; fileRef = 601128E02863049000F92967 /* inflate.c */; };
+		601128E62863049000F92967 /* decode_png.h in Sources */ = {isa = PBXBuildFile; fileRef = 601128E12863049000F92967 /* decode_png.h */; };
+		601128E72863049000F92967 /* decode_png.c in Sources */ = {isa = PBXBuildFile; fileRef = 601128E22863049000F92967 /* decode_png.c */; };
+		601128F5286305B500F92967 /* structuredart1.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128E8286305B500F92967 /* structuredart1.png */; };
+		601128F6286305B500F92967 /* backgrounddetailed1.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128E9286305B500F92967 /* backgrounddetailed1.png */; };
+		601128F7286305B500F92967 /* gimp_test.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128EA286305B500F92967 /* gimp_test.png */; };
+		601128F8286305B500F92967 /* structuredart2.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128EB286305B500F92967 /* structuredart2.png */; };
+		601128F9286305B500F92967 /* structuredart3.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128EC286305B500F92967 /* structuredart3.png */; };
+		601128FA286305B500F92967 /* receiver.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128ED286305B500F92967 /* receiver.png */; };
+		601128FB286305B500F92967 /* fs_bridge.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128EE286305B500F92967 /* fs_bridge.png */; };
+		601128FC286305B500F92967 /* fs_angrymob.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128EF286305B500F92967 /* fs_angrymob.png */; };
+		601128FD286305B500F92967 /* purpleback.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128F0286305B500F92967 /* purpleback.png */; };
+		601128FE286305B500F92967 /* fs_bribery.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128F1286305B500F92967 /* fs_bribery.png */; };
+		601128FF286305B500F92967 /* fs_cannon.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128F2286305B500F92967 /* fs_cannon.png */; };
+		60112900286305B500F92967 /* fs_birdmystic.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128F3286305B500F92967 /* fs_birdmystic.png */; };
+		60112901286305B500F92967 /* font.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128F4286305B500F92967 /* font.png */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		601128D42863043C00F92967 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 12;
+			dstPath = "";
+			dstSubfolderSpec = 16;
+			files = (
+				601128F5286305B500F92967 /* structuredart1.png in CopyFiles */,
+				601128F6286305B500F92967 /* backgrounddetailed1.png in CopyFiles */,
+				601128F7286305B500F92967 /* gimp_test.png in CopyFiles */,
+				601128F8286305B500F92967 /* structuredart2.png in CopyFiles */,
+				601128F9286305B500F92967 /* structuredart3.png in CopyFiles */,
+				601128FA286305B500F92967 /* receiver.png in CopyFiles */,
+				601128FB286305B500F92967 /* fs_bridge.png in CopyFiles */,
+				601128FC286305B500F92967 /* fs_angrymob.png in CopyFiles */,
+				601128FD286305B500F92967 /* purpleback.png in CopyFiles */,
+				601128FE286305B500F92967 /* fs_bribery.png in CopyFiles */,
+				601128FF286305B500F92967 /* fs_cannon.png in CopyFiles */,
+				60112900286305B500F92967 /* fs_birdmystic.png in CopyFiles */,
+				60112901286305B500F92967 /* font.png in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		601128D62863043C00F92967 /* hellopng */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = hellopng; sourceTree = BUILT_PRODUCTS_DIR; };
+		601128DE2863049000F92967 /* hellopng.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = hellopng.c; path = ../../src/hellopng.c; sourceTree = "<group>"; };
+		601128DF2863049000F92967 /* inflate.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = inflate.h; path = ../../src/inflate.h; sourceTree = "<group>"; };
+		601128E02863049000F92967 /* inflate.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = inflate.c; path = ../../src/inflate.c; sourceTree = "<group>"; };
+		601128E12863049000F92967 /* decode_png.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = decode_png.h; path = ../../src/decode_png.h; sourceTree = "<group>"; };
+		601128E22863049000F92967 /* decode_png.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = decode_png.c; path = ../../src/decode_png.c; sourceTree = "<group>"; };
+		601128E8286305B500F92967 /* structuredart1.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = structuredart1.png; path = ../../resources/structuredart1.png; sourceTree = "<group>"; };
+		601128E9286305B500F92967 /* backgrounddetailed1.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = backgrounddetailed1.png; path = ../../resources/backgrounddetailed1.png; sourceTree = "<group>"; };
+		601128EA286305B500F92967 /* gimp_test.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = gimp_test.png; path = ../../resources/gimp_test.png; sourceTree = "<group>"; };
+		601128EB286305B500F92967 /* structuredart2.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = structuredart2.png; path = ../../resources/structuredart2.png; sourceTree = "<group>"; };
+		601128EC286305B500F92967 /* structuredart3.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = structuredart3.png; path = ../../resources/structuredart3.png; sourceTree = "<group>"; };
+		601128ED286305B500F92967 /* receiver.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = receiver.png; path = ../../resources/receiver.png; sourceTree = "<group>"; };
+		601128EE286305B500F92967 /* fs_bridge.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = fs_bridge.png; path = ../../resources/fs_bridge.png; sourceTree = "<group>"; };
+		601128EF286305B500F92967 /* fs_angrymob.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = fs_angrymob.png; path = ../../resources/fs_angrymob.png; sourceTree = "<group>"; };
+		601128F0286305B500F92967 /* purpleback.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = purpleback.png; path = ../../resources/purpleback.png; sourceTree = "<group>"; };
+		601128F1286305B500F92967 /* fs_bribery.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = fs_bribery.png; path = ../../resources/fs_bribery.png; sourceTree = "<group>"; };
+		601128F2286305B500F92967 /* fs_cannon.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = fs_cannon.png; path = ../../resources/fs_cannon.png; sourceTree = "<group>"; };
+		601128F3286305B500F92967 /* fs_birdmystic.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = fs_birdmystic.png; path = ../../resources/fs_birdmystic.png; sourceTree = "<group>"; };
+		601128F4286305B500F92967 /* font.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = font.png; path = ../../resources/font.png; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		601128D32863043C00F92967 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		601128CB286303DB00F92967 = {
+			isa = PBXGroup;
+			children = (
+				6011290228630B3000F92967 /* resources */,
+				601128E22863049000F92967 /* decode_png.c */,
+				601128E12863049000F92967 /* decode_png.h */,
+				601128DE2863049000F92967 /* hellopng.c */,
+				601128E02863049000F92967 /* inflate.c */,
+				601128DF2863049000F92967 /* inflate.h */,
+				601128D82863043C00F92967 /* hellopng */,
+				601128D72863043C00F92967 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		601128D72863043C00F92967 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				601128D62863043C00F92967 /* hellopng */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		601128D82863043C00F92967 /* hellopng */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = hellopng;
+			sourceTree = "<group>";
+		};
+		6011290228630B3000F92967 /* resources */ = {
+			isa = PBXGroup;
+			children = (
+				601128E9286305B500F92967 /* backgrounddetailed1.png */,
+				601128F4286305B500F92967 /* font.png */,
+				601128EF286305B500F92967 /* fs_angrymob.png */,
+				601128F3286305B500F92967 /* fs_birdmystic.png */,
+				601128F1286305B500F92967 /* fs_bribery.png */,
+				601128EE286305B500F92967 /* fs_bridge.png */,
+				601128F2286305B500F92967 /* fs_cannon.png */,
+				601128EA286305B500F92967 /* gimp_test.png */,
+				601128F0286305B500F92967 /* purpleback.png */,
+				601128ED286305B500F92967 /* receiver.png */,
+				601128E8286305B500F92967 /* structuredart1.png */,
+				601128EB286305B500F92967 /* structuredart2.png */,
+				601128EC286305B500F92967 /* structuredart3.png */,
+			);
+			name = resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		601128D52863043C00F92967 /* hellopng */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 601128DB2863043C00F92967 /* Build configuration list for PBXNativeTarget "hellopng" */;
+			buildPhases = (
+				601128D22863043C00F92967 /* Sources */,
+				601128D32863043C00F92967 /* Frameworks */,
+				601128D42863043C00F92967 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = hellopng;
+			productName = hellopng;
+			productReference = 601128D62863043C00F92967 /* hellopng */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		601128CC286303DB00F92967 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1320;
+				TargetAttributes = {
+					601128D52863043C00F92967 = {
+						CreatedOnToolsVersion = 13.2.1;
+					};
+				};
+			};
+			buildConfigurationList = 601128CF286303DB00F92967 /* Build configuration list for PBXProject "debigulator" */;
+			compatibilityVersion = "Xcode 13.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 601128CB286303DB00F92967;
+			productRefGroup = 601128D72863043C00F92967 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				601128D52863043C00F92967 /* hellopng */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		601128D22863043C00F92967 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				601128E32863049000F92967 /* hellopng.c in Sources */,
+				601128E42863049000F92967 /* inflate.h in Sources */,
+				601128E52863049000F92967 /* inflate.c in Sources */,
+				601128E62863049000F92967 /* decode_png.h in Sources */,
+				601128E72863049000F92967 /* decode_png.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		601128D0286303DB00F92967 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		601128D1286303DB00F92967 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		601128DC2863043C00F92967 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 69FRAQZ2YR;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 11.6;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		601128DD2863043C00F92967 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 69FRAQZ2YR;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 11.6;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		601128CF286303DB00F92967 /* Build configuration list for PBXProject "debigulator" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				601128D0286303DB00F92967 /* Debug */,
+				601128D1286303DB00F92967 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		601128DB2863043C00F92967 /* Build configuration list for PBXNativeTarget "hellopng" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				601128DC2863043C00F92967 /* Debug */,
+				601128DD2863043C00F92967 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 601128CC286303DB00F92967 /* Project object */;
+}

@@ -6,4 +6,8 @@
 # swap files used by vim
 *.swp
 
+# xcode
+optional_xcode_project/debigulator/debigulator.xcodeproj/project.xcworkspace/xcuserdata/
+optional_xcode_project/debigulator/debigulator.xcodeproj/xcuserdata/
+
 build/**
