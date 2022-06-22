@@ -14,6 +14,18 @@ the data chunk inside a gzip (.gz) file, an IDAT (image data)
 #define INFLATE_H
 
 #include "inttypes.h"
+#include "stdio.h"
+
+#define INFLATE_SILENCE
+// #define INFLATE_IGNORE_ASSERTS
+
+#ifndef INFLATE_SILENCE
+#include "stdio.h"
+#endif
+
+#ifndef INFLATE_IGNORE_ASSERTS
+#include "assert.h"
+#endif
 
 void inflate(
     uint8_t * recipient,

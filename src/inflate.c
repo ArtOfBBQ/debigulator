@@ -1,23 +1,12 @@
 #include "inflate.h"
 
-#define INFLATE_SILENCE
-// #define INFLATE_IGNORE_ASSERTS
-
 #define NUM_UNIQUE_CODELENGTHS 19
-#define HUFFMAN_HASHMAP_SIZE 1023
-#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 100
-
-#ifndef INFLATE_SILENCE
-#include "stdio.h"
-#endif
-
-#ifndef INFLATE_IGNORE_ASSERTS
-#include "assert.h"
-#endif
+#define HUFFMAN_HASHMAP_SIZE 1024 // enables 10 bits
+#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 10
 
 /*
-Since we need to consume partial bytes (and leave remaining bits
-in a buffer), we're using this data structure.
+Since we need to consume partial bytes (and leave remaining bits in a buffer),
+we're using this data structure.
 */
 typedef struct DataStream {
     uint8_t * data;
@@ -62,27 +51,21 @@ typedef struct HashedHuffman {
     uint32_t max_code_length;
 } HashedHuffman;
 
-static uint32_t
-__attribute__((no_instrument_function))
-mask_rightmost_bits(
+static uint32_t __attribute__((no_instrument_function)) mask_rightmost_bits(
     const uint32_t input,
     const uint32_t bits_to_mask)
 {
     return input & ((1 << bits_to_mask) - 1);
 }
 
-static uint32_t
-__attribute__((no_instrument_function))
-mask_leftmost_bits(
+static uint32_t __attribute__((no_instrument_function)) mask_leftmost_bits(
     const uint32_t input,
     const uint32_t bits_to_mask)
 {
     uint32_t return_value = input;
     
-    uint32_t rightmost_mask =
-        (1 << bits_to_mask) - 1;
-    uint32_t leftmost_mask =
-        rightmost_mask << (32 - bits_to_mask);
+    uint32_t rightmost_mask = (1 << bits_to_mask) - 1;
+    uint32_t leftmost_mask = rightmost_mask << (32 - bits_to_mask);
     
     return_value = return_value & leftmost_mask;
     return_value = return_value >> (32 - bits_to_mask);
@@ -236,7 +219,63 @@ static uint32_t compute_hash(
     uint32_t key,
     uint32_t code_length)
 {
-    return (key * code_length) & (HUFFMAN_HASHMAP_SIZE - 1);
+    assert(code_length > 0);
+    assert(code_length < 19);
+    /*
+    ABANDONED IDEA:
+    code_length is between 1 and 19, so you can store it entirely
+    if you can store an 18
+    we can store almost everything with 4 bits (up to 15)
+    1111
+    8421
+    if we do so, that leaves 6 bits to store the key
+    
+    Alternatively, we can store 3 bits of it, giving
+    111
+    421
+    4 + 2 + 1 = 7 slots for the code length, and 7 bits for the value
+    
+    Note that it's better to invite conflicts for lower code lengths,
+    since small code lengths have only a small possible values and therefore
+    end up being able to store the entire key anyway.
+    
+    uint32_t code_bits = code_length < 3 ? 0 : code_length - 2;
+    assert(code_bits < 16);
+    uint32_t key_bits = key & ((1 << 6) - 1);
+    assert(key_bits < (1 << 6));
+    
+    uint32_t max_hash = (15 << 6) + ((1 << 6)-1);
+    assert(max_hash < HUFFMAN_HASHMAP_SIZE);
+    
+    uint32_t hash = ((code_bits << 6) + key_bits);
+    assert(hash < HUFFMAN_HASHMAP_SIZE);
+    */
+    
+    /*
+    ABANDONED IDEA 2:
+    Alternatively, we can store only 3 bits of the code length and leave
+    7 bits for the key
+    
+    uint32_t code_bits = code_length < 4 ? 0 : ((code_length - 3) & 7);
+    assert(code_bits < 8);
+    uint32_t key_bits = key & ((1 << 7) - 1);
+    assert(key_bits < (1 << 7));
+    
+    uint32_t max_hash = (7 << 7) + ((1 << 7)-1);
+    assert(max_hash < HUFFMAN_HASHMAP_SIZE);
+    
+    uint32_t hash = ((code_bits << 7) + key_bits);
+    assert(hash < HUFFMAN_HASHMAP_SIZE);
+    */
+    
+    /*
+    This hashing function was built by simply fiddling and
+    does much better than the previous 2
+    */
+    uint32_t hash = ((code_length - 1) * (key >> 3)) & (HUFFMAN_HASHMAP_SIZE - 1); 
+    assert(hash < HUFFMAN_HASHMAP_SIZE);
+    
+    return hash;
 }
 
 /*
@@ -244,7 +283,7 @@ Throw away the top x bits from our datastream
 */
 void discard_bits(
     DataStream * from,
-    const unsigned int amount)
+    const uint32_t amount)
 {
     unsigned int discards_left = amount;
     
@@ -443,19 +482,19 @@ Convert an array of huffman codes to a hashmap of huffman codes
 static HashedHuffman huffman_to_hashmap(
     HuffmanEntry * huffman_input,
     uint32_t huffman_input_size)
-{    
+{   
     HashedHuffman hashed_huffman;
     
     hashed_huffman.min_code_length = 1000;
     hashed_huffman.max_code_length = 1;
     
     // init linked list sizes to 0
-    for (unsigned int i = 0; i < HUFFMAN_HASHMAP_SIZE; i++)
+    for (uint32_t i = 0; i < HUFFMAN_HASHMAP_SIZE; i++)
     {
         hashed_huffman.linked_lists[i].size = 0;
     }
     
-    for (unsigned int i = 0; i < huffman_input_size; i++)
+    for (uint32_t i = 0; i < huffman_input_size; i++)
     {
         if (huffman_input[i].used == 0) {
             continue;
