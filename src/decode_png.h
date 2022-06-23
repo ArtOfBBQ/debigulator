@@ -1,6 +1,10 @@
+#define DECODE_PNG_SILENCE
+// #define DECODE_PNG_IGNORE_CRC_CHECKS
+// #define DECODE_PNG_IGNORE_ASSERTS
+
 /*
-This API offers only the decode_PNG() function, which reads
-& decompresses a PNG stream to the RGBA pixel values inside. 
+This API offers only the decode_PNG() function, which reads & decompresses a
+PNG stream to the RGBA pixel values inside. 
 
 DecodedImage * decode_PNG(
     uint8_t * compressed_bytes,
@@ -32,6 +36,14 @@ All other code in the .c file is implementation detail.
 #include "inflate.h"
 #include "inttypes.h"
 
+#ifndef DECODE_PNG_SILENCE
+#include "stdio.h"
+#endif
+
+#ifndef DECODE_PNG_IGNORE_ASSERTS
+#include "assert.h"
+#endif
+
 /*
 You can find out the width and height of a PNG by inspecting
 only the first 26 bytes of a file.
@@ -55,16 +67,27 @@ void get_PNG_width_height(
 /*
 You should use get_PNG_width_height first before using this!
 
-DecodedImage->good will be set to 0 if the decoding was
-unsuccesful, and to 1 if the decoding was succesful.
+- compressed_input: the entire PNG file's data, including headers etc. Just
+read in a PNG file and pass the whole thing directly.
+- compressed_input_size: the size in bytes of compressed_input. Getting this
+wrong is very bad, as it can't be detected.
+- out_rgba_values: a preallocated recipient for the decompressed data.
+It needs to be of size width * height * 4. If you pass a larger size, that's ok
+but the remaining memory will be wasted until you free it. If you pass a smaller
+size decode_PNG() will always fail. The worst thing you can do of course is to
+misinform the function about the size of your array (e.g. you have only 100
+bytes of memory, but set this parameter to 1000), in which case the function
+will write out of bounds and corrupt your memory.
+- out_rgba_values_size: the capacity in bytes of out_rgba_values. This should be
+at least 4 * width * height
+- out_good: will be set to 0 if the decoding was unsuccesful, and to 1 if the
+decoding was succesful.
 */
 void decode_PNG(
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
     uint8_t * out_rgba_values,
-    uint64_t rgba_values_size,
-    uint32_t * out_width,
-    uint32_t * out_height,
+    const uint32_t out_rgba_values_size,
     uint32_t * out_good);
 
 #endif

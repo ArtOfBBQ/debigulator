@@ -50,11 +50,6 @@ static void platform_read_file(
     const char * filename,
     FileBuffer * out_preallocatedbuffer)
 {
-    printf(
-        "platform_read_file: %s into buffer of size: %llu\n",
-        filename,
-        out_preallocatedbuffer->size);
-    
     NSString * nsfilename = [NSString
         stringWithUTF8String:filename];
     
@@ -111,8 +106,6 @@ static DecodedImage read_png_from_disk(
     DecodedImage return_value;
     return_value.good = 0;
     
-    printf("read from disk: %s\n", filename);
-    
     FileBuffer imgfile;
     imgfile.size = platform_get_filesize(filename);
     imgfile.contents = (char *)malloc(sizeof(char) * imgfile.size);
@@ -165,13 +158,10 @@ static DecodedImage read_png_from_disk(
             return_value.rgba_values,
         /* out_rgba_values_size: */
             return_value.rgba_values_size,
-        /* out_width: */
-            &return_value.width,
-        /* out_height: */
-            &return_value.height,
         /* out_good: */
             &return_value.good);
-    assert(return_value.good);
+    return_value.width = png_width;
+    return_value.height = png_height;
     
     free(imgfile.contents);
     
@@ -202,6 +192,15 @@ int main(int argc, const char * argv[])
         (char *)"structuredart2.png",
         (char *)"structuredart3.png"
     };
+
+    /*
+    // TODO: remove this test code focusing on only 1 file
+    #define FILENAMES_CAP 1
+    char * filenames[FILENAMES_CAP] = {
+        //(char *)"structuredart2.png"
+        (char *)"font.png"
+    };
+    */
     
     DecodedImage decoded_images[FILENAMES_CAP];
     
@@ -215,15 +214,18 @@ int main(int argc, const char * argv[])
         
         #ifndef HELLOPNG_SILENCE 
         printf(
-            "finished decode_PNG, result was: %s\n",
+            "finished decode_PNG for %s, result was: %s\n",
+            filenames[filename_i],
             decoded_images[filename_i].good ?
                 "SUCCESS" : "FAILURE");
         #endif
         
         assert(
-            decoded_images[filename_i].width * decoded_images[filename_i].height * 4 ==
-                decoded_images[filename_i].rgba_values_size); 
+            decoded_images[filename_i].width
+                * decoded_images[filename_i].height * 4 ==
+                    decoded_images[filename_i].rgba_values_size); 
     }
     
     return 0;
 }
+
