@@ -16,7 +16,8 @@ header to read pixels from a .png file.
 
 #include <Foundation/foundation.h>
 
-#define APPLICATION_MEMORY_SIZE 50000000
+// 100mb ->                     1..000...
+#define APPLICATION_MEMORY_SIZE 100000000
 uint8_t * memory_store = (uint8_t *)malloc(APPLICATION_MEMORY_SIZE);
 uint64_t memory_store_remaining = APPLICATION_MEMORY_SIZE;
 
@@ -149,7 +150,7 @@ DecodedImage read_png_from_disk(
     memory_store += return_value.rgba_values_size;
     memory_store_remaining -= return_value.rgba_values_size;
     
-    // free(imgfile.contents);
+    free(imgfile.contents);
     
     if (return_value.good) {
         return_value.pixel_count =
