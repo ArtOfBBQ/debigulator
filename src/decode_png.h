@@ -68,26 +68,36 @@ void get_PNG_width_height(
 You should use get_PNG_width_height first before using this!
 
 - compressed_input: the entire PNG file's data, including headers etc. Just
-read in a PNG file and pass the whole thing directly.
+read in a PNG file and pass the whole thing directly. Note that this input will
+be treated as working memory and overwritten inplace.
 - compressed_input_size: the size in bytes of compressed_input. Getting this
-wrong is very bad, as it can't be detected.
-- out_rgba_values: a preallocated recipient for the decompressed data.
-It needs to be of size width * height * 4. If you pass a larger size, that's ok
-but the remaining memory will be wasted until you free it. If you pass a smaller
-size decode_PNG() will always fail. The worst thing you can do of course is to
-misinform the function about the size of your array (e.g. you have only 100
-bytes of memory, but set this parameter to 1000), in which case the function
-will write out of bounds and corrupt your memory.
-- out_rgba_values_size: the capacity in bytes of out_rgba_values. This should be
-at least 4 * width * height
+wrong is very bad, as it can't be detected and will cause decode_PNG to write
+to unrelated memory and corrupt your entire application.
+- receiving_memory_store: A huge block of memory that will receive the final
+output (the pixels of your PNG file), but will also be used as working memory
+for storing hashmaps etc.
+- receiving_memory_store: The size in bytes of receiving_memory_store. You can
+pass far too much memory (e.g. a huge chunk reserved for storing 100's of
+images) and it's fine, but at minimum you need 4 bytes per pixel in the final
+image, PLUS 1 byte per row in the image (for scanline filters), and 5,000,000
+bytes for storing decompression hashmaps. You don't need to keep the hashmaps
+after the function returns, you can use them as memory for the next PNG to
+decode.
+- out_rgba_values_size: the amount of pixels * 4, aka the amount of RGBA
+values. Your memory store pointer + this many bytes contains your PNG file,
+so you should continue using the rest of your memory store in your application
+or realloc() it, to avoid leaking lots of memory.
 - out_good: will be set to 0 if the decoding was unsuccesful, and to 1 if the
 decoding was succesful.
 */
 void decode_PNG(
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
-    uint8_t * out_rgba_values,
-    const uint32_t out_rgba_values_size,
+    uint8_t * receiving_memory_store,
+    const uint64_t receiving_memory_store_size,
+    uint32_t * out_rgba_values_size,
+    uint32_t * out_height,
+    uint32_t * out_width,
     uint32_t * out_good);
 
 #endif

@@ -3,11 +3,22 @@ This file is meant as an example of how to use the "png.h"
 header to read pixels from a .png file.
 */
 
+#define WRITING_VERSION
+
 #include "decode_png.h"
 #include "decodedimage.h"
 #include "stdio.h"
 
+#ifdef WRITING_VERSION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_write.h"
+#endif
+
 #include <Foundation/foundation.h>
+
+#define APPLICATION_MEMORY_SIZE 50000000
+uint8_t * memory_store = (uint8_t *)malloc(APPLICATION_MEMORY_SIZE);
+uint64_t memory_store_remaining = APPLICATION_MEMORY_SIZE;
 
 // #define HELLOPNG_SILENCE
 
@@ -100,7 +111,7 @@ static void platform_read_file(
         // length:out_preallocatedbuffer->size];
 }
 
-static DecodedImage read_png_from_disk(
+DecodedImage read_png_from_disk(
     const char * filename)
 {
     DecodedImage return_value;
@@ -117,53 +128,38 @@ static DecodedImage read_png_from_disk(
             &imgfile);
     int64_t bytes_read = imgfile.size;
     
-    uint32_t png_width;
-    uint32_t png_height;
-    uint32_t width_height_check_success = 0;
-    get_PNG_width_height(
-        /* uint8_t * compressed_bytes: */
-            (uint8_t *)imgfile.contents,
-        /* uint32_t compressed_bytes_size: */
-            bytes_read,
-        /* uint32_t * width_out: */
-            &png_width,
-        /* uint32_t * height_out: */
-            &png_height,
-        /* good: */
-            &width_height_check_success);
-    
-    if (!width_height_check_success) {
-        #ifndef HELLOPNG_SILENCE
-        printf(
-            "Failed to extract width/height from PNG file\n");
-        #endif
-        assert(0);
-    }
-    
-    assert(png_width > 0);
-    assert(png_height > 0);
-    
-    return_value.rgba_values_size =
-        png_width * png_height * 4;
-    return_value.rgba_values =
-        (uint8_t *)malloc(return_value.rgba_values_size);
-    
-    // assert(buffer_copy == start_of_buffer);
     decode_PNG(
         /* compressed_input: */
             (uint8_t *)imgfile.contents,
         /* compressed_input_size: */
             bytes_read,
-        /* out_rgba_values: */
-            return_value.rgba_values,
+        /* receiving_memory_store: */
+            memory_store,
+        /* receiving_memory_store_size: */
+            memory_store_remaining,
         /* out_rgba_values_size: */
-            return_value.rgba_values_size,
+            &(return_value.rgba_values_size),
+        /* out_height: */
+            &return_value.height,
+        /* out_width: */
+            &return_value.width,
         /* out_good: */
             &return_value.good);
-    return_value.width = png_width;
-    return_value.height = png_height;
+    return_value.rgba_values = memory_store;
+    memory_store += return_value.rgba_values_size;
+    memory_store_remaining -= return_value.rgba_values_size;
     
-    free(imgfile.contents);
+    // free(imgfile.contents);
+    
+    if (return_value.good) {
+        return_value.pixel_count =
+            return_value.width * return_value.height;
+        memory_store += return_value.rgba_values_size;
+        memory_store_remaining -= return_value.rgba_values_size;
+        printf(
+            "memory store remaining: %llu bytes\n",
+            memory_store_remaining);
+    }
     
     return return_value;
 }
@@ -192,15 +188,6 @@ int main(int argc, const char * argv[])
         (char *)"structuredart2.png",
         (char *)"structuredart3.png"
     };
-
-    /*
-    // TODO: remove this test code focusing on only 1 file
-    #define FILENAMES_CAP 1
-    char * filenames[FILENAMES_CAP] = {
-        //(char *)"structuredart2.png"
-        (char *)"font.png"
-    };
-    */
     
     DecodedImage decoded_images[FILENAMES_CAP];
     
@@ -219,12 +206,53 @@ int main(int argc, const char * argv[])
             decoded_images[filename_i].good ?
                 "SUCCESS" : "FAILURE");
         #endif
-        
-        assert(
-            decoded_images[filename_i].width
-                * decoded_images[filename_i].height * 4 ==
-                    decoded_images[filename_i].rgba_values_size); 
     }
+    
+    printf("write files with stb_write...\n");
+    
+    #ifdef WRITING_VERSION
+    char * out_filename = (char *)malloc(30);
+    out_filename[0] = 'o';
+    out_filename[1] = 'u';
+    out_filename[2] = 't';
+    out_filename[3] = '\0';
+    
+    for (uint32_t i = 0; i < FILENAMES_CAP; i++) {
+        uint32_t char_i = 3;
+        while (filenames[i][char_i - 3] != '\0') {
+            out_filename[char_i] = filenames[i][char_i - 3];
+            char_i++;
+        }
+        out_filename[char_i] = '\0';
+        printf("created filename: %s\n", out_filename);
+        
+        if (!decoded_images[i].good) {
+            continue;
+        }
+        assert(decoded_images[i].rgba_values_size > 0);
+        assert(decoded_images[i].rgba_values_size >=
+            decoded_images[i].width * decoded_images[i].height * 4);
+        
+        int result = stbi_write_png(
+            /* char const *filename: */
+                out_filename,
+            /* int w: */
+                decoded_images[i].width,
+            /* int h: */
+                decoded_images[i].height,
+            /* int comp: */
+                4,
+            /* const void *data: */
+                decoded_images[i].rgba_values,
+            /* int stride_in_bytes: */
+                decoded_images[i].width * 4);
+        
+        printf(
+            "write to %s result: %i\n",
+            out_filename,
+            result);
+    }
+    #endif
     
     return 0;
 }
