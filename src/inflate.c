@@ -748,7 +748,6 @@ void inflate(
         "\t\tstart INFLATE expecting %llu bytes of compressed data\n",
         compressed_input_size);
     #endif
-    uint8_t * started_at = (uint8_t *)compressed_input;
     uint8_t * recipient_at = (uint8_t *)recipient;
     
     DataStream data_stream;
@@ -945,7 +944,6 @@ void inflate(
                 }
                 
                 uint32_t ll_good = 0;
-                literal_length_huffman = (HuffmanEntry *)working_memory_at;
                 if (working_memory_remaining < sizeof(HuffmanEntry) * 288) {
                     #ifndef INFLATE_SILENCE
                     printf("inflate() failing - ran out of working memory\n");
@@ -953,6 +951,7 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
+                literal_length_huffman = (HuffmanEntry *)working_memory_at;
                 working_memory_at += sizeof(HuffmanEntry) * 288;
                 working_memory_remaining -= sizeof(HuffmanEntry) * 288;
                 unpack_huffman(
@@ -1017,7 +1016,7 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
-                HashedHuffman * hashed_litlen_huffman =
+                hashed_litlen_huffman =
                     (HashedHuffman *)working_memory_at;
                 working_memory_at += sizeof(HashedHuffman);
                 working_memory_remaining -= sizeof(HashedHuffman);
@@ -1556,19 +1555,24 @@ void inflate(
                 #endif
             }
             
+            #ifndef INFLATE_IGNORE_ASSERTS
+            assert(hashed_litlen_huffman != NULL);
+            #endif
+            
             while (1) {
                 // we should normally break from this loop
                 // because we hit the magical value 256,
                 // not because of running out of bytes
                 
-                if (data_stream.data - started_at
+                if (data_stream.data - compressed_input
                     >= compressed_input_size)
                 {
                     #ifndef INFLATE_SILENCE
                     printf(
                         "\t\tWarning: breaking from DEFLATE preemptively "
-                        "because %li bytes were read\n",
-                        data_stream.data - started_at);
+                        "because %li bytes were read - didn't find end of "
+                        "litlen (256)\n",
+                        data_stream.data - compressed_input);
                     printf(
                         "\t\tcompressed_input_size was: %llu\n",
                         compressed_input_size);
@@ -1576,7 +1580,7 @@ void inflate(
                     read_more_deflate_blocks = 0;
                     break;
                 }
-               
+                
                 uint32_t litlen_good = 0; 
                 uint32_t litlenvalue = hashed_huffman_decode(
                     /* dict: */
@@ -1764,7 +1768,7 @@ void inflate(
     }
     
     uint32_t bytes_read =
-        (uint32_t)(data_stream.data - started_at);
+        (uint32_t)(data_stream.data - compressed_input);
     #ifndef INFLATE_IGNORE_ASSERTS
     assert(bytes_read >= 0);
     #endif

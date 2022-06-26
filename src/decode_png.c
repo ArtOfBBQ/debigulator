@@ -624,11 +624,11 @@ void decode_PNG(
     
     // these pointers are initted below
     IHDRBody ihdr_body;
-    uint8_t * headerless_compressed_data = NULL;
-    uint8_t * headerless_compressed_data_begin = NULL;
+    uint8_t * headerless_compressed_data = (uint8_t *)compressed_input;
+    uint8_t * headerless_compressed_data_begin = headerless_compressed_data;
     uint32_t headerless_compressed_data_stream_size = 0;
-    uint8_t * decoded_stream_at = NULL;
-    uint8_t * decoded_stream_start = NULL;
+    uint8_t * decoded_stream_at = (uint8_t *)receiving_memory_store;
+    uint8_t * decoded_stream_start = decoded_stream_at;
     uint8_t * inflate_working_memory = NULL;
     uint8_t * out_rgba_values = (uint8_t *)receiving_memory_store;
     uint64_t decompressed_size = 0;
@@ -670,10 +670,6 @@ void decode_PNG(
             printf("so all compressed data was collected.\n");
             #endif
             
-            decoded_stream_at = (uint8_t *)receiving_memory_store;
-            decoded_stream_start = decoded_stream_at;
-            assert(decoded_stream_at != NULL);
-            assert(decoded_stream_at == decoded_stream_start);
             assert(headerless_compressed_data_stream_size > 4);
             uint32_t inflate_result = 0;
             inflate(
@@ -959,21 +955,12 @@ void decode_PNG(
                 return;
             }
             
-            #ifndef DECODE_PNG_IGNORE_ASSERTS
-            assert(decoded_stream_at == NULL);
-            #endif
-            
-            // We're overwriting the compressed input passed to us
-            // with the same input, except we're leaving out the headers
-            headerless_compressed_data = (uint8_t *)compressed_input;
-            headerless_compressed_data_begin = headerless_compressed_data;
         }  else if (are_equal_strings(
             chunk_header.type,
             (char *)"IDAT",
             4))
         {
-            if (!found_IHDR
-                || headerless_compressed_data == NULL)
+            if (!found_IHDR)
             {
                 #ifndef DECODE_PNG_SILENCE
                 printf(
@@ -1128,11 +1115,6 @@ void decode_PNG(
             (char *)"IEND",
             4))
         {
-            if (decoded_stream_at == NULL) {
-                *out_good = 0;
-                return;
-            }
-            
             // handle image end header
             #ifndef DECODE_PNG_SILENCE
             printf("found IEND header\n");

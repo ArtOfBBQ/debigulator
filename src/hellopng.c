@@ -172,13 +172,14 @@ int main(int argc, const char * argv[])
         "Starting hellopng...\n");
     #endif
     
-    #define FILENAMES_CAP 14
+    #define FILENAMES_CAP 15
     char * filenames[FILENAMES_CAP] = {
         (char *)"fs_angrymob.png",
         (char *)"backgrounddetailed1.png",
         (char *)"font.png",
         (char *)"fs_birdmystic.png",
         (char *)"fs_bribery.png",
+        (char *)"phoebus.png",
         (char *)"fs_bridge.png",
         (char *)"fs_cannon.png",
         (char *)"gimp_test.png",

@@ -26,6 +26,7 @@
 		60112900286305B500F92967 /* fs_birdmystic.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128F3286305B500F92967 /* fs_birdmystic.png */; };
 		60112901286305B500F92967 /* font.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128F4286305B500F92967 /* font.png */; };
 		601129042863BE9300F92967 /* stb_write.h in Sources */ = {isa = PBXBuildFile; fileRef = 601129032863BE9300F92967 /* stb_write.h */; };
+		60FEADF22868D60E00CB6C36 /* phoebus.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 60FEADF12868D60D00CB6C36 /* phoebus.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -35,6 +36,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 16;
 			files = (
+				60FEADF22868D60E00CB6C36 /* phoebus.png in CopyFiles */,
 				601128F5286305B500F92967 /* structuredart1.png in CopyFiles */,
 				601128F6286305B500F92967 /* backgrounddetailed1.png in CopyFiles */,
 				601128F7286305B500F92967 /* gimp_test.png in CopyFiles */,
@@ -74,6 +76,7 @@
 		601128F3286305B500F92967 /* fs_birdmystic.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = fs_birdmystic.png; path = ../../resources/fs_birdmystic.png; sourceTree = "<group>"; };
 		601128F4286305B500F92967 /* font.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = font.png; path = ../../resources/font.png; sourceTree = "<group>"; };
 		601129032863BE9300F92967 /* stb_write.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = stb_write.h; path = ../../src/stb_write.h; sourceTree = "<group>"; };
+		60FEADF12868D60D00CB6C36 /* phoebus.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = phoebus.png; path = ../../resources/phoebus.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +123,7 @@
 		6011290228630B3000F92967 /* resources */ = {
 			isa = PBXGroup;
 			children = (
+				60FEADF12868D60D00CB6C36 /* phoebus.png */,
 				601128E9286305B500F92967 /* backgrounddetailed1.png */,
 				601128F4286305B500F92967 /* font.png */,
 				601128EF286305B500F92967 /* fs_angrymob.png */,
