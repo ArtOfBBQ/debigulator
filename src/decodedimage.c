@@ -187,6 +187,10 @@ DecodedImage concatenate_images(
                 break;
             }
             
+            if (!images_to_concat[i]->good) {
+                break;
+            }
+            
             if (
                 images_to_concat[i]->height != base_height
                 || images_to_concat[i]->width != base_width)
