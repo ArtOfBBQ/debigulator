@@ -16,12 +16,38 @@ header to read pixels from a .png file.
 
 #include <Foundation/foundation.h>
 
-// 100mb ->                     1..000...
-#define APPLICATION_MEMORY_SIZE 100000000
+// 60mb ->                       6.000...
+#define APPLICATION_MEMORY_SIZE  60000000
 uint8_t * memory_store = (uint8_t *)malloc(APPLICATION_MEMORY_SIZE);
 uint64_t memory_store_remaining = APPLICATION_MEMORY_SIZE;
 
+// 9mb ->                        9...000
+#define INFLATE_WORKING_MEMORY   9000000
+uint8_t * inflate_working_memory = (uint8_t *)malloc(INFLATE_WORKING_MEMORY);
+uint64_t inflate_working_memory_size = INFLATE_WORKING_MEMORY;
+
+
 // #define HELLOPNG_SILENCE
+
+static void align_memory()
+{
+    while ((uintptr_t)(void *)memory_store % 16 != 0) {
+        assert(memory_store_remaining >= 1);
+        memory_store += 1;
+        memory_store_remaining -= 1;
+    }
+    
+    while ((uintptr_t)(void *)inflate_working_memory % 16 != 0) {
+        assert(inflate_working_memory_size >= 1);
+        inflate_working_memory += 1;
+        inflate_working_memory_size -= 1;
+    }
+    
+    #ifndef INFLATE_IGNORE_ASSERTS
+    assert((uintptr_t)(void *)memory_store % 16 == 0);
+    assert((uintptr_t)(void *)inflate_working_memory % 16 == 0);
+    #endif
+}
 
 typedef struct FileBuffer {
     uint64_t size;
@@ -31,7 +57,8 @@ typedef struct FileBuffer {
 /*
 Get a file's size. Returns -1 if no such file
 */
-static int64_t platform_get_filesize(const char * filename)
+static int64_t platform_get_filesize(
+    const char * filename)
 {
     NSString * nsfilename = [NSString
         stringWithUTF8String:filename];
@@ -129,39 +156,48 @@ DecodedImage read_png_from_disk(
             &imgfile);
     int64_t bytes_read = imgfile.size;
     
+    get_PNG_width_height(
+        /* const uint8_t * compressed_input: */
+            (uint8_t *)imgfile.contents,
+        /* const uint64_t compressed_input_size: */
+            bytes_read,
+        /* uint32_t * out_width: */
+            &return_value.width,
+        /* uint32_t * out_height: */
+            &return_value.height,
+        /* uint32_t * out_good: */
+            &return_value.good);
+    
+    if (!return_value.good) {
+        return return_value;
+    }
+    
+    align_memory();
+    return_value.rgba_values = (uint8_t *)memory_store;
+    return_value.pixel_count = return_value.width * return_value.height;
+    return_value.rgba_values_size = return_value.pixel_count * 4;
+    assert(memory_store_remaining >= return_value.rgba_values_size);
+    memory_store += return_value.rgba_values_size;
+    memory_store_remaining -= return_value.rgba_values_size;  
+    
     decode_PNG(
         /* compressed_input: */
             (uint8_t *)imgfile.contents,
         /* compressed_input_size: */
             bytes_read,
-        /* receiving_memory_store: */
-            memory_store,
-        /* receiving_memory_store_size: */
-            memory_store_remaining,
+        /* out_rgba_values: */
+            return_value.rgba_values,
         /* out_rgba_values_size: */
-            &(return_value.rgba_values_size),
-        /* out_height: */
-            &return_value.height,
-        /* out_width: */
-            &return_value.width,
+            return_value.rgba_values_size,
+        /* inflate_working_memory: */
+            inflate_working_memory,
+        /* inflate_working_memory_size: */
+            inflate_working_memory_size,
         /* out_good: */
             &return_value.good);
-    return_value.rgba_values = memory_store;
-    memory_store += return_value.rgba_values_size;
-    memory_store_remaining -= return_value.rgba_values_size;
     
-    free(imgfile.contents);
-    
-    if (return_value.good) {
-        return_value.pixel_count =
-            return_value.width * return_value.height;
-        memory_store += return_value.rgba_values_size;
-        memory_store_remaining -= return_value.rgba_values_size;
-        printf(
-            "memory store remaining: %llu bytes\n",
-            memory_store_remaining);
-    }
-    
+    // free(imgfile.contents);
+        
     return return_value;
 }
 
@@ -190,7 +226,7 @@ int main(int argc, const char * argv[])
         (char *)"structuredart2.png",
         (char *)"structuredart3.png"
     };
-    
+        
     DecodedImage decoded_images[FILENAMES_CAP];
     
     for (
@@ -226,7 +262,6 @@ int main(int argc, const char * argv[])
             char_i++;
         }
         out_filename[char_i] = '\0';
-        printf("created filename: %s\n", out_filename);
         
         if (!decoded_images[i].good) {
             continue;
@@ -255,6 +290,8 @@ int main(int argc, const char * argv[])
             result);
     }
     #endif
+    
+    printf("end of hellopng\n");
     
     return 0;
 }

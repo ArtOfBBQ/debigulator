@@ -1,6 +1,7 @@
 #include "decode_png.h"
 
-#define INFLATE_WORKING_MEMORY_SIZE 5000000
+// 5mb                        5...000
+#define INFLATE_HASHMAPS_SIZE 3000000
 
 /*
 PNG files include CRC 'cyclic redundancy checks', a kind
@@ -558,7 +559,6 @@ void get_PNG_width_height(
     
     // 13 bytes
     IHDRBody ihdr_body = *(IHDRBody *)compressed_input;
-    compressed_input += sizeof(IHDRBody);
     
     *out_width = flip_endian(ihdr_body.width);
     *out_height = flip_endian(ihdr_body.height);
@@ -576,26 +576,37 @@ void get_PNG_width_height(
 void decode_PNG(
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
-    uint8_t * receiving_memory_store,
-    const uint64_t receiving_memory_store_size,
-    uint32_t * out_rgba_values_size,
-    uint32_t * out_height,
-    uint32_t * out_width,
+    const uint8_t * out_rgba_values,
+    const uint64_t rgba_values_size,
+    const uint8_t * dpng_working_memory,
+    const uint64_t dpng_working_memory_size,
     uint32_t * out_good)
 {
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(compressed_input != NULL);
     assert(compressed_input_size > 0);
-    assert(receiving_memory_store != NULL);
-    assert(receiving_memory_store_size > 0);
-    assert(out_height != NULL);
-    assert(out_width != NULL);
+    assert(out_rgba_values != NULL);
     assert(out_good != NULL);
     #endif
     
     *out_good = 0;
     
     uint64_t compressed_input_size_left = compressed_input_size;
+    
+    // these pointers are initted below
+    IHDRBody ihdr_body;
+    uint8_t * headerless_compressed_data = (uint8_t *)compressed_input;
+    uint8_t * headerless_compressed_data_begin = headerless_compressed_data;
+    uint32_t headerless_compressed_data_stream_size = 0;
+    uint8_t * decoded_stream_at = (uint8_t *)dpng_working_memory;
+    uint8_t * decoded_stream_start = decoded_stream_at;
+    uint64_t actual_decoded_stream_size = 0;
+    uint64_t estimated_decoded_stream_size = 0;
+    
+    uint32_t found_first_IDAT = 0;
+    uint32_t ran_inflate_algorithm = 0;
+    uint32_t found_IHDR = 0;
+    uint32_t found_IEND = 0;
     
     PNGSignature png_signature = *(PNGSignature *)compressed_input;
     compressed_input += sizeof(PNGSignature);
@@ -621,23 +632,7 @@ void decode_PNG(
         *out_good = 0;
         return;
     }
-    
-    // these pointers are initted below
-    IHDRBody ihdr_body;
-    uint8_t * headerless_compressed_data = (uint8_t *)compressed_input;
-    uint8_t * headerless_compressed_data_begin = headerless_compressed_data;
-    uint32_t headerless_compressed_data_stream_size = 0;
-    uint8_t * decoded_stream_at = (uint8_t *)receiving_memory_store;
-    uint8_t * decoded_stream_start = decoded_stream_at;
-    uint8_t * inflate_working_memory = NULL;
-    uint8_t * out_rgba_values = (uint8_t *)receiving_memory_store;
-    uint64_t decompressed_size = 0;
-    
-    uint32_t found_first_IDAT = 0;
-    uint32_t ran_inflate_algorithm = 0;
-    uint32_t found_IHDR = 0;
-    uint32_t found_IEND = 0;
-    
+        
     while (
         compressed_input_size_left >= 8
         && !found_IEND)
@@ -668,7 +663,18 @@ void decode_PNG(
             #ifndef DECODE_PNG_SILENCE
             printf("next chunk is not IDAT, ");
             printf("so all compressed data was collected.\n");
+            printf(
+                "temp recipient for decompressed data will start at: %p\n",
+                decoded_stream_start);
+            printf(
+                "inflate hashmap memory will start at: %p\n",
+                dpng_working_memory + estimated_decoded_stream_size);
             #endif
+            
+            assert(dpng_working_memory_size - estimated_decoded_stream_size >
+                INFLATE_HASHMAPS_SIZE);
+            assert(decoded_stream_start <
+                (dpng_working_memory + estimated_decoded_stream_size));
             
             assert(headerless_compressed_data_stream_size > 4);
             uint32_t inflate_result = 0;
@@ -676,11 +682,13 @@ void decode_PNG(
                 /* recipient: */
                     decoded_stream_start,
                 /* recipient_size: */
-                    decompressed_size,
+                    estimated_decoded_stream_size,
+                /* final_recipient_size: */
+                    &actual_decoded_stream_size,
                 /* temp_working_memory: */
-                    inflate_working_memory,
+                    dpng_working_memory + estimated_decoded_stream_size,
                 /* temp_working_memory_size: */
-                    INFLATE_WORKING_MEMORY_SIZE,
+                    dpng_working_memory_size - estimated_decoded_stream_size,
                 /* compressed_input: */
                     headerless_compressed_data_begin,
                 /* compressed_input_size: */
@@ -699,6 +707,20 @@ void decode_PNG(
                 #ifndef DECODE_PNG_SILENCE
                 printf("INFLATE succesful\n");
                 #endif
+                
+                if (
+                    actual_decoded_stream_size >
+                        estimated_decoded_stream_size)
+                {
+                    #ifndef DECODE_PNG_SILENCE
+                    printf(
+                        "ERROR actual_decoded_stream_size: %llu was > than "
+                        "estimated_decoded_stream_size: %llu\n",
+                        actual_decoded_stream_size,
+                        estimated_decoded_stream_size);
+                    #endif
+                }
+                
                 if (decoded_stream_at[0] > 4) {
                     #ifndef DECODE_PNG_SILENCE
                     printf(
@@ -716,7 +738,7 @@ void decode_PNG(
                 uint32_t nonzeroes_found = 0;
                 for (
                     uint32_t i = 0;
-                    i < decompressed_size;
+                    i < actual_decoded_stream_size;
                     i++)
                 {
                     if (decoded_stream_start[i] > 0)
@@ -724,7 +746,16 @@ void decode_PNG(
                         nonzeroes_found += 1;
                     }
                 }
-                assert(nonzeroes_found >= 10);
+                
+                if (nonzeroes_found < 10) {
+                    #ifndef DECODE_PNG_SILENCE
+                    printf(
+                        "WARNING: found only %u non-zero values after "
+                        "inflate()\n",
+                        nonzeroes_found);
+                    #endif
+                    assert(nonzeroes_found >= 10);
+                };
                 #endif
             }
         }
@@ -743,8 +774,11 @@ void decode_PNG(
         
         #ifndef DECODE_PNG_SILENCE 
         printf(
-            "[%s] chunk (extra %u bytes follow)\n",
-            chunk_header.type,
+            "[%c%c%c%c] chunk (extra %u bytes follow)\n",
+            chunk_header.type[0],
+            chunk_header.type[1],
+            chunk_header.type[2],
+            chunk_header.type[3],
             chunk_header.length);
         #endif
         
@@ -792,8 +826,27 @@ void decode_PNG(
                 flip_endian(ihdr_body.width);
             ihdr_body.height =
                 flip_endian(ihdr_body.height);
-            *out_width = ihdr_body.width;
-            *out_height = ihdr_body.height;
+            estimated_decoded_stream_size =
+                ((ihdr_body.width)
+                    * (ihdr_body.height) * 4)
+                        + (ihdr_body.height) + 1;
+            
+            if (ihdr_body.width * ihdr_body.height * 4
+                != rgba_values_size)
+            {
+                #ifndef DECODE_PNG_SILENCE
+                printf(
+                    "ERROR - you passed rgba_values_size: %llu but the PNG "
+                    "file has width %u, height %u and 4 channels so a buffer "
+                    "of size %u was expected\n",
+                    rgba_values_size,
+                    ihdr_body.width,
+                    ihdr_body.height,
+                    ihdr_body.width * ihdr_body.height * 4);
+                #endif
+                *out_good = 0;
+                return;
+            }
             
             switch (ihdr_body.color_type) {
                 case 0:
@@ -833,7 +886,7 @@ void decode_PNG(
                 case 6:
                     #ifndef DECODE_PNG_SILENCE
                     printf(
-                        "\tColor type 6 (truecolour with alpha) is supported.");
+                        "\tColor type 6 (truecolour with alpha) supported.\n");
                     #endif
                     break;
                 default:
@@ -868,37 +921,26 @@ void decode_PNG(
                 return;
             }
             
-            if (
+            uint64_t required_memory_size =
                 (ihdr_body.width * ihdr_body.height * 4)
-                + ihdr_body.height
-                + 1
-                + 5000000 > 
-                    receiving_memory_store_size)
+                    + ihdr_body.height
+                    + 1
+                    + INFLATE_HASHMAPS_SIZE;
+            if (required_memory_size > dpng_working_memory_size)
             {
                 #ifndef DECODE_PNG_SILENCE
                 printf(
                     "ERROR: this function assumes at least"
-                    "(imgwidth * imgwidth * 4)+imgheight+1+5MB) to work in and"
-                    "write to, got: %llu, expected: %u\n",
-                    receiving_memory_store_size,
+                    "(imgwidth * imgwidth * 4)+imgheight+1+hashmap memory) to "
+                    "to work in and write to, got: %llu, expected: %u\n",
+                    dpng_working_memory_size,
                     (ihdr_body.width * ihdr_body.height * 4)
                         + ihdr_body.height
-                        + INFLATE_WORKING_MEMORY_SIZE);
+                        + INFLATE_HASHMAPS_SIZE);
                 #endif
                 *out_good = 0;
                 return;
             }
-            
-            // use the end of the memory store as working memory
-            // for inflate
-            inflate_working_memory =
-                (uint8_t *)receiving_memory_store +
-                    receiving_memory_store_size -
-                        INFLATE_WORKING_MEMORY_SIZE;
-            decompressed_size =
-                ((ihdr_body.width)
-                    * (ihdr_body.height) * 4)
-                        + (ihdr_body.height) + 1;
             
             // (below) These PNG setting assert the RGBA
             // color space.
@@ -1090,10 +1132,9 @@ void decode_PNG(
                 printf("\t\tFLEVEL: %u\n", FLEVEL);
                 printf("\t\tread compressed data...\n");
                 printf(
-                    "\t\tprepped recipient of %llu bytes...\n",
-                    decompressed_size);
+                    "\t\treserved recipient of estimated %llu bytes...\n",
+                    estimated_decoded_stream_size);
                 #endif
-                
             }
             
             #ifndef DECODE_PNG_SILENCE
@@ -1199,20 +1240,14 @@ void decode_PNG(
     
     uint32_t pixel_count = (ihdr_body.width) * (ihdr_body.height);
     
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(decoded_stream_start != NULL);
-    assert(decoded_stream_start[0] < 4);
-    #endif
-    
     decoded_stream_at = decoded_stream_start;
-    uint8_t * rgba_at = out_rgba_values;
-    *out_rgba_values_size = *out_width * *out_height * 4;
+    uint8_t * rgba_at = (uint8_t *)out_rgba_values;
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     uint32_t found_nonzero = 0;
     for (
         uint32_t i = 0;
-        i < *out_rgba_values_size;
+        i < rgba_values_size;
         i++)
     {
         if (decoded_stream_at[i] > 0)
@@ -1245,10 +1280,10 @@ void decode_PNG(
         ihdr_body.color_type);
     #endif
     uint8_t * a_previous_pixel =
-        out_rgba_values - bytes_per_channel;
+        (uint8_t *)out_rgba_values - bytes_per_channel;
     uint8_t * b_previous_scanline =
-        out_rgba_values
-        - (ihdr_body.width * bytes_per_channel);
+        (uint8_t *)out_rgba_values
+            - (ihdr_body.width * bytes_per_channel);
     uint8_t * c_previous_scanline_previous_pixel = 
         b_previous_scanline - bytes_per_channel;
     
@@ -1270,7 +1305,7 @@ void decode_PNG(
         
         for (uint32_t w = 0; w < ihdr_body.width; w++) {
             // repeat this 3x or 4x, once for every byte in pixel
-            // (RGB or R, G, B & A) 
+            // (RGB or R, G, B & A)
             for (int _ = 0; _ < bytes_per_channel; _++) {
                 // when a/b/c are out of bounds,
                 // we have to use a 0 instead
@@ -1280,6 +1315,19 @@ void decode_PNG(
                     *b_previous_scanline : 0;
                 uint8_t c = h > 0 && w > 0 ?
                     *c_previous_scanline_previous_pixel : 0;
+                
+                if (rgba_at >= out_rgba_values + rgba_values_size) {
+                    #ifndef DECODE_PNG_SILENCE
+                    printf(
+                        "Error: writing to rgba_at: %p (%ld bytes away from "
+                        "out_rgba_values), but out_rgba_values_size is %llu\n",
+                        rgba_at,
+                        rgba_at - out_rgba_values,
+                        rgba_values_size);
+                    #endif
+                    *out_good = 0;
+                    return;
+                }
                 
                 *rgba_at++ = undo_PNG_filter(
                     /* filter_type: */
@@ -1298,25 +1346,26 @@ void decode_PNG(
                 c_previous_scanline_previous_pixel++;
                 
                 decoded_stream_at++;
+                #ifndef DECODE_PNG_IGNORE_ASSERTS
+                if (
+                    (uint64_t)(decoded_stream_at - decoded_stream_start) >
+                        actual_decoded_stream_size)
+                {
+                    #ifndef DECODE_PNG_SILENCE
+                    printf(
+                        "ERROR - actual_decoded_stream_size was only %llu, but "
+                        "we're writing to (uint64_t)(decoded_stream_at - "
+                        "decoded_stream_at of %llu\n",
+                        actual_decoded_stream_size,
+                        (uint64_t)(decoded_stream_at - decoded_stream_start));
+                    *out_good = 0;
+                    return;
+                    #endif
+                }
+                #endif
             }
         }
     }
-    
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    if(
-       *out_rgba_values_size
-            != pixel_count * bytes_per_channel)
-    {
-        #ifndef DECODE_PNG_SILENCE
-        printf(
-            "ERROR - out_rgba_values_size of %u with pixel_count of %u and "
-            "%u bytes_per_channel",
-            *out_rgba_values_size,
-            pixel_count,
-            bytes_per_channel);
-        #endif
-    }
-    #endif
     
     // If we have less than 4 channels, forcibly convert to 4
     // channels of data by explicitly adding an alpha channel
@@ -1328,10 +1377,10 @@ void decode_PNG(
         // We can start overwriting at the end (copying from 25% away from the
         // end) without ever overwriting anything
         uint8_t * write_at =
-            out_rgba_values +
+            (uint8_t *)out_rgba_values +
                 ((pixel_count * 4) - 1);
         uint8_t * read_at =
-            out_rgba_values +
+            (uint8_t *)out_rgba_values +
             ((pixel_count * 3) - 1);
         
         for (
@@ -1344,9 +1393,6 @@ void decode_PNG(
             *write_at-- = *read_at--;
             *write_at-- = *read_at--;
         }
-        
-        assert(*out_rgba_values_size >=
-            pixel_count * 4);
     }
     
     *out_good = 1;

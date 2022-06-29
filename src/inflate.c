@@ -2,7 +2,21 @@
 
 #define NUM_UNIQUE_CODELENGTHS 19
 #define HUFFMAN_HASHMAP_SIZE 1024 // enables 10 bits
-#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 10
+#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 30
+
+static void align_memory(
+    uint8_t ** memory_store,
+    uint64_t * memory_store_size_remaining)
+{
+    while ((uintptr_t)(void *)*memory_store % 16 != 0) {
+        *memory_store += 1;
+        *memory_store_size_remaining -= 1;
+    }
+    
+    #ifndef INFLATE_IGNORE_ASSERTS
+    assert((uintptr_t)(void *)*memory_store % 16 == 0);
+    #endif
+}
 
 /*
 Since we need to consume partial bytes (and leave remaining bits in a buffer),
@@ -723,21 +737,57 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 void inflate(
     const uint8_t * recipient,
     const uint64_t recipient_size,
+    uint64_t * final_recipient_size,
     const uint8_t * temp_working_memory,
     const uint64_t temp_working_memory_size,
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
     uint32_t * out_good)
 {
-    if (
-        recipient == NULL
-        || recipient_size < compressed_input_size
-        || compressed_input == NULL
-        || compressed_input_size < 1)
-    {
+    if (recipient == NULL) {
         #ifndef INFLATE_SILENCE
         printf(
-            "inflate() ERROR: was passed nonsense datastream\n");
+            "inflate() ERROR: was passed a NULL recipient, cant write data\n");
+        #endif
+        *out_good = 0;
+        return;
+    }
+    
+    if (final_recipient_size == NULL) {
+        #ifndef INFLATE_SILENCE
+        printf(
+            "inflate() ERROR: was passed a NULL final_recipient_size, cant "
+            " store the size of the uncompressed data\n");
+        #endif
+        *out_good = 0;
+        return;
+    }
+    
+    if (compressed_input == NULL) {
+        #ifndef INFLATE_SILENCE
+        printf(
+            "inflate() ERROR: was passed a NULL compressed_input, cant read "
+            " data to uncompress\n");
+        #endif
+        *out_good = 0;
+        return;
+    }
+    
+    if (recipient_size < compressed_input_size) {
+        #ifndef INFLATE_SILENCE
+        printf(
+            "inflate() ERROR: recipient size was smaller than input, no "
+            "room to uncompress\n");
+        #endif
+        *out_good = 0;
+        return;
+    }
+    
+    if (compressed_input_size < 5) {
+        #ifndef INFLATE_SILENCE
+        printf(
+            "inflate() ERROR: compressed_input_size was only %llu\n",
+            compressed_input_size);
         #endif
         *out_good = 0;
         return;
@@ -749,6 +799,7 @@ void inflate(
         compressed_input_size);
     #endif
     uint8_t * recipient_at = (uint8_t *)recipient;
+    *final_recipient_size = 0;
     
     DataStream data_stream;
     data_stream.data = (uint8_t *)compressed_input;
@@ -857,12 +908,22 @@ void inflate(
             for (int _ = 0; _ < LEN; _++) {
                 *recipient_at = *(uint8_t *)data_stream.data;
                 recipient_at++;
+                *final_recipient_size += 1;
+                #ifndef INFLATE_IGNORE_ASSERTS
+                assert(*final_recipient_size <= recipient_size);
+                #endif
                 
-                if (recipient_at >= working_memory_at) {
+                if ((uint64_t)(recipient_at - recipient)
+                    >= recipient_size)
+                {
                     #ifndef INFLATE_SILENCE
                     printf(
-                        "ERROR - recipient overflowing into working "
-                        "memory!\n");
+                        "ERROR - recipient overflow! recipient_at: %p - "
+                        "recipient: %p = %llu, but recipient_size only: %llu\n",
+                        recipient_at,
+                        recipient,
+                        (uint64_t)(recipient_at - recipient),
+                        recipient_size);
                     *out_good = 0;
                     return;
                     #endif
@@ -951,6 +1012,8 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
+                
+                align_memory(&working_memory_at, &working_memory_remaining);
                 literal_length_huffman = (HuffmanEntry *)working_memory_at;
                 working_memory_at += sizeof(HuffmanEntry) * 288;
                 working_memory_remaining -= sizeof(HuffmanEntry) * 288;
@@ -1016,6 +1079,7 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
+                align_memory(&working_memory_at, &working_memory_remaining);
                 hashed_litlen_huffman =
                     (HashedHuffman *)working_memory_at;
                 working_memory_at += sizeof(HashedHuffman);
@@ -1168,6 +1232,7 @@ void inflate(
                     return;
                 }
                 uint32_t cl_good = 0;
+                align_memory(&working_memory_at, &working_memory_remaining);
                 HuffmanEntry * codelengths_huffman =
                     (HuffmanEntry *)working_memory_at;
                 working_memory_at +=
@@ -1201,6 +1266,7 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
+                align_memory(&working_memory_at, &working_memory_remaining);
                 HashedHuffman * hashed_clen_huffman =
                     (HashedHuffman *)working_memory_at;
                 working_memory_at += sizeof(HashedHuffman);
@@ -1268,6 +1334,7 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
+                align_memory(&working_memory_at, &working_memory_remaining);
                 uint32_t * litlendist_table = (uint32_t *)working_memory_at;
                 working_memory_at += sizeof(uint32_t) * two_dicts_size;
                 working_memory_remaining -= sizeof(uint32_t) * two_dicts_size;
@@ -1406,6 +1473,7 @@ void inflate(
                     return;
                 }
                 uint32_t litlen_good = 0;
+                align_memory(&working_memory_at, &working_memory_remaining);
                 literal_length_huffman = (HuffmanEntry *)working_memory_at;
                 working_memory_at += sizeof(HuffmanEntry) * HLIT;
                 working_memory_remaining -= sizeof(HuffmanEntry) * HLIT;
@@ -1434,6 +1502,7 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
+                align_memory(&working_memory_at, &working_memory_remaining);
                 hashed_litlen_huffman = (HashedHuffman *)working_memory_at;
                 working_memory_at += sizeof(HashedHuffman);
                 working_memory_remaining -= sizeof(HashedHuffman); 
@@ -1475,6 +1544,7 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
+                align_memory(&working_memory_at, &working_memory_remaining);
                 distance_huffman = (HuffmanEntry *)working_memory_at;
                 working_memory_at += sizeof(HashedHuffman);
                 working_memory_remaining -= sizeof(HashedHuffman);
@@ -1502,6 +1572,7 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
+                align_memory(&working_memory_at, &working_memory_remaining);
                 hashed_dist_huffman = (HashedHuffman *)working_memory_at;
                 working_memory_at += sizeof(HashedHuffman);
                 working_memory_remaining -= sizeof(HashedHuffman);
@@ -1603,10 +1674,12 @@ void inflate(
                     *recipient_at =
                         (uint8_t)(litlenvalue & 255);
                     recipient_at++;
+                    *final_recipient_size += 1;
                     
                     #ifndef INFLATE_IGNORE_ASSERTS
+                    assert(*final_recipient_size < recipient_size);
                     assert(
-                        (recipient_at - recipient)
+                        (uint64_t)(recipient_at - recipient)
                             <= recipient_size);
                     #endif
                     
@@ -1662,7 +1735,7 @@ void inflate(
                                 &data_stream,
                             /* good: */
                                 &hashed_dist_good);
-                        if (!hashed_dist_good) { 
+                        if (!hashed_dist_good) {
                             #ifndef INFLATE_SILENCE
                             printf(
                                 "inflate() failed, "
@@ -1710,15 +1783,22 @@ void inflate(
                         base_dist + dist_extra_bits_decoded;
                     
                     // go back dist bytes, then copy length bytes
-                    #ifndef INFLATE_IGNORE_ASSERTS
-                    assert(
-                        recipient_at - total_dist >= recipient);
-                    #endif
+                    if (recipient_at - total_dist < recipient) {
+                        #ifndef INFLATE_SILENCE
+                        printf(
+                            "ERROR - can't repeat data from %u bytes before, "
+                            "address is out of bounds\n",
+                            total_dist);
+                        #endif
+                        *out_good = 0;
+                        return;
+                    }
                     uint8_t * back_dist_bytes =
                         recipient_at - total_dist;
                     for (uint32_t _ = 0; _ < total_length; _++) {
                         *recipient_at = *back_dist_bytes;
                         recipient_at++;
+                        *final_recipient_size += 1;
                         if (recipient_at >= working_memory_at) {
                             #ifndef INFLATE_SILENCE
                             printf(
@@ -1729,6 +1809,7 @@ void inflate(
                             #endif
                         }
                         #ifndef INFLATE_IGNORE_ASSERTS
+                        assert(*final_recipient_size <= recipient_size);
                         assert(
                             (recipient_at - recipient)
                                 < recipient_size);
@@ -1818,7 +1899,8 @@ void inflate(
         #ifndef INFLATE_SILENCE
         printf(
             "WARNING - inflate decompressed but there are only %u non-zero "
-            "values\n");
+            "values\n",
+            nonzeroes_found);
         #endif
         assert(nonzeroes_found >= 2);
     }

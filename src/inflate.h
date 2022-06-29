@@ -32,7 +32,9 @@ according to legend many others.
 This function decompresses data was compressed using the DEFLATE algorithm.
 
 - recipient: the receiving memory to uncompress to
-- recipient_size: the capacity in bytes of recipient 
+- recipient_size: the capacity in bytes of recipient
+- final_recipient_size: will be filled in with the actual size of the recipient
+after decompressing everything.
 - temp_working_memory: will be used to store some hashmaps
 that are only useful while the functions runs. You can overwrite
 , free, or pass somewhere else immediately after. The function will fail when
@@ -48,6 +50,7 @@ set to 1 on success, and 0 on failure so you can see if inflate() worked
 void inflate(
     const uint8_t * recipient,
     const uint64_t recipient_size,
+    uint64_t * final_recipient_size,
     const uint8_t * temp_working_memory,
     const uint64_t temp_working_memory_size,
     const uint8_t * compressed_input,
