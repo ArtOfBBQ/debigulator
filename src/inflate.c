@@ -2,7 +2,7 @@
 
 #define NUM_UNIQUE_CODELENGTHS 19
 #define HUFFMAN_HASHMAP_SIZE 1024 // enables 10 bits
-#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 40
+#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 50
 
 static void align_memory(
     uint8_t ** memory_store,
