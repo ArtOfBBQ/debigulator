@@ -6,7 +6,6 @@ header to read pixels from a .png file.
 #define WRITING_VERSION
 
 #include "decode_png.h"
-#include "decodedimage.h"
 #include "stdio.h"
 
 #ifdef WRITING_VERSION
@@ -26,6 +25,14 @@ uint64_t memory_store_remaining = APPLICATION_MEMORY_SIZE;
 uint8_t * inflate_working_memory = (uint8_t *)malloc(INFLATE_WORKING_MEMORY);
 uint64_t inflate_working_memory_size = INFLATE_WORKING_MEMORY;
 
+typedef struct DecodedImage {
+    uint8_t * rgba_values;
+    uint32_t rgba_values_size;
+    uint32_t width;
+    uint32_t height;
+    uint32_t pixel_count; // rgba_values_size / 4
+    uint32_t good;
+} DecodedImage;
 
 // #define HELLOPNG_SILENCE
 

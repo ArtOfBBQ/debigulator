@@ -9,7 +9,6 @@ The 2 methods declared in this file are my API for decoding PNG files.
 #ifndef DECODE_PNG_H
 #define DECODE_PNG_H
 
-#include "decodedimage.h"
 #include "inflate.h"
 #include "inttypes.h"
 

@@ -1,5 +1,5 @@
 APP_NAME="hellopng"
-ADDITIONAL_SOURCES="src/decodedimage.c src/decode_png.c src/inflate.c"
+ADDITIONAL_SOURCES="src/decode_png.c src/inflate.c"
 
 MAC_FRAMEWORKS="-framework AppKit"
 
