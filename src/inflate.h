@@ -1,5 +1,5 @@
 #define INFLATE_SILENCE
-// #define INFLATE_IGNORE_ASSERTS
+//#define INFLATE_IGNORE_ASSERTS
 
 /*
 This API offers only the "inflate" function to decompress a buffer of bytes 

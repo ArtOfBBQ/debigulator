@@ -387,9 +387,9 @@ static uint32_t flip_endian(const uint32_t to_flip) {
 static uint32_t are_equal_strings(
     char * str1,
     char * str2,
-    size_t len)
+    uint32_t len)
 {
-    for (size_t i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++) {
         if (str1[i] != str2[i]) {
             return 0;
         }
@@ -551,11 +551,13 @@ void get_PNG_width_height(
     PNGChunkHeader chunk_header = *(PNGChunkHeader *)compressed_input;
     compressed_input += sizeof(PNGChunkHeader);
     
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(
         are_equal_strings(
             chunk_header.type,
             (char *)"IHDR",
             4));
+    #endif
     
     // 13 bytes
     IHDRBody ihdr_body = *(IHDRBody *)compressed_input;
@@ -671,12 +673,14 @@ void decode_PNG(
                 dpng_working_memory + estimated_decoded_stream_size);
             #endif
             
+            #ifndef DECODE_PNG_IGNORE_ASSERTS
             assert(dpng_working_memory_size - estimated_decoded_stream_size >
                 INFLATE_HASHMAPS_SIZE);
             assert(decoded_stream_start <
                 (dpng_working_memory + estimated_decoded_stream_size));
-            
             assert(headerless_compressed_data_stream_size > 4);
+            #endif
+            
             uint32_t inflate_result = 0;
             inflate(
                 /* recipient: */
@@ -733,30 +737,6 @@ void decode_PNG(
                     *out_good = 0;
                     return;
                 }
-                
-                #ifndef DECODE_PNG_IGNORE_ASSERTS
-                uint32_t nonzeroes_found = 0;
-                for (
-                    uint32_t i = 0;
-                    i < actual_decoded_stream_size;
-                    i++)
-                {
-                    if (decoded_stream_start[i] > 0)
-                    {
-                        nonzeroes_found += 1;
-                    }
-                }
-                
-                if (nonzeroes_found < 10) {
-                    #ifndef DECODE_PNG_SILENCE
-                    printf(
-                        "WARNING: found only %u non-zero values after "
-                        "inflate()\n",
-                        nonzeroes_found);
-                    #endif
-                    assert(nonzeroes_found >= 10);
-                };
-                #endif
             }
         }
         
@@ -1242,21 +1222,6 @@ void decode_PNG(
     
     decoded_stream_at = decoded_stream_start;
     uint8_t * rgba_at = (uint8_t *)out_rgba_values;
-    
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    uint32_t found_nonzero = 0;
-    for (
-        uint32_t i = 0;
-        i < rgba_values_size;
-        i++)
-    {
-        if (decoded_stream_at[i] > 0)
-        {
-            found_nonzero = 1;
-        }
-    }
-    assert(found_nonzero);
-    #endif
     
     /*
     The spec tells us to track these values:

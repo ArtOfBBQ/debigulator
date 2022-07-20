@@ -7,6 +7,7 @@ header to read pixels from a .png file.
 
 #include "decode_png.h"
 #include "stdio.h"
+#include <time.h>
 
 #ifdef WRITING_VERSION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -15,13 +16,13 @@ header to read pixels from a .png file.
 
 #include <Foundation/foundation.h>
 
-// 60mb ->                       6.000...
-#define APPLICATION_MEMORY_SIZE  60000000
+// 990mb ->                      99.000...
+#define APPLICATION_MEMORY_SIZE  990000000
 uint8_t * memory_store = (uint8_t *)malloc(APPLICATION_MEMORY_SIZE);
 uint64_t memory_store_remaining = APPLICATION_MEMORY_SIZE;
 
-// 9mb ->                        9...000
-#define INFLATE_WORKING_MEMORY   9000000
+// 30mb ->                        30...000
+#define INFLATE_WORKING_MEMORY    30000000
 uint8_t * inflate_working_memory = (uint8_t *)malloc(INFLATE_WORKING_MEMORY);
 uint64_t inflate_working_memory_size = INFLATE_WORKING_MEMORY;
 
@@ -236,6 +237,9 @@ int main(int argc, const char * argv[])
         
     DecodedImage decoded_images[FILENAMES_CAP];
     
+    
+    clock_t tic = clock();
+        
     for (
         uint32_t filename_i = 0;
         filename_i < FILENAMES_CAP;
@@ -252,6 +256,9 @@ int main(int argc, const char * argv[])
                 "SUCCESS" : "FAILURE");
         #endif
     }
+    
+    clock_t toc = clock();
+    printf("Elapsed: %f seconds\n", (double)(toc - tic) / CLOCKS_PER_SEC);
     
     printf("write files with stb_write...\n");
     

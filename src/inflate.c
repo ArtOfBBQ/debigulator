@@ -1,8 +1,10 @@
 #include "inflate.h"
 
 #define NUM_UNIQUE_CODELENGTHS 19
-#define HUFFMAN_HASHMAP_SIZE 1024 // enables 10 bits
-#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 50
+// #define HUFFMAN_HASHMAP_SIZE 2048 // 2^11
+// #define HUFFMAN_HASHMAP_SIZE 4096 // 2^12
+#define HUFFMAN_HASHMAP_SIZE 8192 // 2^13
+#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 10
 
 static void align_memory(
     uint8_t ** memory_store,
@@ -30,10 +32,6 @@ typedef struct DataStream {
     
     uint64_t size_left;
 } DataStream;
-
-static void discard_bits(
-    DataStream * from,
-    const unsigned int amount);
 
 /*
 'Huffman encoding' is a famous compression algorithm
@@ -65,14 +63,14 @@ typedef struct HashedHuffman {
     uint32_t max_code_length;
 } HashedHuffman;
 
-static uint32_t __attribute__((no_instrument_function)) mask_rightmost_bits(
+static uint32_t mask_rightmost_bits(
     const uint32_t input,
     const uint32_t bits_to_mask)
 {
     return input & ((1 << bits_to_mask) - 1);
 }
 
-static uint32_t __attribute__((no_instrument_function)) mask_leftmost_bits(
+static uint32_t mask_leftmost_bits(
     const uint32_t input,
     const uint32_t bits_to_mask)
 {
@@ -172,55 +170,48 @@ Look at the top bits of our data stream, but keep them inplace
 */
 static uint32_t peek_bits(
     DataStream * from,
-    const uint32_t amount)
+    uint32_t bits_to_peek)
 {
     uint32_t return_value = 0;
-    uint32_t bits_to_peek = amount;
-    
     uint32_t bits_in_return = 0;
     
-    if (from->bits_left > 0) {
-        uint32_t num_to_read_from_buf =
-            bits_to_peek > from->bits_left ?
-                from->bits_left
-                : bits_to_peek;
-        
-        return_value =
-            mask_rightmost_bits(
-                /* input: */
-                    from->bit_buffer,
-                /* amount: */
-                    num_to_read_from_buf);
-        
-        bits_to_peek -= num_to_read_from_buf;
-        bits_in_return += num_to_read_from_buf;
-    }
+    // read from the bit buffer first (up to 7 bits)
+    uint32_t num_to_read_from_bitbuf =
+        ((bits_to_peek > from->bits_left) * from->bits_left) +
+        ((bits_to_peek <= from->bits_left) * bits_to_peek);
+    return_value =
+        mask_rightmost_bits(
+            /* input: */
+                from->bit_buffer,
+            /* amount: */
+                num_to_read_from_bitbuf);
+    bits_to_peek -= num_to_read_from_bitbuf;
+    bits_in_return += num_to_read_from_bitbuf;
     
+    // now read from the byte buffer
     uint8_t * peek_at = from->data;
-    while (bits_to_peek >= 8) {
-        // the new byte will be 'more significant', so the
-        // return value can stay the same but the new byte
-        // 's values should be bitshifted left to be bigger
-        uint32_t new_byte = *peek_at;
-        return_value |= (new_byte << bits_in_return);
-        peek_at++;
-        bits_to_peek -= 8;
-        bits_in_return += 8;
-    }
+    uint32_t bytes_to_peek = bits_to_peek / 8;
+    #ifndef INFLATE_IGNORE_ASSERTS
+    assert(bytes_to_peek < 4);
+    #endif
+    uint32_t next_bytes = *(uint32_t *)peek_at & ((1 << (bytes_to_peek * 8)) - 1);
+    return_value += (next_bytes << bits_in_return);
     
-    if (bits_to_peek > 0) {
-       // Add bits from the final byte
-       // here again, if there were bits in the return
-       // the new byte is 'more significant'
-       // so again the return value stays the same and
-       // the new partial byte gets bitshifted left
-       uint32_t partial_new_byte = 
-            mask_rightmost_bits(
-                /* input: */ *peek_at,
-                /* amount: */ bits_to_peek);
-       partial_new_byte <<= bits_in_return;
-       return_value |= partial_new_byte;
-    }
+    bits_to_peek -= bytes_to_peek * 8;
+    bits_in_return += bytes_to_peek * 8;
+    peek_at += bytes_to_peek;
+    
+    // Add bits from the final byte
+    // here again, if there were bits in the return
+    // the new byte is 'more significant'
+    // so again the return value stays the same and
+    // the new partial byte gets bitshifted left
+    uint32_t partial_new_byte = 
+        mask_rightmost_bits(
+            /* input: */ *peek_at,
+            /* amount: */ bits_to_peek);
+    partial_new_byte <<= bits_in_return;
+    return_value |= partial_new_byte;
     
     return return_value;
 }
@@ -290,9 +281,8 @@ static uint32_t compute_hash(
     does much better than the previous 2
     */
     uint32_t hash =
-        ((code_length - 1) *
-            (key >> 3)) & (HUFFMAN_HASHMAP_SIZE - 1); 
-            
+        (key + (code_length - 1)) & (HUFFMAN_HASHMAP_SIZE - 1); 
+    
     #ifndef INFLATE_IGNORE_ASSERTS
     assert(hash < HUFFMAN_HASHMAP_SIZE);
     #endif
@@ -303,36 +293,32 @@ static uint32_t compute_hash(
 /*
 Throw away the top x bits from our datastream
 */
-void discard_bits(
+static void discard_bits(
     DataStream * from,
     const uint32_t amount)
 {
-    unsigned int discards_left = amount;
+    uint32_t discards_left = amount;
+    uint32_t bits_to_discard =
+        ((from->bits_left > discards_left) * discards_left) +
+        (from->bits_left <= discards_left) * from->bits_left;
+    from->bit_buffer >>= bits_to_discard;
+    from->bits_left -= bits_to_discard;
+    discards_left -= bits_to_discard;
     
-    if (from->bits_left > 0) {
-        uint32_t bits_to_discard =
-            from->bits_left > discards_left ?
-                discards_left
-                : from->bits_left;
-        
-        from->bit_buffer >>= bits_to_discard;
-        from->bits_left -= bits_to_discard;
-        discards_left -= bits_to_discard;
-    }
+    uint32_t full_bytes_to_discard = discards_left / 8;
+    from->data += full_bytes_to_discard;
+    from->size_left -= full_bytes_to_discard;
+    discards_left %= 8;
     
-    while (discards_left >= 8) {
-        from->data += 1;
-        from->size_left -= 1;
-        discards_left -= 8;
-    }
-    
-    if (discards_left > 0) {
-        from->bit_buffer = *(uint8_t *)from->data;
-        from->data += 1;
-        from->size_left -= 1;
-        from->bits_left = (8 - discards_left);
-        from->bit_buffer >>= discards_left;
-    }
+    from->bit_buffer =
+        (discards_left > 0) * (*(uint8_t *)from->data) +
+        (discards_left <= 0) * from->bit_buffer;
+    from->data += discards_left > 0;
+    from->size_left -= discards_left > 0;
+    from->bits_left =
+        ((discards_left > 0) * (8 - discards_left)) +
+        (discards_left == 0) * from->bits_left;
+    from->bit_buffer >>= discards_left;
 }
 
 static uint32_t consume_bits(
@@ -373,14 +359,12 @@ static uint32_t hashed_huffman_decode(
     #endif
     
     uint32_t bitcount = dict->min_code_length - 1;
-    uint32_t upcoming_bits =
-        peek_bits(
-            /* from: */ datastream,
-            /* size: */ 24);
+    uint32_t upcoming_bits = peek_bits(
+        /* from: */ datastream,
+        /* size: */ 24);
     uint32_t raw = 0;
     
-    while (bitcount < dict->max_code_length)
-    {
+    while (bitcount < dict->max_code_length) {
         bitcount += 1;
         
         /*
@@ -391,9 +375,7 @@ static uint32_t hashed_huffman_decode(
         Attention: The hash keys are already reversed,
         so we can just compare the raw values to the keys 
         */
-        raw = mask_rightmost_bits(
-            upcoming_bits,
-            bitcount);
+        raw = mask_rightmost_bits(upcoming_bits, bitcount);
         
         uint32_t hash = compute_hash(
             /* key: */ raw,
@@ -441,7 +423,7 @@ static void huffman_to_hashmap(
     assert(huffman_input_size > 0);
     #endif
     
-    recipient->min_code_length = 1000;
+    recipient->min_code_length = 9999;
     recipient->max_code_length = 1;
     
     // init linked list sizes to 0
@@ -481,8 +463,10 @@ static void huffman_to_hashmap(
         if (huffman_input[i].code_length
             > recipient->max_code_length)
         {
-            recipient->max_code_length =
-                huffman_input[i].code_length;
+            recipient->max_code_length = huffman_input[i].code_length;
+            #ifndef INFLATE_IGNORE_ASSERTS
+            assert(recipient->max_code_length < 30);
+            #endif
         }
         
         uint32_t list_size = recipient->linked_lists[hash].size;
@@ -493,7 +477,7 @@ static void huffman_to_hashmap(
         recipient->linked_lists[hash].entries[list_size].value =
             huffman_input[i].value;
         recipient->linked_lists[hash].size += 1;
-        #ifndef INFLATE_IGNORE_ASSERTS 
+        #ifndef INFLATE_IGNORE_ASSERTS
         assert(recipient->linked_lists[hash].size <
             HUFFMAN_HASHMAP_LINKEDLIST_SIZE);
         #endif
@@ -1132,7 +1116,7 @@ void inflate(
                     "\t\t\tHLIT : %u (expect 257-286)\n",
                     HLIT);
                 #endif
-
+                
                 #ifndef INFLATE_IGNORE_ASSERTS
                 assert(HLIT >= 257 && HLIT <= 286);
                 #endif
@@ -1191,7 +1175,7 @@ void inflate(
                 
                 uint32_t HCLEN_table[
                     NUM_UNIQUE_CODELENGTHS] = {};
-
+                
                 #ifndef INFLATE_SILENCE
                 printf("\t\t\tReading raw code lengths\n");
                 #endif
@@ -1881,29 +1865,6 @@ void inflate(
     
     #ifndef INFLATE_SILENCE 
     printf("\t\tend of succesful inflate..\n");
-    #endif
-    
-    #ifndef INFLATE_IGNORE_ASSERTS
-    uint32_t nonzeroes_found = 0;
-    for (
-        uint8_t * recipient_check = (uint8_t *)recipient;
-        recipient_check != recipient_at;
-        recipient_check++)
-    {
-        if (*recipient_check > 0) {
-            nonzeroes_found += 1;
-        }
-    }
-    
-    if (nonzeroes_found < 2) {
-        #ifndef INFLATE_SILENCE
-        printf(
-            "WARNING - inflate decompressed but there are only %u non-zero "
-            "values\n",
-            nonzeroes_found);
-        #endif
-        assert(nonzeroes_found >= 2);
-    }
     #endif
     
     *out_good = 1;
