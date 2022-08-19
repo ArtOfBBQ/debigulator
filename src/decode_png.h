@@ -3,7 +3,7 @@ The 2 methods declared in this file are my API for decoding PNG files.
 */
 
 #define DECODE_PNG_SILENCE
-#define DECODE_PNG_IGNORE_CRC_CHECKS
+// #define DECODE_PNG_IGNORE_CRC_CHECKS
 // #define DECODE_PNG_IGNORE_ASSERTS
 
 #ifndef DECODE_PNG_H

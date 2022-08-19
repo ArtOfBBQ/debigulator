@@ -16,8 +16,7 @@ according to legend many others.
 #include "inttypes.h"
 
 #ifndef NULL
-#define remove_NULL_def
-#define NULL nullptr
+#define NULL 0
 #endif 
 
 #ifndef INFLATE_SILENCE

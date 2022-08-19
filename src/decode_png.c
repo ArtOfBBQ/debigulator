@@ -1,5 +1,9 @@
 #include "decode_png.h"
 
+#ifndef NULL
+#define NULL 0
+#endif
+
 // 5mb                        5...000
 #define INFLATE_HASHMAPS_SIZE 3000000
 

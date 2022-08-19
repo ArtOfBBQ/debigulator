@@ -1,5 +1,9 @@
 #include "inflate.h"
 
+#ifndef NULL
+#define NULL 0
+#endif
+
 #define NUM_UNIQUE_CODELENGTHS 19
 // #define HUFFMAN_HASHMAP_SIZE 2048 // 2^11
 // #define HUFFMAN_HASHMAP_SIZE 4096 // 2^12
@@ -194,8 +198,18 @@ static uint32_t peek_bits(
     #ifndef INFLATE_IGNORE_ASSERTS
     assert(bytes_to_peek < 4);
     #endif
-    uint32_t next_bytes = *(uint32_t *)peek_at & ((1 << (bytes_to_peek * 8)) - 1);
-    return_value += (next_bytes << bits_in_return);
+    uint32_t next_bytes =
+	(uint32_t)peek_at[0]
+	| ((uint32_t)peek_at[1] << 8)
+	| ((uint32_t)peek_at[2] << 16)
+	| ((uint32_t)peek_at[3] << 24);
+    next_bytes &= ((1 << (bytes_to_peek * 8)) - 1);
+//     uint32_t next_bytes =
+// 	*(uint32_t *)peek_at
+// 	& ((1 << (bytes_to_peek * 8)) - 1);
+    
+    return_value +=
+	(next_bytes << bits_in_return);
     
     bits_to_peek -= bytes_to_peek * 8;
     bits_in_return += bytes_to_peek * 8;
