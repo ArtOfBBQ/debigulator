@@ -533,7 +533,6 @@ static void unpack_huffman(
     // 1) Count the number of codes for each code length.  Let
     // bl_count[N] be the number of codes of length N, N >= 1.
     uint32_t bl_count[array_and_recipient_size];
-    unsigned int unique_code_lengths = 0;
     unsigned int min_code_length = 123454321;
     unsigned int max_code_length = 0;
     for (uint32_t i = 0; i < array_and_recipient_size; i++) {
@@ -550,7 +549,6 @@ static void unpack_huffman(
         }
         
         if (bl_count[bl_count_i] == 0) {
-            unique_code_lengths += 1;
         }
         if (bl_count_i > max_code_length) {
             max_code_length = bl_count_i;
