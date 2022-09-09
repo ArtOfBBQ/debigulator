@@ -1,0 +1,284 @@
+/*
+This file is meant as an example of how to use the "bmp.h"
+header to read pixels from a .bmp file.
+*/
+
+#include "decode_bmp.h"
+#include "stdio.h"
+#include "stdlib.h"
+
+#define true 1
+#define false 0
+
+#define WRITING_VERSION
+#ifdef WRITING_VERSION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_write.h"
+#endif
+
+// 590mb ->                      59.000...
+#define APPLICATION_MEMORY_SIZE  590000000
+static uint8_t * memory_store;
+static uint64_t memory_store_remaining;
+
+static void align_memory()
+{
+    while ((uintptr_t)(void *)memory_store % 16 != 0) {
+        assert(memory_store_remaining >= 1);
+        memory_store += 1;
+        memory_store_remaining -= 1;
+    }
+    
+    #ifndef INFLATE_IGNORE_ASSERTS
+    assert((uintptr_t)(void *)memory_store % 16 == 0);
+    #endif
+}
+
+typedef struct FileBuffer {
+    uint64_t size;
+    char * contents;
+} FileBuffer;
+
+static void filename_to_filepath(
+    const char * filename,
+    char * out_filename)
+{
+    char * app_path = (char *)".";
+    
+    uint32_t i = 0;
+    while (app_path[i] != '\0') {
+        out_filename[i] = app_path[i];
+        i++;
+    }
+    out_filename[i++] = '/';
+    uint32_t j = 0;
+    while (filename[j] != '\0') {
+        out_filename[i++] = filename[j++];
+    }
+    out_filename[i++] = '\0';
+}
+
+static uint64_t platform_get_filesize(
+    const char * filename)
+{
+    char path_and_filename[1000];
+    filename_to_filepath(
+        /* filename: */ filename,
+        /* char * out_filename: */ path_and_filename);
+    
+    printf("path_and_filename: %s\n", path_and_filename);
+    
+    FILE * file_handle = fopen(
+        path_and_filename,
+        "rb+");
+    
+    if (!file_handle) {
+        assert(0);
+        return -1;
+    }
+    
+    fseek(file_handle, 0L, SEEK_END);
+    int64_t fsize = ftell(file_handle);
+    
+    fclose(file_handle);
+    
+    printf("fsize: %llu\n", fsize);
+    return fsize;
+}
+
+static void platform_read_file(
+    const char * filename,
+    char * out_preallocatedbuffer,
+    const uint64_t out_size)
+{
+    char path_and_filename[1000];
+    filename_to_filepath(
+        /* filename: */ filename,
+        /* char * out_filename: */ path_and_filename);
+    
+    printf("path_and_filename: %s\n", path_and_filename);
+    
+    FILE * file_handle = fopen(
+        path_and_filename,
+        "rb+");
+
+    assert(file_handle);
+    
+    fread(
+        /* ptr: */
+            out_preallocatedbuffer,
+        /* size of each element to be read: */
+            1,
+        /* nmemb (no of members) to read: */
+            out_size - 1,
+        /* stream: */
+            file_handle);
+    
+    fclose(file_handle);
+    
+    out_preallocatedbuffer[out_size - 1] = '\0'; // for windows
+}
+
+typedef struct Image {
+    uint8_t * rgba_values;
+    uint64_t rgba_values_size;
+    uint32_t width;
+    uint32_t height;
+    uint32_t good;
+} Image;
+
+Image read_bmp_from_disk(
+    const char * filename)
+{
+    Image return_value;
+    return_value.good = 0;
+    
+    FileBuffer imgfile;
+    imgfile.size = platform_get_filesize(filename);
+    imgfile.contents = (char *)malloc(sizeof(char) * imgfile.size);
+    
+    platform_read_file(
+        /* const char * filename: */
+            filename,
+        /* char * out_preallocatedbuffer: */
+            imgfile.contents,
+        /* uint64_t out_size: */
+            imgfile.size);
+    int64_t bytes_read = imgfile.size;
+    
+    
+    get_BMP_size(
+        /* const uint8_t * raw_input: */
+            (uint8_t *)imgfile.contents,
+        /* const uint64_t raw_input_size: */
+            bytes_read,
+        /* uint32_t * out_width: */
+            &return_value.width,
+        /* uint32_t * out_height: */
+            &return_value.height,
+        /* uint32_t * out_good: */
+            &return_value.good);
+
+    assert(return_value.width > 0);
+    assert(return_value.height > 0);
+    
+    printf("width/height: %u,%u\n", return_value.width, return_value.height);
+    align_memory();
+    return_value.rgba_values = (uint8_t *)memory_store;
+    return_value.rgba_values_size =
+        return_value.width * return_value.height * 4;
+    assert(memory_store_remaining >= return_value.rgba_values_size);
+    memory_store += return_value.rgba_values_size;
+    memory_store_remaining -= return_value.rgba_values_size;  
+    
+    assert(return_value.good);
+    return_value.good = false;
+    
+    decode_BMP(
+        /* raw_input: */
+            (uint8_t *)imgfile.contents,
+        /* raw_input_size: */
+            bytes_read,
+        /* out_rgba_values: */
+            return_value.rgba_values,
+        /* out_rgba_values_size: */
+            return_value.rgba_values_size,
+        /* out_good: */
+            &return_value.good);
+    
+    assert(return_value.good);
+    
+    return return_value;
+}
+
+int main(int argc, const char * argv[]) {
+    
+    // 990mb ->                      99.000...
+    #define APPLICATION_MEMORY_SIZE  990000000
+    memory_store = (uint8_t *)malloc(APPLICATION_MEMORY_SIZE);
+    memory_store_remaining = APPLICATION_MEMORY_SIZE;
+    
+    #ifndef HELLOBMP_SILENCE 
+    printf(
+        "Starting hellobmp...\n");
+    #endif
+    
+    #define FILENAMES_CAP 1
+    char * filenames[FILENAMES_CAP] = {
+        (char *)"structuredart.bmp",
+    };
+    
+    Image decoded_images[FILENAMES_CAP];
+    
+    for (
+        uint32_t filename_i = 0;
+        filename_i < FILENAMES_CAP;
+        filename_i++)
+    {
+        decoded_images[filename_i] = read_bmp_from_disk(filenames[filename_i]);
+        
+        #ifndef HELLOBMP_SILENCE 
+        printf(
+            "finished decode_BMP for %s, result was: %s\n",
+            filenames[filename_i],
+            decoded_images[filename_i].good ?
+                "SUCCESS" : "FAILURE");
+        uint32_t i = 0;
+        printf(
+        "pixel %u: [%u,%u,%u,%u]\n",
+            i,
+            decoded_images[filename_i].rgba_values[i + 0],
+            decoded_images[filename_i].rgba_values[i + 1],
+            decoded_images[filename_i].rgba_values[i + 2],
+            decoded_images[filename_i].rgba_values[i + 3]);
+        #endif
+    }
+
+    #ifdef WRITING_VERSION
+    char * out_filename = (char *)malloc(30);
+    out_filename[0] = 'o';
+    out_filename[1] = 'u';
+    out_filename[2] = 't';
+    out_filename[3] = '\0';
+    
+    for (uint32_t i = 0; i < FILENAMES_CAP; i++) {
+        uint32_t char_i = 3;
+        while (filenames[i][char_i - 3] != '\0') {
+            out_filename[char_i] = filenames[i][char_i - 3];
+            char_i++;
+        }
+        out_filename[char_i] = '\0';
+        
+        if (!decoded_images[i].good) {
+            continue;
+        }
+        assert(decoded_images[i].rgba_values_size > 0);
+        assert(decoded_images[i].rgba_values_size >=
+            decoded_images[i].width * decoded_images[i].height * 4);
+        
+        int result = stbi_write_png(
+            /* char const *filename: */
+                out_filename,
+            /* int w: */
+                decoded_images[i].width,
+            /* int h: */
+                decoded_images[i].height,
+            /* int comp: */
+                4,
+            /* const void *data: */
+                decoded_images[i].rgba_values,
+            /* int stride_in_bytes: */
+                decoded_images[i].width * 4);
+        
+        printf(
+            "write to %s result: %i\n",
+            out_filename,
+            result);
+    }
+    #endif
+    
+    printf("end of hellobmp\n");
+    
+    return 0;
+}
+
