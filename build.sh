@@ -1,7 +1,5 @@
-APP_NAME="hellopng"
-ADDITIONAL_SOURCES="src/decode_png.c src/inflate.c"
-
-MAC_FRAMEWORKS="-framework AppKit"
+APP_NAME="hellobmp"
+ADDITIONAL_SOURCES="src/decode_bmp.c"
 
 echo "Building $APP_NAME... (this shell script must be run from the app's root directory"
 
@@ -13,10 +11,10 @@ mkdir build
 
 echo "copying resources..."
 # cp resources/$INPUT_FILE.$INPUT_EXTENSION build/$INPUT_FILE.$INPUT_EXTENSION
-cp resources/*.png build
+cp resources/*.bmp build
 
 echo "Compiling $APP_NAME..."
-clang++ -fsanitize=address $MAC_FRAMEWORKS -g -o0 -x objective-c++ -objC -std="c++17" -Wno-padded -Wno-gnu-empty-initializer -lstdc++ -o build/$APP_NAME src/$APP_NAME.c $ADDITIONAL_SOURCES
+gcc -fsanitize=address -g -o0 -std="c99" -Wno-padded -Wno-gnu-empty-initializer -lstdc++ -o build/$APP_NAME src/$APP_NAME.c $ADDITIONAL_SOURCES
 
 # echo "Running $APP_NAME"
 (cd build && ./$APP_NAME)

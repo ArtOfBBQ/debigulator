@@ -4,23 +4,6 @@
 #define NULL 0
 #endif
 
-#ifndef true
-#define true 1
-#endif
-
-#ifndef false
-#define false 0
-#endif
-
-/*
-Header	14 bytes	 	
-Windows Structure: BITMAPFILEHEADER
-Signature	2 bytes	0000h	'BM'
-FileSize	4 bytes	0002h	File size in bytes
-reserved	4 bytes	0006h	unused (=0)
-DataOffset	4 bytes	000Ah	Offset from beginning of file to bitmap data
-*/
-
 #pragma pack(push, 1)
 typedef struct BitmapFileHeader {
     char character_header[2]; // BM, BA, CI, CP, IC, or PT
@@ -29,6 +12,20 @@ typedef struct BitmapFileHeader {
     uint16_t reserved_2; // historical artifact, usually 0
     uint32_t image_offset;
 } BitmapFileHeader;
+
+typedef struct DIBHeader {
+    uint32_t size;
+    int32_t width;
+    int32_t height;
+    uint16_t planes;         // expecting 1
+    uint16_t bits_per_pixel; // expecting 32
+    uint32_t compression;    // expecting 0
+    uint32_t image_size;     // 0 is valid if no compression
+    uint32_t x_pixels_per_meter; // wtf
+    uint32_t y_pixels_per_meter; // wtf
+    uint32_t colors_used;
+    uint32_t important_colors; // 0 = all
+} DIBHeader;
 #pragma pack(pop)
 
 void get_BMP_size(
@@ -58,16 +55,10 @@ void get_BMP_size(
             header.character_header[0],
             header.character_header[1]);
         #endif
-        *out_good = false;
+        *out_good = 0;
         return;
     }
     
-    // read DIB header
-    printf("reading DIB header from 4 bytes: %u, %u, %u, %u\n",
-        raw_input_at[0],
-        raw_input_at[1],
-        raw_input_at[2],
-        raw_input_at[3]);
     uint32_t DIB_size = *(uint32_t *)raw_input_at;
     raw_input_at += sizeof(uint32_t);
     raw_input_left -= sizeof(uint32_t);
@@ -79,7 +70,7 @@ void get_BMP_size(
             " Actual value was: %u\n",
             DIB_size);
         #endif
-        *out_good = false;
+        *out_good = 0;
         return;
     }
     
@@ -100,9 +91,7 @@ void get_BMP_size(
         ((height > 0) * height) +
         ((height < 0) * -height));
     
-    printf("out_height: %u, out_width: %u\n", *out_height, *out_width);
-    
-    *out_good = true;
+    *out_good = 1;
 }
 
 void decode_BMP(
@@ -130,7 +119,7 @@ void decode_BMP(
             header.character_header[0],
             header.character_header[1]);
         #endif
-        *out_good = false;
+        *out_good = 0;
         return;
     }
     
@@ -145,77 +134,118 @@ void decode_BMP(
             header.image_size,
             raw_input_size);
         #endif
-        *out_good = false;
+        *out_good = 0;
         return;
     }
     
-    uint32_t DIB_size = *(uint32_t *)raw_input_at;
-    raw_input_at += sizeof(uint32_t);
-    raw_input_left -= sizeof(uint32_t);
-    if (DIB_size != 40) {
+    DIBHeader dib_header = *(DIBHeader *)raw_input_at;
+    raw_input_at += sizeof(DIBHeader);
+    raw_input_left -= sizeof(DIBHeader);
+    if (dib_header.size != 40) {
         #ifndef DECODE_BMP_SILENCE
         printf(
             "Error - currently supporting only 40-byte DIB headers."
             " Actual value was: %u\n",
-            DIB_size);
+            dib_header.size);
         #endif
-        *out_good = false;
+        *out_good = 0;
         return;
     }
     
-    int32_t width = *(int32_t *)raw_input_at;
-    raw_input_at += sizeof(int32_t);
-    raw_input_left -= sizeof(int32_t);
-    
-    int32_t height = *(int32_t *)raw_input_at;
-    raw_input_at += sizeof(int32_t);
-    raw_input_left -= sizeof(int32_t);
     // height can be negative - it means the bitmap is stored from top to
     // bottom
-    height = (
-        ((height > 0) * height) +
-        ((height < 0) * -height));
+    dib_header.height = (
+        ((dib_header.height > 0) * dib_header.height) +
+        ((dib_header.height < 0) * -dib_header.height));
     
     if (
-        (uint64_t)(width * height * 4) != out_rgba_values_size)
+        (uint64_t)(dib_header.width * dib_header.height * 4) !=
+            out_rgba_values_size)
     {
         #ifndef DECODE_BMP_SILENCE
         printf(
-            "Error - bitmap has height %i * width %i * 4 pixels, but "
-            "out_rgba_values_size is %llu\n",
-            height,
-            width,
+            "Error - bitmap has dib_header.height %i * dib_header.width %i"
+            " * 4 pixels, but out_rgba_values_size is %llu\n",
+            dib_header.height,
+            dib_header.width,
             out_rgba_values_size);
         #endif
-        *out_good = false;
-    }
-
-    uint16_t planes =  *(int16_t *)raw_input_at;
-    raw_input_at += sizeof(int16_t);
-    raw_input_left -= sizeof(int16_t);
-    if (planes != 1) {
-        #ifndef DECODE_BMP_SILENCE
-        printf("Error - # of planes was: %u, expected 1\n", planes);
-        #endif
-        *out_good = false;
-        return;
+        *out_good = 0;
     }
     
-    uint16_t bits_per_pixel =  *(int16_t *)raw_input_at;
-    raw_input_at += sizeof(int16_t);
-    raw_input_left -= sizeof(int16_t);
-    if (bits_per_pixel != 32) {
+    if (dib_header.planes != 1) {
         #ifndef DECODE_BMP_SILENCE
         printf(
-            "Error - # of bits_per_pixel was: %u, expected 32\n",
-            bits_per_pixel);
+            "Error - # of dib_header.planes was: %u, expected 1\n",
+            dib_header.planes);
         #endif
-        *out_good = false;
+        *out_good = 0;
         return;
     }
-
-    uint32_t actual_image_size = height * width * 4;
     
+    if (dib_header.bits_per_pixel != 32) {
+        #ifndef DECODE_BMP_SILENCE
+        printf(
+            "Error - # of dib_header.bits_per_pixel was: %u, expected 32\n",
+            dib_header.bits_per_pixel);
+        #endif
+        *out_good = 0;
+        return;
+    }
+    
+    if (dib_header.compression != 0) {
+        #ifndef DECODE_BMP_SILENCE
+        printf(
+            "Error - dib_header.compression was: %u, expected 0\n",
+            dib_header.compression);
+        #endif
+        *out_good = 0;
+    }
+    
+    if (dib_header.image_size != out_rgba_values_size) {
+        #ifndef DECODE_BMP_SILENCE
+        printf(
+            "Error - dib_header.image_size was: %u, expected %llu\n",
+            dib_header.image_size,
+            out_rgba_values_size);
+        #endif
+        *out_good = 0;
+    }
+
+    if (dib_header.x_pixels_per_meter != 0) {
+        #ifndef DECODE_BMP_SILENCE
+        printf(
+            "Error - dib_header.x_pixels_per_meter was: %u, expected 0\n",
+            dib_header.x_pixels_per_meter);
+        #endif
+        *out_good = 0;
+    }
+    if (dib_header.y_pixels_per_meter != 0) {
+        #ifndef DECODE_BMP_SILENCE
+        printf(
+            "Error - dib_header.y_pixels_per_meter was: %u, expected 0\n",
+            dib_header.y_pixels_per_meter);
+        #endif
+        *out_good = 0;
+    }
+    if (dib_header.colors_used != 0) {
+        #ifndef DECODE_BMP_SILENCE
+        printf(
+            "Error - dib_header.colors_used was: %u, expected 0\n",
+            dib_header.colors_used);
+        #endif
+        *out_good = 0;
+    }
+    if (dib_header.important_colors != 0) {
+        #ifndef DECODE_BMP_SILENCE
+        printf(
+            "Error - dib_header.important_colors was: %u, expected 0\n",
+            dib_header.important_colors);
+        #endif
+        *out_good = 0;
+    }
+    
+    uint32_t actual_image_size = dib_header.height * dib_header.width * 4;
     // copy pixel values
     // note: we want RGBA, but bitmaps are stored in BGRA
     for (
@@ -232,7 +262,64 @@ void decode_BMP(
     #ifndef DECODE_BMP_SILENCE
     printf("No errors detected, assuming success\n");
     #endif
-    *out_good = true;
+    *out_good = 1;
     return;
+}
+
+void encode_BMP(
+    const uint8_t * rgba,
+    const uint64_t rgba_size,
+    const uint32_t width,
+    const uint32_t height,
+    unsigned char * recipient,
+    const int64_t recipient_capacity)
+{
+    // reminder: the final +1 is for a potential null terminator
+    assert(recipient_capacity == 14 + 40 + rgba_size + 1);
+    unsigned char * recipient_at = (unsigned char*)recipient;
+    
+    BitmapFileHeader header;
+    assert(sizeof(header) == 14);
+    header.character_header[0] = 'B';
+    header.character_header[1] = 'M';
+    header.image_size = (width * height * 4) + 54;
+    header.reserved_1 = 0;
+    header.reserved_2 = 0;
+    header.image_offset = 54;
+    
+    char * bitmap_header_at = (char *)&header;
+    for (uint32_t _ = 0; _ < 14; _++)  {
+        *recipient_at++ = *bitmap_header_at++;
+    }
+    
+    DIBHeader dib_header;
+    assert(sizeof(dib_header) == 40);
+    dib_header.size = 40;
+    dib_header.width = (int32_t)width;
+    dib_header.height = -1 * (int32_t)height;
+    dib_header.planes = 1;
+    dib_header.bits_per_pixel = 32;
+    dib_header.compression = 0;
+    dib_header.image_size = width * height * 4;
+    dib_header.x_pixels_per_meter = 0;
+    dib_header.y_pixels_per_meter = 0;
+    dib_header.colors_used = 0;
+    dib_header.important_colors = 0;
+    
+    char * dib_header_at = (char *)&dib_header;
+    for (uint32_t _ = 0; _ < 40; _++) {
+        *recipient_at++ = *dib_header_at++;
+    }
+    
+    for (
+        uint32_t _ = 0;
+        _ < rgba_size;
+        _ += 4)
+    {
+        *recipient_at++ = rgba[_ + 2];
+        *recipient_at++ = rgba[_ + 1];
+        *recipient_at++ = rgba[_ + 0];
+        *recipient_at++ = rgba[_ + 3];
+    }
 }
 

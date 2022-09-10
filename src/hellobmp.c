@@ -11,18 +11,13 @@ header to read pixels from a .bmp file.
 #define false 0
 
 #define WRITING_VERSION
-#ifdef WRITING_VERSION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_write.h"
-#endif
 
-// 590mb ->                      59.000...
-#define APPLICATION_MEMORY_SIZE  590000000
+// 50mb ->                      50...000
+#define APPLICATION_MEMORY_SIZE 50000000
 static uint8_t * memory_store;
-static uint64_t memory_store_remaining;
+static uint64_t memory_store_remaining = APPLICATION_MEMORY_SIZE;
 
-static void align_memory()
-{
+static void align_memory() {
     while ((uintptr_t)(void *)memory_store % 16 != 0) {
         assert(memory_store_remaining >= 1);
         memory_store += 1;
@@ -66,8 +61,6 @@ static uint64_t platform_get_filesize(
         /* filename: */ filename,
         /* char * out_filename: */ path_and_filename);
     
-    printf("path_and_filename: %s\n", path_and_filename);
-    
     FILE * file_handle = fopen(
         path_and_filename,
         "rb+");
@@ -82,7 +75,6 @@ static uint64_t platform_get_filesize(
     
     fclose(file_handle);
     
-    printf("fsize: %llu\n", fsize);
     return fsize;
 }
 
@@ -95,8 +87,6 @@ static void platform_read_file(
     filename_to_filepath(
         /* filename: */ filename,
         /* char * out_filename: */ path_and_filename);
-    
-    printf("path_and_filename: %s\n", path_and_filename);
     
     FILE * file_handle = fopen(
         path_and_filename,
@@ -117,6 +107,29 @@ static void platform_read_file(
     fclose(file_handle);
     
     out_preallocatedbuffer[out_size - 1] = '\0'; // for windows
+}
+
+static void platform_write_file(
+    const char * filename,
+    unsigned char * to_write,
+    const uint64_t out_size)
+{
+    char path_and_filename[1000];
+    filename_to_filepath(
+        /* filename: */ filename,
+        /* char * out_filename: */ path_and_filename);
+    
+    FILE * file_handle = fopen(
+        path_and_filename,
+        "wb+");
+    
+    fwrite(
+        to_write,
+        out_size,
+        1,
+        file_handle);
+    
+    fclose(file_handle);
 }
 
 typedef struct Image {
@@ -162,7 +175,6 @@ Image read_bmp_from_disk(
     assert(return_value.width > 0);
     assert(return_value.height > 0);
     
-    printf("width/height: %u,%u\n", return_value.width, return_value.height);
     align_memory();
     return_value.rgba_values = (uint8_t *)memory_store;
     return_value.rgba_values_size =
@@ -194,13 +206,10 @@ Image read_bmp_from_disk(
 int main(int argc, const char * argv[]) {
     
     // 990mb ->                      99.000...
-    #define APPLICATION_MEMORY_SIZE  990000000
     memory_store = (uint8_t *)malloc(APPLICATION_MEMORY_SIZE);
-    memory_store_remaining = APPLICATION_MEMORY_SIZE;
     
     #ifndef HELLOBMP_SILENCE 
-    printf(
-        "Starting hellobmp...\n");
+    printf("Starting hellobmp...\n");
     #endif
     
     #define FILENAMES_CAP 1
@@ -219,18 +228,9 @@ int main(int argc, const char * argv[]) {
         
         #ifndef HELLOBMP_SILENCE 
         printf(
-            "finished decode_BMP for %s, result was: %s\n",
-            filenames[filename_i],
-            decoded_images[filename_i].good ?
-                "SUCCESS" : "FAILURE");
+            "finished decode_BMP for %s\n",
+            filenames[filename_i]);
         uint32_t i = 0;
-        printf(
-        "pixel %u: [%u,%u,%u,%u]\n",
-            i,
-            decoded_images[filename_i].rgba_values[i + 0],
-            decoded_images[filename_i].rgba_values[i + 1],
-            decoded_images[filename_i].rgba_values[i + 2],
-            decoded_images[filename_i].rgba_values[i + 3]);
         #endif
     }
 
@@ -256,28 +256,33 @@ int main(int argc, const char * argv[]) {
         assert(decoded_images[i].rgba_values_size >=
             decoded_images[i].width * decoded_images[i].height * 4);
         
-        int result = stbi_write_png(
-            /* char const *filename: */
-                out_filename,
-            /* int w: */
-                decoded_images[i].width,
-            /* int h: */
-                decoded_images[i].height,
-            /* int comp: */
-                4,
-            /* const void *data: */
+        unsigned char * encoded_bmp = (unsigned char *)memory_store;
+        uint64_t encoded_bmp_size = 
+            (decoded_images[i].width * decoded_images[i].height * 4) + 55;
+        memory_store += encoded_bmp_size;
+        encode_BMP(
+            /* const uint8_t * rgba: */
                 decoded_images[i].rgba_values,
-            /* int stride_in_bytes: */
-                decoded_images[i].width * 4);
+            /* const uint64_t rgba_size: */
+                decoded_images[i].rgba_values_size,
+            /* const uint32_t width: */
+                decoded_images[i].width,
+            /* const uint32_t height: */
+                decoded_images[i].height,
+            /* char * recipient: */
+                encoded_bmp,
+            /* const int64_t recipient_capacity: */
+                encoded_bmp_size);
         
-        printf(
-            "write to %s result: %i\n",
-            out_filename,
-            result);
+        platform_write_file(
+            /* const char * filename: */
+                out_filename,
+            /* unsigned char * to_write: */
+                encoded_bmp,
+            /* const uint64_t out_size: */
+                encoded_bmp_size);
     }
     #endif
-    
-    printf("end of hellobmp\n");
     
     return 0;
 }

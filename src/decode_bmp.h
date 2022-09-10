@@ -29,5 +29,13 @@ void decode_BMP(
     const int64_t out_rgba_values_size,
     uint32_t * out_good);
 
+void encode_BMP(
+    const uint8_t * rgba,
+    const uint64_t rgba_size,
+    const uint32_t width,
+    const uint32_t height,
+    unsigned char * recipient,
+    const int64_t recipient_capacity);
+
 #endif
 
