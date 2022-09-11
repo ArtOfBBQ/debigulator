@@ -15,7 +15,7 @@ The 2 methods declared in this file are my API for decoding BMP files.
 #include "assert.h"
 #endif
 
-void get_BMP_size(
+void get_BMP_width_height(
     const uint8_t * raw_input,
     const uint64_t raw_input_size,
     uint32_t * out_width,

@@ -10,7 +10,7 @@ header to read pixels from a .bmp file.
 #define true 1
 #define false 0
 
-#define WRITING_VERSION
+// #define WRITING_VERSION
 
 // 50mb ->                      50...000
 #define APPLICATION_MEMORY_SIZE 50000000
@@ -214,7 +214,7 @@ int main(int argc, const char * argv[]) {
     
     #define FILENAMES_CAP 1
     char * filenames[FILENAMES_CAP] = {
-        (char *)"structuredart.bmp",
+        (char *)"fs_bribery.bmp",
     };
     
     Image decoded_images[FILENAMES_CAP];

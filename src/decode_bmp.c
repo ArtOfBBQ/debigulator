@@ -28,7 +28,7 @@ typedef struct DIBHeader {
 } DIBHeader;
 #pragma pack(pop)
 
-void get_BMP_size(
+void get_BMP_width_height(
     const uint8_t * raw_input,
     const uint64_t raw_input_size,
     uint32_t * out_width,
@@ -103,11 +103,11 @@ void decode_BMP(
 {
     assert(raw_input_size >= sizeof(BitmapFileHeader));
     uint8_t * raw_input_at = (uint8_t *)raw_input;
-    uint64_t raw_input_left = raw_input_size;
+    // uint64_t raw_input_left = raw_input_size;
     
     BitmapFileHeader header = *(BitmapFileHeader *)raw_input;
     raw_input_at += sizeof(BitmapFileHeader);
-    raw_input_left -= sizeof(BitmapFileHeader);
+    // raw_input_left -= sizeof(BitmapFileHeader);
     
     if (header.character_header[0] != 'B' ||
         header.character_header[1] != 'M')
@@ -140,7 +140,7 @@ void decode_BMP(
     
     DIBHeader dib_header = *(DIBHeader *)raw_input_at;
     raw_input_at += sizeof(DIBHeader);
-    raw_input_left -= sizeof(DIBHeader);
+    // raw_input_left -= sizeof(DIBHeader);
     if (dib_header.size != 40) {
         #ifndef DECODE_BMP_SILENCE
         printf(
@@ -259,9 +259,6 @@ void decode_BMP(
         out_rgba_values[i - header.image_offset + 3] = raw_input[i + 3];
     }
     
-    #ifndef DECODE_BMP_SILENCE
-    printf("No errors detected, assuming success\n");
-    #endif
     *out_good = 1;
     return;
 }
