@@ -44,6 +44,9 @@ void get_BMP_width_height(
     raw_input_at += sizeof(BitmapFileHeader);
     raw_input_left -= sizeof(BitmapFileHeader);
     
+    assert(raw_input_left >= sizeof(DIBHeader));
+    DIBHeader dib_header = *(DIBHeader *)raw_input_at;
+    
     if (
         header.character_header[0] != 'B' ||
         header.character_header[1] != 'M')
@@ -59,39 +62,15 @@ void get_BMP_width_height(
         return;
     }
     
-    uint32_t DIB_size = *(uint32_t *)raw_input_at;
-    raw_input_at += sizeof(uint32_t);
-    raw_input_left -= sizeof(uint32_t);
-    
-    if (DIB_size != 40) {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - currently supporting only 40-byte DIB headers."
-            " Actual value was: %u\n",
-            DIB_size);
-        #endif
-        *out_good = 0;
-        return;
-    }
-    
-    assert(raw_input_left >= 8);
-    int32_t width = *(int32_t *)raw_input_at;
-    raw_input_at += sizeof(int32_t);
-    raw_input_left -= sizeof(int32_t);
-    
-    *out_width = (uint32_t)width;
-    
-    int32_t height = *(int32_t *)raw_input_at;
-    raw_input_at += sizeof(int32_t);
-    raw_input_left -= sizeof(int32_t);
-    
     // height can be negative - it means the bitmap is stored from top to
     // bottom
     *out_height = (uint32_t)(
-        ((height > 0) * height) +
-        ((height < 0) * -height));
+        ((dib_header.height > 0) * dib_header.height) +
+        ((dib_header.height < 0) * -dib_header.height));
     
-    *out_good = 1;
+    *out_width = (uint32_t)dib_header.width;
+    
+    *out_good = *out_width > 0 && *out_height > 0;
 }
 
 void decode_BMP(
@@ -138,8 +117,9 @@ void decode_BMP(
         return;
     }
     
+    assert(raw_input_size >= sizeof(DIBHeader));
     DIBHeader dib_header = *(DIBHeader *)raw_input_at;
-    raw_input_at += sizeof(DIBHeader);
+    // raw_input_at += sizeof(DIBHeader);
     // raw_input_left -= sizeof(DIBHeader);
     if (dib_header.size != 40) {
         #ifndef DECODE_BMP_SILENCE
@@ -160,7 +140,7 @@ void decode_BMP(
     
     if (
         (uint64_t)(dib_header.width * dib_header.height * 4) !=
-            out_rgba_values_size)
+            (uint64_t)out_rgba_values_size)
     {
         #ifndef DECODE_BMP_SILENCE
         printf(
@@ -245,7 +225,11 @@ void decode_BMP(
         *out_good = 0;
     }
     
-    uint32_t actual_image_size = dib_header.height * dib_header.width * 4;
+    uint32_t actual_image_size =
+        (uint32_t)dib_header.height *
+        (uint32_t)dib_header.width *
+        4;
+    
     // copy pixel values
     // note: we want RGBA, but bitmaps are stored in BGRA
     for (
@@ -272,7 +256,7 @@ void encode_BMP(
     const int64_t recipient_capacity)
 {
     // reminder: the final +1 is for a potential null terminator
-    assert(recipient_capacity == 14 + 40 + rgba_size + 1);
+    assert((uint64_t)recipient_capacity == 14 + 40 + rgba_size + 1);
     unsigned char * recipient_at = (unsigned char*)recipient;
     
     BitmapFileHeader header;
@@ -284,7 +268,7 @@ void encode_BMP(
     header.reserved_2 = 0;
     header.image_offset = 54;
     
-    char * bitmap_header_at = (char *)&header;
+    unsigned char * bitmap_header_at = (unsigned char *)(&header);
     for (uint32_t _ = 0; _ < 14; _++)  {
         *recipient_at++ = *bitmap_header_at++;
     }
