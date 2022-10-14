@@ -1,13 +1,14 @@
+#ifndef DECODE_PNG_H
+#define DECODE_PNG_H
+
 /*
-The 2 methods declared in this file are my API for decoding PNG files.
+The 2 methods declared in this file are the API for decoding
+PNG files.
 */
 
 #define DECODE_PNG_SILENCE
 // #define DECODE_PNG_IGNORE_CRC_CHECKS
 // #define DECODE_PNG_IGNORE_ASSERTS
-
-#ifndef DECODE_PNG_H
-#define DECODE_PNG_H
 
 #include "inflate.h"
 #include "inttypes.h"
@@ -18,6 +19,10 @@ The 2 methods declared in this file are my API for decoding PNG files.
 
 #ifndef DECODE_PNG_IGNORE_ASSERTS
 #include "assert.h"
+#endif
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 /*
@@ -74,4 +79,8 @@ void decode_PNG(
     const uint64_t dpng_working_memory_size,
     uint32_t * out_good);
 
+#ifdef __cplusplus
+}
 #endif
+
+#endif // DECODE_PNG_H

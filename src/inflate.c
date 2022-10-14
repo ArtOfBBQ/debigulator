@@ -731,12 +731,12 @@ static ExtraBitsEntry dist_extra_bits_table[] = {
 // to the original
 // returns 1 when failed, 0 when succesful
 void inflate(
-    const uint8_t * recipient,
+    uint8_t const * recipient,
     const uint64_t recipient_size,
     uint64_t * final_recipient_size,
-    const uint8_t * temp_working_memory,
+    uint8_t const * temp_working_memory,
     const uint64_t temp_working_memory_size,
-    const uint8_t * compressed_input,
+    uint8_t const * compressed_input,
     const uint64_t compressed_input_size,
     uint32_t * out_good)
 {
