@@ -38,7 +38,7 @@ void encode_BMP(
     const uint64_t rgba_size,
     const uint32_t width,
     const uint32_t height,
-    unsigned char * recipient,
+    char * recipient,
     const int64_t recipient_capacity);
 
 #ifdef __cplusplus

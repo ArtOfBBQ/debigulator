@@ -1631,7 +1631,7 @@ void inflate(
                 // because we hit the magical value 256,
                 // not because of running out of bytes
                 
-                if (data_stream.data - compressed_input
+                if ((uint64_t)(data_stream.data - compressed_input)
                     >= compressed_input_size)
                 {
                     #ifndef INFLATE_SILENCE

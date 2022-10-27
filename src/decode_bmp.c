@@ -252,12 +252,12 @@ void encode_BMP(
     const uint64_t rgba_size,
     const uint32_t width,
     const uint32_t height,
-    unsigned char * recipient,
+    char * recipient,
     const int64_t recipient_capacity)
 {
     // reminder: the final +1 is for a potential null terminator
     assert((uint64_t)recipient_capacity == 14 + 40 + rgba_size + 1);
-    unsigned char * recipient_at = (unsigned char*)recipient;
+    char * recipient_at = (char *)recipient;
     
     BitmapFileHeader header;
     assert(sizeof(header) == 14);
@@ -268,7 +268,7 @@ void encode_BMP(
     header.reserved_2 = 0;
     header.image_offset = 54;
     
-    unsigned char * bitmap_header_at = (unsigned char *)(&header);
+    char * bitmap_header_at = (char *)(&header);
     for (uint32_t _ = 0; _ < 14; _++)  {
         *recipient_at++ = *bitmap_header_at++;
     }
@@ -297,10 +297,9 @@ void encode_BMP(
         _ < rgba_size;
         _ += 4)
     {
-        *recipient_at++ = rgba[_ + 2];
-        *recipient_at++ = rgba[_ + 1];
-        *recipient_at++ = rgba[_ + 0];
-        *recipient_at++ = rgba[_ + 3];
+        *recipient_at++ = (char)rgba[_ + 2];
+        *recipient_at++ = (char)rgba[_ + 1];
+        *recipient_at++ = (char)rgba[_ + 0];
+        *recipient_at++ = (char)rgba[_ + 3];
     }
 }
-
