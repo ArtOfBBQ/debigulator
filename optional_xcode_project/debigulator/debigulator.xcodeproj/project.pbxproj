@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		601128E32863049000F92967 /* hellopng.c in Sources */ = {isa = PBXBuildFile; fileRef = 601128DE2863049000F92967 /* hellopng.c */; };
 		601128E42863049000F92967 /* inflate.h in Sources */ = {isa = PBXBuildFile; fileRef = 601128DF2863049000F92967 /* inflate.h */; };
 		601128E52863049000F92967 /* inflate.c in Sources */ = {isa = PBXBuildFile; fileRef = 601128E02863049000F92967 /* inflate.c */; };
 		601128E62863049000F92967 /* decode_png.h in Sources */ = {isa = PBXBuildFile; fileRef = 601128E12863049000F92967 /* decode_png.h */; };
@@ -27,6 +26,10 @@
 		60112901286305B500F92967 /* font.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 601128F4286305B500F92967 /* font.png */; };
 		601129042863BE9300F92967 /* stb_write.h in Sources */ = {isa = PBXBuildFile; fileRef = 601129032863BE9300F92967 /* stb_write.h */; };
 		60FEADF22868D60E00CB6C36 /* phoebus.png in CopyFiles */ = {isa = PBXBuildFile; fileRef = 60FEADF12868D60D00CB6C36 /* phoebus.png */; };
+		EC2E42BD2A7A6344004A188C /* hellobmp.c in Sources */ = {isa = PBXBuildFile; fileRef = EC2E42BC2A7A6344004A188C /* hellobmp.c */; };
+		EC2E42C12A7A63D5004A188C /* decode_bmp.c in Sources */ = {isa = PBXBuildFile; fileRef = EC2E42C02A7A63D5004A188C /* decode_bmp.c */; };
+		EC2E42C22A7A6449004A188C /* fs_psychologist.bmp in CopyFiles */ = {isa = PBXBuildFile; fileRef = EC2E42BE2A7A6358004A188C /* fs_psychologist.bmp */; };
+		EC2E42C52A7A6E52004A188C /* fs_fightingpit.bmp in CopyFiles */ = {isa = PBXBuildFile; fileRef = EC2E42C42A7A6E52004A188C /* fs_fightingpit.bmp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -36,6 +39,8 @@
 			dstPath = "";
 			dstSubfolderSpec = 16;
 			files = (
+				EC2E42C52A7A6E52004A188C /* fs_fightingpit.bmp in CopyFiles */,
+				EC2E42C22A7A6449004A188C /* fs_psychologist.bmp in CopyFiles */,
 				60FEADF22868D60E00CB6C36 /* phoebus.png in CopyFiles */,
 				601128F5286305B500F92967 /* structuredart1.png in CopyFiles */,
 				601128F6286305B500F92967 /* backgrounddetailed1.png in CopyFiles */,
@@ -57,11 +62,11 @@
 
 /* Begin PBXFileReference section */
 		601128D62863043C00F92967 /* hellopng */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = hellopng; sourceTree = BUILT_PRODUCTS_DIR; };
-		601128DE2863049000F92967 /* hellopng.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = hellopng.c; path = ../../src/hellopng.c; sourceTree = "<group>"; };
-		601128DF2863049000F92967 /* inflate.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = inflate.h; path = ../../src/inflate.h; sourceTree = "<group>"; };
-		601128E02863049000F92967 /* inflate.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = inflate.c; path = ../../src/inflate.c; sourceTree = "<group>"; };
-		601128E12863049000F92967 /* decode_png.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = decode_png.h; path = ../../src/decode_png.h; sourceTree = "<group>"; };
-		601128E22863049000F92967 /* decode_png.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; name = decode_png.c; path = ../../src/decode_png.c; sourceTree = "<group>"; };
+		601128DE2863049000F92967 /* hellopng.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = hellopng.c; path = ../../src/hellopng.c; sourceTree = "<group>"; };
+		601128DF2863049000F92967 /* inflate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = inflate.h; path = ../../src/inflate.h; sourceTree = "<group>"; };
+		601128E02863049000F92967 /* inflate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = inflate.c; path = ../../src/inflate.c; sourceTree = "<group>"; };
+		601128E12863049000F92967 /* decode_png.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = decode_png.h; path = ../../src/decode_png.h; sourceTree = "<group>"; };
+		601128E22863049000F92967 /* decode_png.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = decode_png.c; path = ../../src/decode_png.c; sourceTree = "<group>"; };
 		601128E8286305B500F92967 /* structuredart1.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = structuredart1.png; path = ../../resources/structuredart1.png; sourceTree = "<group>"; };
 		601128E9286305B500F92967 /* backgrounddetailed1.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = backgrounddetailed1.png; path = ../../resources/backgrounddetailed1.png; sourceTree = "<group>"; };
 		601128EA286305B500F92967 /* gimp_test.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = gimp_test.png; path = ../../resources/gimp_test.png; sourceTree = "<group>"; };
@@ -77,6 +82,12 @@
 		601128F4286305B500F92967 /* font.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = font.png; path = ../../resources/font.png; sourceTree = "<group>"; };
 		601129032863BE9300F92967 /* stb_write.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = stb_write.h; path = ../../src/stb_write.h; sourceTree = "<group>"; };
 		60FEADF12868D60D00CB6C36 /* phoebus.png */ = {isa = PBXFileReference; explicitFileType = compiled; name = phoebus.png; path = ../../resources/phoebus.png; sourceTree = "<group>"; };
+		EC2E42BC2A7A6344004A188C /* hellobmp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hellobmp.c; path = ../../src/hellobmp.c; sourceTree = "<group>"; };
+		EC2E42BE2A7A6358004A188C /* fs_psychologist.bmp */ = {isa = PBXFileReference; explicitFileType = compiled; name = fs_psychologist.bmp; path = ../../resources/fs_psychologist.bmp; sourceTree = "<group>"; };
+		EC2E42BF2A7A63D5004A188C /* decode_bmp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = decode_bmp.h; path = ../../src/decode_bmp.h; sourceTree = "<group>"; };
+		EC2E42C02A7A63D5004A188C /* decode_bmp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = decode_bmp.c; path = ../../src/decode_bmp.c; sourceTree = "<group>"; };
+		EC2E42C32A7A6E30004A188C /* fs_fightingpit.bmp */ = {isa = PBXFileReference; explicitFileType = compiled; name = fs_fightingpit.bmp; path = ../../resources/fs_fightingpit.bmp; sourceTree = "<group>"; };
+		EC2E42C42A7A6E52004A188C /* fs_fightingpit.bmp */ = {isa = PBXFileReference; explicitFileType = compiled; name = fs_fightingpit.bmp; path = ../../resources/fs_fightingpit.bmp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -98,6 +109,9 @@
 				601128E22863049000F92967 /* decode_png.c */,
 				601128E12863049000F92967 /* decode_png.h */,
 				601128DE2863049000F92967 /* hellopng.c */,
+				EC2E42C02A7A63D5004A188C /* decode_bmp.c */,
+				EC2E42BF2A7A63D5004A188C /* decode_bmp.h */,
+				EC2E42BC2A7A6344004A188C /* hellobmp.c */,
 				601128E02863049000F92967 /* inflate.c */,
 				601128DF2863049000F92967 /* inflate.h */,
 				601128D82863043C00F92967 /* hellopng */,
@@ -127,7 +141,10 @@
 				601128E9286305B500F92967 /* backgrounddetailed1.png */,
 				601128F4286305B500F92967 /* font.png */,
 				601128EF286305B500F92967 /* fs_angrymob.png */,
+				EC2E42C32A7A6E30004A188C /* fs_fightingpit.bmp */,
 				601128F3286305B500F92967 /* fs_birdmystic.png */,
+				EC2E42C42A7A6E52004A188C /* fs_fightingpit.bmp */,
+				EC2E42BE2A7A6358004A188C /* fs_psychologist.bmp */,
 				601128F1286305B500F92967 /* fs_bribery.png */,
 				601128EE286305B500F92967 /* fs_bridge.png */,
 				601128F2286305B500F92967 /* fs_cannon.png */,
@@ -199,10 +216,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				601129042863BE9300F92967 /* stb_write.h in Sources */,
-				601128E32863049000F92967 /* hellopng.c in Sources */,
 				601128E42863049000F92967 /* inflate.h in Sources */,
 				601128E52863049000F92967 /* inflate.c in Sources */,
 				601128E62863049000F92967 /* decode_png.h in Sources */,
+				EC2E42BD2A7A6344004A188C /* hellobmp.c in Sources */,
+				EC2E42C12A7A63D5004A188C /* decode_bmp.c in Sources */,
 				601128E72863049000F92967 /* decode_png.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

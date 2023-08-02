@@ -10,7 +10,7 @@ header to read pixels from a .bmp file.
 #define true 1
 #define false 0
 
-// #define WRITING_VERSION
+#define WRITING_VERSION
 
 // 50mb ->                      50...000
 #define APPLICATION_MEMORY_SIZE 50000000
@@ -160,7 +160,7 @@ Image read_bmp_from_disk(
     int64_t bytes_read = imgfile.size;
     
     
-    get_BMP_size(
+    get_BMP_width_height(
         /* const uint8_t * raw_input: */
             (uint8_t *)imgfile.contents,
         /* const uint64_t raw_input_size: */
@@ -171,7 +171,7 @@ Image read_bmp_from_disk(
             &return_value.height,
         /* uint32_t * out_good: */
             &return_value.good);
-
+    
     assert(return_value.width > 0);
     assert(return_value.height > 0);
     
@@ -212,9 +212,10 @@ int main(int argc, const char * argv[]) {
     printf("Starting hellobmp...\n");
     #endif
     
-    #define FILENAMES_CAP 1
+    #define FILENAMES_CAP 2
     char * filenames[FILENAMES_CAP] = {
-        (char *)"fs_bribery.bmp",
+        (char *)"fs_psychologist.bmp",
+        (char *)"fs_fightingpit.bmp"
     };
     
     Image decoded_images[FILENAMES_CAP];
@@ -230,10 +231,9 @@ int main(int argc, const char * argv[]) {
         printf(
             "finished decode_BMP for %s\n",
             filenames[filename_i]);
-        uint32_t i = 0;
         #endif
     }
-
+    
     #ifdef WRITING_VERSION
     char * out_filename = (char *)malloc(30);
     out_filename[0] = 'o';
@@ -256,7 +256,7 @@ int main(int argc, const char * argv[]) {
         assert(decoded_images[i].rgba_values_size >=
             decoded_images[i].width * decoded_images[i].height * 4);
         
-        unsigned char * encoded_bmp = (unsigned char *)memory_store;
+        char * encoded_bmp = (char *)memory_store;
         uint64_t encoded_bmp_size = 
             (decoded_images[i].width * decoded_images[i].height * 4) + 55;
         memory_store += encoded_bmp_size;
@@ -278,7 +278,7 @@ int main(int argc, const char * argv[]) {
             /* const char * filename: */
                 out_filename,
             /* unsigned char * to_write: */
-                encoded_bmp,
+                (unsigned char *)encoded_bmp,
             /* const uint64_t out_size: */
                 encoded_bmp_size);
     }

@@ -239,7 +239,7 @@ int main(int argc, const char * argv[])
     
     
     clock_t tic = clock();
-        
+    
     for (
         uint32_t filename_i = 0;
         filename_i < FILENAMES_CAP;
