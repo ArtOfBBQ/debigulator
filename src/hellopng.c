@@ -14,143 +14,128 @@ header to read pixels from a .png file.
 #include "stb_write.h"
 #endif
 
-#include <Foundation/foundation.h>
-
-// 990mb ->                      99.000...
-#define APPLICATION_MEMORY_SIZE  990000000
-uint8_t * memory_store = (uint8_t *)malloc(APPLICATION_MEMORY_SIZE);
-uint64_t memory_store_remaining = APPLICATION_MEMORY_SIZE;
-
-// 30mb ->                        30...000
-#define INFLATE_WORKING_MEMORY    30000000
-uint8_t * inflate_working_memory = (uint8_t *)malloc(INFLATE_WORKING_MEMORY);
-uint64_t inflate_working_memory_size = INFLATE_WORKING_MEMORY;
-
-typedef struct DecodedImage {
-    uint8_t * rgba_values;
-    uint32_t rgba_values_size;
-    uint32_t width;
-    uint32_t height;
-    uint32_t pixel_count; // rgba_values_size / 4
-    uint32_t good;
-} DecodedImage;
-
-// #define HELLOPNG_SILENCE
-
-static void align_memory()
-{
-    while ((uintptr_t)(void *)memory_store % 16 != 0) {
-        assert(memory_store_remaining >= 1);
-        memory_store += 1;
-        memory_store_remaining -= 1;
-    }
-    
-    while ((uintptr_t)(void *)inflate_working_memory % 16 != 0) {
-        assert(inflate_working_memory_size >= 1);
-        inflate_working_memory += 1;
-        inflate_working_memory_size -= 1;
-    }
-    
-    #ifndef INFLATE_IGNORE_ASSERTS
-    assert((uintptr_t)(void *)memory_store % 16 == 0);
-    assert((uintptr_t)(void *)inflate_working_memory % 16 == 0);
-    #endif
-}
-
 typedef struct FileBuffer {
     uint64_t size;
     char * contents;
 } FileBuffer;
 
-/*
-Get a file's size. Returns -1 if no such file
-*/
-static int64_t platform_get_filesize(
+static void filename_to_filepath(
+    const char * filename,
+    char * out_filename)
+{
+    assert(filename != NULL);
+    assert(filename[0] != '\0');
+    assert(out_filename != NULL);
+    
+    char * app_path = (char *)".";
+    
+    uint32_t i = 0;
+    while (app_path[i] != '\0') {
+        out_filename[i] = app_path[i];
+        i++;
+    }
+    out_filename[i++] = '/';
+    uint32_t j = 0;
+    while (filename[j] != '\0') {
+        out_filename[i++] = filename[j++];
+    }
+    out_filename[i++] = '\0';
+}
+
+static uint64_t platform_get_filesize(
     const char * filename)
 {
-    NSString * nsfilename = [NSString
-        stringWithUTF8String:filename];
+    char path_and_filename[1000];
+    filename_to_filepath(
+        /* filename: */ filename,
+        /* char * out_filename: */ path_and_filename);
     
-    NSURL * file_url = [[NSBundle mainBundle]
-        URLForResource:[nsfilename stringByDeletingPathExtension]
-        withExtension: [nsfilename pathExtension]];
-        
-    NSError * error_value = nil;
-    NSNumber * file_size;
+    FILE * file_handle = fopen(
+        path_and_filename,
+        "rb+");
     
-    [file_url
-        getResourceValue:&file_size
-        forKey:NSURLFileSizeKey
-        error:&error_value];
-    
-    if (error_value != nil)
-    {
-        NSLog(@" error => %@ ", [error_value userInfo]);
+    if (!file_handle) {
         assert(0);
         return -1;
     }
     
-    return file_size.intValue;
+    fseek(file_handle, 0L, SEEK_END);
+    int64_t fsize = ftell(file_handle);
+    
+    fclose(file_handle);
+    
+    return fsize;
 }
 
 static void platform_read_file(
     const char * filename,
-    FileBuffer * out_preallocatedbuffer)
+    char * out_preallocatedbuffer,
+    const uint64_t out_size)
 {
-    NSString * nsfilename = [NSString
-        stringWithUTF8String:filename];
+    char path_and_filename[1000];
+    filename_to_filepath(
+        /* filename: */ filename,
+        /* char * out_filename: */ path_and_filename);
     
-    NSURL * file_url = [[NSBundle mainBundle]
-        URLForResource:[nsfilename stringByDeletingPathExtension]
-        withExtension: [nsfilename pathExtension]];
+    FILE * file_handle = fopen(
+        path_and_filename,
+        "rb+");
+
+    assert(file_handle);
     
-    if (file_url == NULL) {
-        printf("file_url nil!\n");
-        assert(0);
-    }
+    fread(
+        /* ptr: */
+            out_preallocatedbuffer,
+        /* size of each element to be read: */
+            1,
+        /* nmemb (no of members) to read: */
+            out_size - 1,
+        /* stream: */
+            file_handle);
     
-    NSError * error = NULL; 
-    NSData * file_data =
-        [NSData
-            dataWithContentsOfURL:file_url
-            options:NSDataReadingUncached
-            error:&error];
+    fclose(file_handle);
     
-    if (error != NULL) {
-        printf("error while reading NSData from file_url\n");
-        assert(0);
-    }
-    
-    /*
-    NSString * debug_string = [
-        [NSString alloc]
-            initWithData:file_data
-            encoding:NSASCIIStringEncoding];
-    */
-    
-    if (file_data == nil) {
-        NSLog(
-            @"error => %@ ",
-            [error userInfo]);
-        assert(0);
-    }
-    
-    if (out_preallocatedbuffer->size >
-        [file_data length])
-    {
-        out_preallocatedbuffer->size = [file_data length];
-    }
-    
-    [file_data
-        getBytes:out_preallocatedbuffer->contents
-        range:NSMakeRange(0, out_preallocatedbuffer->size)];
-        // length:out_preallocatedbuffer->size];
+    out_preallocatedbuffer[out_size - 1] = '\0'; // for windows
 }
 
-DecodedImage read_png_from_disk(
+static void platform_write_file(
+    const char * filename,
+    unsigned char * to_write,
+    const uint64_t out_size)
+{
+    char path_and_filename[1000];
+    filename_to_filepath(
+        /* filename: */ filename,
+        /* char * out_filename: */ path_and_filename);
+    
+    FILE * file_handle = fopen(
+        path_and_filename,
+        "wb+");
+    
+    fwrite(
+        to_write,
+        out_size,
+        1,
+        file_handle);
+    
+    fclose(file_handle);
+}
+
+static uint8_t * dpng_working_memory = NULL;
+static uint32_t dpng_working_memory_size = 0;
+
+typedef struct Image {
+    uint8_t * rgba_values;
+    uint64_t rgba_values_size;
+    uint32_t width;
+    uint32_t height;
+    uint32_t good;
+} Image;
+
+Image read_png_from_disk(
     const char * filename)
 {
-    DecodedImage return_value;
+    Image return_value;
     return_value.good = 0;
     
     FileBuffer imgfile;
@@ -160,14 +145,16 @@ DecodedImage read_png_from_disk(
     platform_read_file(
         /* const char * filename: */
             filename,
-        /* FileBuffer * out_preallocatedbuffer: */
-            &imgfile);
+        /* char * out_preallocatedbuffer: */
+            imgfile.contents,
+        /* uint64_t out_size: */
+            imgfile.size);
     int64_t bytes_read = imgfile.size;
     
     get_PNG_width_height(
-        /* const uint8_t * compressed_input: */
+        /* const uint8_t * raw_input: */
             (uint8_t *)imgfile.contents,
-        /* const uint64_t compressed_input_size: */
+        /* const uint64_t raw_input_size: */
             bytes_read,
         /* uint32_t * out_width: */
             &return_value.width,
@@ -176,36 +163,34 @@ DecodedImage read_png_from_disk(
         /* uint32_t * out_good: */
             &return_value.good);
     
-    if (!return_value.good) {
-        return return_value;
-    }
+    assert(return_value.width > 0);
+    assert(return_value.height > 0);
     
-    align_memory();
-    return_value.rgba_values = (uint8_t *)memory_store;
-    return_value.pixel_count = return_value.width * return_value.height;
-    return_value.rgba_values_size = return_value.pixel_count * 4;
-    assert(memory_store_remaining >= return_value.rgba_values_size);
-    memory_store += return_value.rgba_values_size;
-    memory_store_remaining -= return_value.rgba_values_size;  
+    return_value.rgba_values_size =
+        return_value.width * return_value.height * 4;
+    return_value.rgba_values = (uint8_t *)malloc(return_value.rgba_values_size);
+    
+    assert(return_value.good);
+    return_value.good = 0;
     
     decode_PNG(
-        /* compressed_input: */
+        /* const uint8_t * compressed_input: */
             (uint8_t *)imgfile.contents,
-        /* compressed_input_size: */
+        /* const uint64_t compressed_input_size: */
             bytes_read,
-        /* out_rgba_values: */
+        /* const uint8_t * out_rgba_values: */
             return_value.rgba_values,
-        /* out_rgba_values_size: */
+        /* const uint64_t rgba_values_size: */
             return_value.rgba_values_size,
-        /* inflate_working_memory: */
-            inflate_working_memory,
-        /* inflate_working_memory_size: */
-            inflate_working_memory_size,
+        /* const uint8_t * dpng_working_memory: */
+            dpng_working_memory,
+        /* const uint64_t dpng_working_memory_size: */
+            dpng_working_memory_size,
         /* out_good: */
             &return_value.good);
     
-    // free(imgfile.contents);
-        
+    assert(return_value.good);
+    
     return return_value;
 }
 
@@ -216,27 +201,17 @@ int main(int argc, const char * argv[])
         "Starting hellopng...\n");
     #endif
     
-    #define FILENAMES_CAP 15
+    //                         50...000
+    dpng_working_memory_size = 50000000;
+    dpng_working_memory = (uint8_t *)malloc(dpng_working_memory_size);
+    
+    #define FILENAMES_CAP 14
     char * filenames[FILENAMES_CAP] = {
-        (char *)"fs_angrymob.png",
-        (char *)"backgrounddetailed1.png",
-        (char *)"font.png",
-        (char *)"fs_birdmystic.png",
-        (char *)"fs_bribery.png",
-        (char *)"phoebus.png",
-        (char *)"fs_bridge.png",
-        (char *)"fs_cannon.png",
-        (char *)"gimp_test.png",
-        (char *)"purpleback.png",
-        (char *)"receiver.png",
-        (char *)"structuredart1.png",
-        (char *)"structuredart1.png",
-        (char *)"structuredart2.png",
-        (char *)"structuredart3.png"
+        (char *)"extraturns.png",
+        (char *)"immunetomustsurvive.png",
     };
         
-    DecodedImage decoded_images[FILENAMES_CAP];
-    
+    Image decoded_images[FILENAMES_CAP];
     
     clock_t tic = clock();
     
@@ -245,8 +220,14 @@ int main(int argc, const char * argv[])
         filename_i < FILENAMES_CAP;
         filename_i++)
     {
-        decoded_images[filename_i] =
-            read_png_from_disk(filenames[filename_i]);
+        if (
+            filenames[filename_i] == NULL ||
+            filenames[filename_i][0] == '\0')
+        {
+            break;
+        }
+        
+        decoded_images[filename_i] = read_png_from_disk(filenames[filename_i]);
         
         #ifndef HELLOPNG_SILENCE 
         printf(
@@ -270,6 +251,12 @@ int main(int argc, const char * argv[])
     out_filename[3] = '\0';
     
     for (uint32_t i = 0; i < FILENAMES_CAP; i++) {
+        if (
+            filenames[i] == NULL ||
+            filenames[i][0] == '\0')
+        {
+            break;
+        }
         uint32_t char_i = 3;
         while (filenames[i][char_i - 3] != '\0') {
             out_filename[char_i] = filenames[i][char_i - 3];
@@ -309,4 +296,3 @@ int main(int argc, const char * argv[])
     
     return 0;
 }
-

@@ -2,7 +2,7 @@
 #define INFLATE_H
 
 #define INFLATE_SILENCE
-#define INFLATE_IGNORE_ASSERTS
+// #define INFLATE_IGNORE_ASSERTS
 
 /*
 This API offers only 1 function: inflate()

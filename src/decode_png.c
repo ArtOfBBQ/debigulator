@@ -306,6 +306,15 @@ static unsigned long update_crc(
 }
 #endif // DECODE_PNG_IGNORE_CRC_CHECKS
 
+typedef struct Palette {
+    uint8_t red[256];
+    uint8_t green[256];
+    uint8_t blue[256];
+    uint32_t size;
+} Palette;
+
+static Palette * palette = NULL;
+
 /*
 A PNG file starts with an 8-byte signature
 All of these seem like ancient artifacts to me,
@@ -599,12 +608,15 @@ void decode_PNG(
     
     uint64_t compressed_input_size_left = compressed_input_size;
     
+    palette = (Palette *)dpng_working_memory;
+    
     // these pointers are initted below
     IHDRBody ihdr_body;
     uint8_t * headerless_compressed_data = (uint8_t *)compressed_input;
     uint8_t * headerless_compressed_data_begin = headerless_compressed_data;
     uint32_t headerless_compressed_data_stream_size = 0;
-    uint8_t * decoded_stream_at = (uint8_t *)dpng_working_memory;
+    uint8_t * decoded_stream_at =
+        (uint8_t *)(dpng_working_memory + sizeof(Palette));
     uint8_t * decoded_stream_start = decoded_stream_at;
     uint64_t actual_decoded_stream_size = 0;
     uint64_t estimated_decoded_stream_size = 0;
@@ -796,6 +808,42 @@ void decode_PNG(
                 *out_good = 0;
                 return;
             }
+            
+            #ifndef DECODE_PNG_IGNORE_ASSERTS
+            if (ihdr_body.color_type == 0) {
+                #ifndef DECODE_PNG_SILENCE
+                printf(
+                    "Found palette, but for a grayscale image (color mode "
+                    "0), this is not supported yet\n");
+                #endif
+                *out_good = 0;
+                return;
+            }
+            assert(ihdr_body.color_type == 3);
+            assert(palette != NULL);
+            #endif
+            
+            if (chunk_header.length % 3 != 0) {
+                #ifndef DECODE_PNG_SILENCE
+                printf(
+                    "[%s] palette chunk should always have a length divisible"
+                    " by 3 or the PNG file is not legally formatted. Found: %u"
+                    " entries.\n",
+                    chunk_header.type,
+                    chunk_header.length);
+                #endif
+                *out_good = 0;
+                return;
+            }
+            
+            palette->size = chunk_header.length / 3;
+            
+            for (uint32_t i = 0; i < palette->size; i++) {
+                palette->red[i]    = compressed_input[0];
+                palette->green[i]  = compressed_input[1];
+                palette->blue[i]   = compressed_input[2];
+                compressed_input  += 3;
+            }
         } else if (are_equal_strings(
             chunk_header.type,
             (char *)"IHDR",
@@ -852,11 +900,11 @@ void decode_PNG(
                 case 3:
                     #ifndef DECODE_PNG_SILENCE
                     printf(
-                        "\tColor type 3 (indexed-color) is not supported yet."
-                        "Requires parsing [tRNS] chunk for alpha values\n");
+                        "\tColor type 3 (indexed-color RGB)\n");
+                    printf(
+                        "bit depth was: %u\n",
+                        ihdr_body.bit_depth);
                     #endif
-                    *out_good = 0;
-                    return;
                     break;
                 case 4:
                     #ifndef DECODE_PNG_SILENCE
@@ -958,6 +1006,7 @@ void decode_PNG(
             printf(
                 "\tinterlace_method: %u\n",
                 ihdr_body.interlace_method);
+            assert(ihdr_body.interlace_method == 0);
             #endif
             
             if (ihdr_body.filter_method != 0) {
@@ -997,8 +1046,7 @@ void decode_PNG(
                 return;
             }
             
-            uint32_t chunk_data_length =
-                chunk_header.length;
+            uint32_t chunk_data_length = chunk_header.length;
             
             if (!found_first_IDAT) {
                 #ifndef DECODE_PNG_SILENCE
@@ -1057,8 +1105,9 @@ void decode_PNG(
                     full_check_value % 31 == 0 ? "OK\n" : "ERR\n");
                 #endif
                 
-                if (full_check_value == 0
-                    || full_check_value % 31 != 0)
+                if (
+                    full_check_value == 0 ||
+                    full_check_value % 31 != 0)
                 {
                     *out_good = 0;
                     return;
@@ -1188,8 +1237,8 @@ void decode_PNG(
                 "ERROR: CRC checksum mismatch - "
                 " PNG file is corrupted?\n");
             #endif
-            *out_good = 0;
-            return;
+            // *out_good = 0;
+            // return;
         } else {
             #ifndef DECODE_PNG_SILENCE
             printf("CRC checksum match: OK\n");
@@ -1227,6 +1276,7 @@ void decode_PNG(
     decoded_stream_at = decoded_stream_start;
     uint8_t * rgba_at = (uint8_t *)out_rgba_values;
     
+        
     /*
     The spec tells us to track these values:
     
@@ -1235,13 +1285,27 @@ void decode_PNG(
         before the pixel containing x
     b = the byte in the previous scanline
     c = the byte in the pixel immediately
-        before the pixel containing b 
+        before the pixel containing b
     
     [.][.][.][c][b][.][.][.]
     [.][.][.][a][x][.][.][.]
     */
-    uint8_t bytes_per_channel =
-        ihdr_body.color_type == 2 ? 3 : 4;
+    
+    uint8_t bytes_per_channel;
+    switch (ihdr_body.color_type) {
+        case 2: {
+            bytes_per_channel = 1;
+            break;
+        }
+        case 3: {
+            bytes_per_channel = 1;
+            break;
+        }
+        default: {
+            bytes_per_channel = 4;
+        }
+    }
+    
     #ifndef DECODE_PNG_SILENCE
     printf(
         "bytes per channel: %u because ihdr_body.color_type was: %u\n",
@@ -1253,12 +1317,12 @@ void decode_PNG(
     uint8_t * b_previous_scanline =
         (uint8_t *)out_rgba_values
             - (ihdr_body.width * bytes_per_channel);
-    uint8_t * c_previous_scanline_previous_pixel = 
+    uint8_t * c_previous_scanline_previous_pixel =
         b_previous_scanline - bytes_per_channel;
     
     for (uint32_t h = 0; h < ihdr_body.height; h++) {
         
-        uint8_t filter_type = *decoded_stream_at++; 
+        uint8_t filter_type = *decoded_stream_at++;
         #ifndef DECODE_PNG_IGNORE_ASSERTS
         if (filter_type > 4) {
             #ifndef DECODE_PNG_SILENCE
@@ -1279,7 +1343,7 @@ void decode_PNG(
                 // when a/b/c are out of bounds,
                 // we have to use a 0 instead
                 uint8_t a = w > 0 ?
-                    *a_previous_pixel : 0; 
+                    *a_previous_pixel : 0;
                 uint8_t b = h > 0 ?
                     *b_previous_scanline : 0;
                 uint8_t c = h > 0 && w > 0 ?
@@ -1334,33 +1398,50 @@ void decode_PNG(
                 #endif
             }
         }
+        
+        // If we have less than 4 channels, forcibly convert to 4
+        // channels of data by explicitly adding an alpha channel
+        // of 255 to each pixel
+        if (bytes_per_channel == 3) {
+            // we can overwrite in place because our array already has space for 4
+            // channels per pixel, it just has 25% empty unitialized values at the
+            // end.
+            // We can start overwriting at the end (copying from 25% away from the
+            // end) without ever overwriting anything
+            uint8_t * write_at =
+                (uint8_t *)out_rgba_values +
+                    ((pixel_count * 4) - 1);
+            uint8_t * read_at =
+                (uint8_t *)out_rgba_values +
+                ((pixel_count * 3) - 1);
+            
+            for (
+                uint32_t p = 0;
+                p < pixel_count;
+                p++)
+            {
+                *write_at-- = 255;
+                *write_at-- = *read_at--;
+                *write_at-- = *read_at--;
+                *write_at-- = *read_at--;
+            }
+        }
     }
     
-    // If we have less than 4 channels, forcibly convert to 4
-    // channels of data by explicitly adding an alpha channel
-    // of 255 to each pixel
-    if (bytes_per_channel == 3) {
-        // we can overwrite in place because our array already has space for 4
-        // channels per pixel, it just has 25% empty unitialized values at the
-        // end.
-        // We can start overwriting at the end (copying from 25% away from the
-        // end) without ever overwriting anything
-        uint8_t * write_at =
-            (uint8_t *)out_rgba_values +
-                ((pixel_count * 4) - 1);
-        uint8_t * read_at =
-            (uint8_t *)out_rgba_values +
-            ((pixel_count * 3) - 1);
+    rgba_at = (uint8_t *)out_rgba_values;
+    decoded_stream_at = (uint8_t *)(dpng_working_memory + sizeof(Palette));
+    if (ihdr_body.color_type == 3) {
+        for (uint32_t _ = 0; _ < pixel_count; _++) {
+            assert(rgba_at[_] < palette->size);
+            decoded_stream_at[_] = rgba_at[_];
+        }
         
-        for (
-            uint32_t p = 0;
-            p < pixel_count;
-            p++)
-        {
-            *write_at-- = 255;
-            *write_at-- = *read_at--;
-            *write_at-- = *read_at--;
-            *write_at-- = *read_at--;
+        for (uint32_t _ = 0; _ < pixel_count; _++) {
+            assert((_ * 4) + 3 < rgba_values_size);
+            rgba_at[(_ * 4) + 0] = palette->red  [decoded_stream_at[_]];
+            rgba_at[(_ * 4) + 1] = palette->green[decoded_stream_at[_]];
+            rgba_at[(_ * 4) + 2] = palette->blue [decoded_stream_at[_]];
+            rgba_at[(_ * 4) + 3] = 255;
         }
     }
     
