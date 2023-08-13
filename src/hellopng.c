@@ -182,10 +182,6 @@ Image read_png_from_disk(
             return_value.rgba_values,
         /* const uint64_t rgba_values_size: */
             return_value.rgba_values_size,
-        /* const uint8_t * dpng_working_memory: */
-            dpng_working_memory,
-        /* const uint64_t dpng_working_memory_size: */
-            dpng_working_memory_size,
         /* out_good: */
             &return_value.good);
     
@@ -201,13 +197,11 @@ int main(int argc, const char * argv[])
         "Starting hellopng...\n");
     #endif
     
-    //                         50...000
-    dpng_working_memory_size = 50000000;
-    dpng_working_memory = (uint8_t *)malloc(dpng_working_memory_size);
+    init_PNG_decoder(/* void *(*malloc_funcptr)(size_t): */ malloc);
     
     #define FILENAMES_CAP 14
     char * filenames[FILENAMES_CAP] = {
-        (char *)"extraturns.png",
+        (char *)"backgrounddetailed1.png",
         (char *)"immunetomustsurvive.png",
     };
         

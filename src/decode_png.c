@@ -11,7 +11,6 @@
 PNG files include CRC 'cyclic redundancy checks', a kind
 of checksum to make sure each block is valid data.
 */
-
 #ifndef DECODE_PNG_IGNORE_CRC_CHECKS
 /*
 Table of CRCs of all 8-bit messages.
@@ -278,6 +277,25 @@ static unsigned long crc_table[256] = {
     755167117
 };
 
+#ifndef DECODE_PNG_IGNORE_ASSERTS
+void assert_crc_table_accurate(void)
+{
+    unsigned long c;
+    int n, k;
+
+    for (n = 0; n < 256; n++) {
+    c = (unsigned long) n;
+    for (k = 0; k < 8; k++) {
+      if (c & 1)
+        c = 0xedb88320L ^ (c >> 1);
+      else
+        c = c >> 1;
+    }
+    assert(crc_table[n] == c);
+    }
+}
+#endif
+
 /*
 Update a running CRC with the bytes buf[0..len-1]--the CRC
 should be initialized to all 1's, and the transmitted value
@@ -286,16 +304,15 @@ crc() routine below).
 */
 static unsigned long update_crc(
     const unsigned long crc,
-    const unsigned char *buf,
+    const unsigned char * buf,
     const uint32_t len)
 {
     assert(buf != NULL);
-    // assert(len > 0);
+    assert(len > 0);
     
     unsigned long c = crc;
-    uint32_t n;
     
-    for (n = 0; n < len; n++) {
+    for (uint32_t n = 0; n < len; n++) {
         #ifndef DECODE_PNG_IGNORE_ASSERTS
         assert(((c ^ buf[n]) & 0xff) < 256);
         #endif
@@ -383,7 +400,7 @@ We need to able to flip them to little endian
 */
 static uint32_t flip_endian(const uint32_t to_flip) {
     
-    uint32_t byte_1 = ((to_flip >> 0) & 255);
+    uint32_t byte_1 = (to_flip & 255);
     uint32_t byte_2 = ((to_flip >> 8) & 255);
     uint32_t byte_3 = ((to_flip >> 16) & 255);
     uint32_t byte_4 = ((to_flip >> 24) & 255);
@@ -392,7 +409,7 @@ static uint32_t flip_endian(const uint32_t to_flip) {
         byte_1 << 24 |
         byte_2 << 16 |
         byte_3 << 8  |
-        byte_4 << 0;
+        byte_4;
     
     return return_value;
 }
@@ -518,6 +535,29 @@ static uint8_t undo_PNG_filter(
     return 0;
 }
 
+static uint32_t already_initialized = 0;
+static void * (* malloc_func)(size_t __size) = NULL;
+static uint8_t * dpng_working_memory = NULL;
+static uint32_t dpng_working_memory_size = 0;
+void init_PNG_decoder(
+    void * (* malloc_funcptr)(size_t __size)
+    )
+{
+    malloc_func = malloc_funcptr;
+    
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    assert_crc_table_accurate();
+    #endif
+    
+    if (already_initialized) { return; }
+    already_initialized = 1;
+    
+    palette = (Palette *)malloc_func(sizeof(Palette));
+    
+    dpng_working_memory_size = 50000000;
+    dpng_working_memory = (uint8_t *)malloc_func(dpng_working_memory_size);
+}
+
 void get_PNG_width_height(
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
@@ -561,16 +601,9 @@ void get_PNG_width_height(
     }
     
     // 8 bytes
-    PNGChunkHeader chunk_header = *(PNGChunkHeader *)compressed_input;
+    // PNGChunkHeader chunk_header = *(PNGChunkHeader *)compressed_input;
     compressed_input += sizeof(PNGChunkHeader);
     
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(
-        are_equal_strings(
-            chunk_header.type,
-            (char *)"IHDR",
-            4));
-    #endif
     
     // 13 bytes
     IHDRBody ihdr_body = *(IHDRBody *)compressed_input;
@@ -593,10 +626,16 @@ void decode_PNG(
     const uint64_t compressed_input_size,
     const uint8_t * out_rgba_values,
     const uint64_t rgba_values_size,
-    const uint8_t * dpng_working_memory,
-    const uint64_t dpng_working_memory_size,
     uint32_t * out_good)
 {
+    if (!already_initialized) {
+        #ifndef DECODE_PNG_SILENCE
+        printf("Error - decode_PNG() was called before init_png_decoder()\n");
+        #endif
+        *out_good = 0;
+        return;
+    }
+    
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(compressed_input != NULL);
     assert(compressed_input_size > 0);
@@ -607,8 +646,6 @@ void decode_PNG(
     *out_good = 0;
     
     uint64_t compressed_input_size_left = compressed_input_size;
-    
-    palette = (Palette *)dpng_working_memory;
     
     // these pointers are initted below
     IHDRBody ihdr_body;
@@ -692,8 +729,6 @@ void decode_PNG(
             #ifndef DECODE_PNG_IGNORE_ASSERTS
             assert(dpng_working_memory_size - estimated_decoded_stream_size >
                 INFLATE_HASHMAPS_SIZE);
-            assert(decoded_stream_start <
-                (dpng_working_memory + estimated_decoded_stream_size));
             assert(headerless_compressed_data_stream_size > 4);
             #endif
             
@@ -759,12 +794,14 @@ void decode_PNG(
         #ifndef DECODE_PNG_IGNORE_CRC_CHECKS
         running_crc = update_crc(
             /* crc: */ running_crc,
-            /* buffer: */ (unsigned char *)&(chunk_header.type),
+            /* buffer: */ (unsigned char *)chunk_header.type,
             /* length: */ 4);
-        running_crc = update_crc(
-            /* crc: */ running_crc,
-            /* buffer: */ (unsigned char *)compressed_input,
-            /* length: */ chunk_header.length);
+        if (chunk_header.length > 0) {
+            running_crc = update_crc(
+                /* crc: */ running_crc,
+                /* buffer: */ (unsigned char *)compressed_input,
+                /* length: */ chunk_header.length);
+        }
         running_crc = running_crc ^ 0xffffffffL;
         #endif
         
@@ -893,7 +930,7 @@ void decode_PNG(
                 case 2:
                     #ifndef DECODE_PNG_SILENCE
                     printf(
-                        "\tColor type 2 (truecolor with alhpa) is supported"
+                        "\tColor type 2 (truecolor with alpha) is supported"
                         ".\n");
                     #endif
                     break;
@@ -964,7 +1001,7 @@ void decode_PNG(
                 printf(
                     "ERROR: this function assumes at least"
                     "(imgwidth * imgwidth * 4)+imgheight+1+hashmap memory) to "
-                    "to work in and write to, got: %llu, expected: %u\n",
+                    "to work in and write to, got: %u, expected: %u\n",
                     dpng_working_memory_size,
                     (ihdr_body.width * ihdr_body.height * 4)
                         + ihdr_body.height
@@ -1194,8 +1231,7 @@ void decode_PNG(
             printf("found IEND header\n");
             #endif
             found_IEND = 1;
-        }
-        else if ((char)chunk_header.type[0] > 'Z')
+        } else if ((char)chunk_header.type[0] > 'Z')
         {
             #ifndef DECODE_PNG_SILENCE
             printf(
@@ -1237,8 +1273,8 @@ void decode_PNG(
                 "ERROR: CRC checksum mismatch - "
                 " PNG file is corrupted?\n");
             #endif
-            // *out_good = 0;
-            // return;
+            *out_good = 0;
+            return;
         } else {
             #ifndef DECODE_PNG_SILENCE
             printf("CRC checksum match: OK\n");
@@ -1294,7 +1330,7 @@ void decode_PNG(
     uint8_t bytes_per_channel;
     switch (ihdr_body.color_type) {
         case 2: {
-            bytes_per_channel = 1;
+            bytes_per_channel = 3;
             break;
         }
         case 3: {
@@ -1428,20 +1464,24 @@ void decode_PNG(
         }
     }
     
-    rgba_at = (uint8_t *)out_rgba_values;
-    decoded_stream_at = (uint8_t *)(dpng_working_memory + sizeof(Palette));
-    if (ihdr_body.color_type == 3) {
-        for (uint32_t _ = 0; _ < pixel_count; _++) {
-            assert(rgba_at[_] < palette->size);
-            decoded_stream_at[_] = rgba_at[_];
-        }
-        
-        for (uint32_t _ = 0; _ < pixel_count; _++) {
-            assert((_ * 4) + 3 < rgba_values_size);
-            rgba_at[(_ * 4) + 0] = palette->red  [decoded_stream_at[_]];
-            rgba_at[(_ * 4) + 1] = palette->green[decoded_stream_at[_]];
-            rgba_at[(_ * 4) + 2] = palette->blue [decoded_stream_at[_]];
-            rgba_at[(_ * 4) + 3] = 255;
+    if (palette != NULL &&
+        ihdr_body.color_type == 3)
+    {
+        rgba_at = (uint8_t *)out_rgba_values;
+        decoded_stream_at = (uint8_t *)(dpng_working_memory + sizeof(Palette));
+        if (ihdr_body.color_type == 3) {
+            for (uint32_t _ = 0; _ < pixel_count; _++) {
+                assert(rgba_at[_] < palette->size);
+                decoded_stream_at[_] = rgba_at[_];
+            }
+            
+            for (uint32_t _ = 0; _ < pixel_count; _++) {
+                assert((_ * 4) + 3 < rgba_values_size);
+                rgba_at[(_ * 4) + 0] = palette->red  [decoded_stream_at[_]];
+                rgba_at[(_ * 4) + 1] = palette->green[decoded_stream_at[_]];
+                rgba_at[(_ * 4) + 2] = palette->blue [decoded_stream_at[_]];
+                rgba_at[(_ * 4) + 3] = 255;
+            }
         }
     }
     

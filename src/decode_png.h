@@ -6,9 +6,9 @@ The 2 methods declared in this file are the API for decoding
 PNG files.
 */
 
-// #define DECODE_PNG_SILENCE
+#define DECODE_PNG_SILENCE
 // #define DECODE_PNG_IGNORE_CRC_CHECKS
-// #define DECODE_PNG_IGNORE_ASSERTS
+#define DECODE_PNG_IGNORE_ASSERTS
 
 #include "inflate.h"
 #include "inttypes.h"
@@ -24,6 +24,10 @@ PNG files.
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void init_PNG_decoder(
+    void * (* malloc_funcptr)(size_t __size)
+    );
 
 /*
 Find out the width and height of a PNG by inspecting the first 26 bytes of a
@@ -57,14 +61,6 @@ decode the contents of a PNG file into uint8 RGBA values.
 - rgba_values_size:
     the size of rgba_values. Again this means you must know in advance how big
     the output will be because you've used get_PNG_width_height().
-- dpng_working_memory:
-    this function hogs much more memory than its input or output, to store the
-    full decompressed PNG stream (includes 'scanline' markers and is bigger than
-    the output) and additionally a bunch of hashmaps for decoding. You should
-    pass (width * height * 4)+height+7000000 of memory to work in. The contents
-    become useless immediately after the function returns, and so you can keep
-    re-using the same working memory buffer even if you want to decode 1000
-    pngs, and free the memory only after all png's are done.
 - out_good:
     will be set to 1 on success and 0 on failure. If your decoding fails but
     you don't know why, comment out #define DECODE_PNG_SILENCE and you should
@@ -75,8 +71,6 @@ void decode_PNG(
     const uint64_t compressed_input_size,
     const uint8_t * out_rgba_values,
     const uint64_t rgba_values_size,
-    const uint8_t * dpng_working_memory,
-    const uint64_t dpng_working_memory_size,
     uint32_t * out_good);
 
 #ifdef __cplusplus

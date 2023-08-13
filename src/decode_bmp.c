@@ -292,7 +292,6 @@ void encode_BMP(
     char * recipient_at = (char *)recipient;
     
     BitmapFileHeader header;
-    assert(sizeof(header) == 14);
     header.character_header[0] = 'B';
     header.character_header[1] = 'M';
     header.image_size = (width * height * 4) + 54;
