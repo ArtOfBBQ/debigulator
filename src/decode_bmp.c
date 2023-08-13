@@ -242,23 +242,25 @@ void decode_BMP(
     // note: we want RGBA, but bitmaps are stored in BGRA
     for (
         uint32_t x = 0;
-        x < dib_header.width;
+        x < (uint32_t)dib_header.width;
         x++)
     {
         for (
             uint32_t y = 0;
-            y < dib_header.height;
+            y < (uint32_t)dib_header.height;
             y++)
         {
             uint32_t target_i =
-                (y * 4 * dib_header.width) +
+                (y * 4 * (uint32_t)dib_header.width) +
                 (x * 4);
             uint32_t source_i =
-                (y * 4 * dib_header.width) + (x * 4);
+                (y * 4 * (uint32_t)dib_header.width) + (x * 4);
             
             if (read_bottom_first) {
                 target_i =
-                    ((dib_header.height - y - 1) * 4 * dib_header.width) +
+                    (
+                        ((uint32_t)dib_header.height - y - 1) * 4 *
+                        (uint32_t)dib_header.width) +
                     ((x) * 4);
             }
             

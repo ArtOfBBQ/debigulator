@@ -927,8 +927,7 @@ void inflate(
                 
                 #ifndef INFLATE_IGNORE_ASSERTS
                 assert(
-                    (recipient_at - recipient)
-                        <= recipient_size);
+                    (recipient_at - recipient) <= (uint32_t)recipient_size);
                 #endif
                 data_stream.data++;
                 data_stream.size_left--;
@@ -1807,8 +1806,8 @@ void inflate(
                         #ifndef INFLATE_IGNORE_ASSERTS
                         assert(*final_recipient_size <= recipient_size);
                         assert(
-                            (recipient_at - recipient)
-                                < recipient_size);
+                            (recipient_at - recipient) <
+                                (uint32_t)recipient_size);
                         #endif
                         back_dist_bytes++;
                     }
