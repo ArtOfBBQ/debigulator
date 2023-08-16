@@ -11,7 +11,7 @@ PNG files.
 #define DECODE_PNG_IGNORE_ASSERTS
 
 #include "inflate.h"
-#include "inttypes.h"
+#include <stddef.h>
 
 #ifndef DECODE_PNG_SILENCE
 #include "stdio.h"

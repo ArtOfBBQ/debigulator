@@ -284,14 +284,14 @@ void assert_crc_table_accurate(void)
     int n, k;
 
     for (n = 0; n < 256; n++) {
-    c = (unsigned long) n;
-    for (k = 0; k < 8; k++) {
-      if (c & 1)
-        c = 0xedb88320L ^ (c >> 1);
-      else
-        c = c >> 1;
-    }
-    assert(crc_table[n] == c);
+        c = (unsigned long) n;
+        for (k = 0; k < 8; k++) {
+            if (c & 1)
+                c = 0xedb88320L ^ (c >> 1);
+            else
+                c = c >> 1;
+        }
+        assert(crc_table[n] == c);
     }
 }
 #endif

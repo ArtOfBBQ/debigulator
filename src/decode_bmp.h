@@ -5,7 +5,7 @@ The 2 methods declared in this file are my API for decoding BMP files.
 #ifndef DECODE_BMP_H
 #define DECODE_BMP_H
 
-#include "stdint.h"
+#include <stdint.h>
 
 #ifndef DECODE_BMP_SILENCE
 #include "stdio.h"
@@ -19,7 +19,6 @@ The 2 methods declared in this file are my API for decoding BMP files.
 extern "C" {
 #endif
 
-#include "stdlib.h"
 
 void get_BMP_width_height(
     const uint8_t * raw_input,
