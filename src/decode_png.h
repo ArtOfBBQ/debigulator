@@ -25,11 +25,24 @@ PNG files.
 extern "C" {
 #endif
 
+/*
+This function must be run first, or you can't use anything else in this
+header file.
+
+Pass the malloc() function from <stdlib.h> or any other allocation function
+with the same signature to give the PNG decoder memory to work with.
+
+** Example:
+** #include <stdlib.h>
+** 
+** init_PNG_decoder(malloc);
+*/
 void init_PNG_decoder(
-    void * (* malloc_funcptr)(size_t __size)
-    );
+    void * (* malloc_funcptr)(size_t __size));
 
 /*
+You must run init_PNG_decode() first or this won't work.
+
 Find out the width and height of a PNG by inspecting the first 26 bytes of a
 file.
 
@@ -39,8 +52,7 @@ memory you need to store the whole PNG. decode_PNG() always returns 4 channels
 exactly enough memory.
 
 Make sure to check if good is set to 1 (success) or 0 (parsing error). If the
-first 26 bytes fail, you can immediately avoid all the extra work of allocating
-memory for the image and parsing the entire file.
+first 26 bytes fail, you can immediately abort. 
 */
 void get_PNG_width_height(
     const uint8_t * compressed_input,
@@ -50,11 +62,13 @@ void get_PNG_width_height(
     uint32_t * out_good);
 
 /*
-decode the contents of a PNG file into uint8 RGBA values.
+You must run init_PNG_decode() first or this won't work.
+
+Decode the contents of a PNG file into uint8 RGBA values.
 
 - compressed_input:
-    the entire contents of your file, including headers etc. this data will be
-    treated as working memory and overwritten in the process!
+    the entire contents of your PNG file, including headers etc. this data
+    will be treated as working memory and overwritten in the process!
 - out_rgba_values:
     the buffer to copy into, that you already allocated to the correct size.
     Use get_PNG_width_height() above to get the size (width * height * 4).
@@ -78,3 +92,4 @@ void decode_PNG(
 #endif
 
 #endif // DECODE_PNG_H
+

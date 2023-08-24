@@ -1487,3 +1487,4 @@ void decode_PNG(
     
     *out_good = 1;
 }
+
