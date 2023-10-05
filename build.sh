@@ -1,5 +1,5 @@
-APP_NAME="hellopng"
-ADDITIONAL_SOURCES="src/decode_png.c src/inflate.c"
+APP_NAME="hellogz"
+ADDITIONAL_SOURCES="src/decode_gz.c src/inflate.c"
 
 echo "Building $APP_NAME... (this shell script must be run from the app's root directory"
 
@@ -13,12 +13,13 @@ echo "copying resources..."
 # cp resources/$INPUT_FILE.$INPUT_EXTENSION build/$INPUT_FILE.$INPUT_EXTENSION
 cp resources/*.bmp build
 cp resources/*.png build
+cp resources/*.gz build
 
 echo "Compiling $APP_NAME..."
 gcc -fsanitize=address -g -o0 -x c -std="c99" -Wno-padded -Wno-gnu-empty-initializer -o build/$APP_NAME src/$APP_NAME.c $ADDITIONAL_SOURCES
 
 # echo "Running $APP_NAME"
-(cd build && ./$APP_NAME)
+(cd build && ./$APP_NAME gzipsample.gz)
 
 # debugging with gdb
 # sudo chmod +x build/$APP_NAME

@@ -1,47 +1,66 @@
 #include "decode_gz.h"
 
-#define true 1
-#define false 0
+static void * (* malloc_func)(size_t __size) = NULL;
 
-#ifndef DECODE_GZ_SILENCE
+void init_decode_gz(
+    void * (* malloc_funcptr)(size_t __size))
+{
+    malloc_func = malloc_funcptr;
+}
+
+#ifndef true
+#define true 1
+#endif
+
+#ifndef false
+#define false 0
+#endif
+
+static char * consume_bytes(
+    uint8_t ** buffer,
+    uint32_t * buffer_size,
+    uint32_t amount_to_consume)
+{
+    #ifndef DECODE_GZ_IGNORE_ASSERTS
+    assert(**buffer_size >= amount_to_consume);
+    #endif
+    
+    char * return_value = (char *)*buffer;
+    *buffer += amount_to_consume;
+    *buffer_size -= amount_to_consume;
+    
+    return return_value;
+}
+#define consume_struct(type, doubleptr_buffer, ptr_buffer_size) (type *)consume_bytes(doubleptr_buffer, ptr_buffer_size, sizeof(type))
+
 static char * consume_till_terminate(
-    DataStream * from,
+    uint8_t ** from,
+    uint32_t * from_size,
     const uint32_t max_size,
     const char terminator)
 {
     #ifndef DECODE_GZ_IGNORE_ASSERTS
-    assert(max_size <= from->size_left);
+    assert(max_size <= *from_size);
     #endif
     
     uint32_t string_size = 0;
-    char * seeker = (char *)from->data;
     while (
-        *seeker != terminator 
+        (*from)[string_size] != terminator
         && string_size < max_size)
     {
         string_size++;
-        seeker++;
     }
     
     #ifndef DECODE_GZ_IGNORE_ASSERTS
     assert(string_size > 0);
     #endif
     
-    char * return_value = (char *)malloc(
-        string_size * sizeof(char));
-    
-    for (uint32_t i = 0; i <= string_size; i++) {
-        #ifndef DECODE_GZ_IGNORE_ASSERTS
-        assert(from->size_left > 0);
-        #endif
-        return_value[i] = ((char *)from->data)[0];
-        from->data++;
-        from->size_left--;
-    }
+    char * return_value = (char *)*from;
+    *from += (string_size + 1);
+    *from_size -= (string_size + 1);
     
     return return_value;
 }
-#endif
 
 #pragma pack(push, 1)
 /*
@@ -74,24 +93,27 @@ typedef struct GZFooter {
 
 DecodedData * decode_gz(
     uint8_t * compressed_bytes,
-    uint32_t compressed_bytes_size)
+    uint32_t compressed_bytes_left)
 {
+    if (malloc_func == NULL) {
+        #ifndef DECODE_GZ_SILENCE
+        printf(
+            "%s\n",
+            "please run init_decode_gz() and pass malloc before running "
+            "decode_gz. Exiting...");
+        #endif
+        return NULL;
+    }
     DecodedData * return_value =
-        (DecodedData *)malloc(sizeof(DecodedData));
+        (DecodedData *)malloc_func(sizeof(DecodedData));
     
     if (compressed_bytes == NULL) {
         return_value->good = false;
         return return_value;
     }
     
-    DataStream * data_stream =
-        (DataStream *)malloc(sizeof(DataStream));
-    
-    data_stream->data = compressed_bytes;
-    data_stream->size_left = compressed_bytes_size;
-    
     // The first chunk must be IHDR
-    if (data_stream->size_left < sizeof(GZHeader)) {
+    if (compressed_bytes_left < sizeof(GZHeader)) {
         #ifndef DECODE_GZ_SILENCE
         printf("data stream too tiny to even contain a header\n");
         #endif
@@ -101,8 +123,9 @@ DecodedData * decode_gz(
     
     GZHeader * gzip_header = consume_struct(
         /* type  : */ GZHeader,
-        /* buffer: */ data_stream);
-   
+        /* buffer: */ &compressed_bytes,
+        /* buffer_size: */ &compressed_bytes_left);
+    
     #ifndef DECODE_GZ_SILENCE 
     printf("checking if valid gzip file..\n");
     #endif
@@ -159,19 +182,21 @@ DecodedData * decode_gz(
     (if FLG.FNAME set)
     
     +=========================================+
-    |...original file name, zero-terminated...| (more-->)
+    |...original file name, zero-terminated...|
     +=========================================+
     */
     if (gzip_header->FLG >> 3 & 1) {
         #ifndef DECODE_GZ_SILENCE
         printf("original filename was included, reading...\n");
         #endif
-
-        #ifndef DECODE_GZ_SILENCE
+        
         char * filename = consume_till_terminate(
-            /* from: */ data_stream,
-            /* max_size: */ data_stream->size_left,
-            /* terminator: */ (char)0);
+            /* uint8_t * from,: */ &compressed_bytes,
+            /* uint32_t * from_size: */ &compressed_bytes_left,
+            /* uint32_t max_size: */ compressed_bytes_left,
+            /* const char terminator: */ '\0');
+        
+        #ifndef DECODE_GZ_SILENCE
         
         printf(
             "original filename: %s\n",
@@ -189,8 +214,9 @@ DecodedData * decode_gz(
     if (gzip_header->FLG >> 4 & 1) {
         #ifndef DECODE_GZ_SILENCE
         char * comment = consume_till_terminate(
-            /* from: */ data_stream,
-            /* max_size: */ data_stream->size_left,
+            /* uint8_t ** from: */ &compressed_bytes,
+            /* from_size: */ &compressed_bytes_left,
+            /* max_size: */ compressed_bytes_left,
             /* terminator: */ (char)0);
         
         printf("comment: %s\n", comment);
@@ -200,30 +226,53 @@ DecodedData * decode_gz(
 
     #ifndef DECODE_GZ_SILENCE
     printf("compressed blocks should start here...\n");
-    printf("file size left: %zu\n", data_stream->size_left);
+    printf("file size left: %u\n", compressed_bytes_left);
     printf(
-        "8 bytes at EOF rsrved, so DEFLATE size is: %zu\n",
-        data_stream->size_left - 8);
+        "8 bytes at EOF rsrved, so DEFLATE size is: %u\n",
+        compressed_bytes_left - 8);
     #endif
     
     // TODO: figure out how much memory to assign in advance
-    uint32_t decompressed_size = data_stream->size_left * 25;
+    uint32_t guess_decompressed_size = (compressed_bytes_left - 8) * 25;
     
-    uint8_t * recipient = (uint8_t *)malloc(decompressed_size);
+    uint8_t * recipient = (uint8_t *)malloc_func(guess_decompressed_size);
+    uint64_t recipient_size = 0;
+    
+    uint64_t temp_working_memory_size = 50000000;
+    uint8_t * temp_working_memory = (uint8_t *)malloc_func(
+        temp_working_memory_size);
+    
+    uint32_t inflate_good = false;
     
     inflate(
-        /* recipient: */ recipient,
-        /* recipient_size: */ decompressed_size,
-        /* data_stream: */ data_stream,
-        /* compressed_size_bytes: */ data_stream->size_left - 8);
+        /* uint8_t const * recipient: */
+            recipient,
+        /* const uint64_t recipient_size: */
+            guess_decompressed_size,
+        /* uint64_t * final_recipient_size: */
+            &recipient_size,
+        /* uint8_t const * temp_working_memory: */
+            temp_working_memory,
+        /* const uint64_t temp_working_memory_size: */
+            temp_working_memory_size,
+        /* uint8_t const * compressed_input: */
+            compressed_bytes,
+        /* const uint64_t compressed_input_size: */
+            compressed_bytes_left - 8,
+        /* uint32_t * out_good: */
+            &inflate_good);
    
     #ifndef DECODE_GZ_SILENCE 
-    printf("\ninflate algorithm decompressed & returned\n");
+    printf("\ninflate algorithm returned: %u\n", inflate_good);
     #endif
+    if (!inflate_good) {
+        return return_value;
+    }
     
     GZFooter * gzip_footer = consume_struct(
         /* type: */ GZFooter,
-        /* buffer: */ data_stream);
+        /* buffer: */ &compressed_bytes,
+        /* ptr_buffer_size: */ &compressed_bytes_left);
     
     #ifndef DECODE_GZ_SILENCE 
     printf("CRC32 value from footer: %u\n", gzip_footer->CRC32);
@@ -231,13 +280,10 @@ DecodedData * decode_gz(
     
     printf(
         "size left in buffer (excess bytes): %u\n",
-        (int)data_stream->size_left);
+        compressed_bytes_left);
     
     printf("end of gz file...\n");
     #endif
-    
-    free(gzip_header);
-    free(gzip_footer);
     
     return_value->data = (char *)recipient;
     return_value->good = true;

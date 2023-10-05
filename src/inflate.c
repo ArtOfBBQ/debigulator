@@ -67,14 +67,14 @@ typedef struct HashedHuffman {
     uint32_t max_code_length;
 } HashedHuffman;
 
-static uint32_t mask_rightmost_bits(
+inline static uint32_t mask_rightmost_bits(
     const uint32_t input,
     const uint32_t bits_to_mask)
 {
     return input & ((1 << bits_to_mask) - 1);
 }
 
-static uint32_t mask_leftmost_bits(
+inline static uint32_t mask_leftmost_bits(
     const uint32_t input,
     const uint32_t bits_to_mask)
 {
@@ -172,7 +172,7 @@ static uint32_t reverse_bit_order(
 /*
 Look at the top bits of our data stream, but keep them inplace
 */
-static uint32_t peek_bits(
+inline static uint32_t peek_bits(
     DataStream * from,
     uint32_t bits_to_peek)
 {
@@ -291,48 +291,59 @@ static uint32_t compute_hash(
     */
     
     /*
+    ABANDONED IDEA 3:
+    code_length is between 1 and 19, so you can store it entirely
+    if you can store an 18, so 5 bits:
+    6
+    18421
+    
+    and then it would take 19 bits for the key, so 25 in total
+    that would be 33,554,432 entries for a full hashmap
+    
+    each entry would have 12 bytes, so that would be 400MB (!) impossible.
+    */
+    
+    /*
     This hashing function was built by simply fiddling and
     does much better than the previous 2
     */
-    uint32_t hash =
-        (key + (code_length - 1)) & (HUFFMAN_HASHMAP_SIZE - 1); 
-    
     #ifndef INFLATE_IGNORE_ASSERTS
-    assert(hash < HUFFMAN_HASHMAP_SIZE);
+    assert(
+        (key + (code_length - 1)) & (HUFFMAN_HASHMAP_SIZE - 1) <
+            HUFFMAN_HASHMAP_SIZE);
     #endif
     
-    return hash;
+    return (key + (code_length - 1)) & (HUFFMAN_HASHMAP_SIZE - 1);
 }
 
 /*
 Throw away the top x bits from our datastream
 */
-static void discard_bits(
+inline static void discard_bits(
     DataStream * from,
-    const uint32_t amount)
+    uint32_t amount)
 {
-    uint32_t discards_left = amount;
     uint32_t bits_to_discard =
-        ((from->bits_left > discards_left) * discards_left) +
-        (from->bits_left <= discards_left) * from->bits_left;
+        ((from->bits_left > amount) * amount) +
+        (from->bits_left <= amount) * from->bits_left;
     from->bit_buffer >>= bits_to_discard;
     from->bits_left -= bits_to_discard;
-    discards_left -= bits_to_discard;
+    amount -= bits_to_discard;
     
-    uint32_t full_bytes_to_discard = discards_left / 8;
+    uint32_t full_bytes_to_discard = amount / 8;
     from->data += full_bytes_to_discard;
     from->size_left -= full_bytes_to_discard;
-    discards_left %= 8;
+    amount %= 8;
     
     from->bit_buffer =
-        (discards_left > 0) * (*(uint8_t *)from->data) +
-        (discards_left <= 0) * from->bit_buffer;
-    from->data += discards_left > 0;
-    from->size_left -= discards_left > 0;
+        (amount > 0) * (*(uint8_t *)from->data) +
+        (amount <= 0) * from->bit_buffer;
+    from->data += amount > 0;
+    from->size_left -= amount > 0;
     from->bits_left =
-        ((discards_left > 0) * (8 - discards_left)) +
-        (discards_left == 0) * from->bits_left;
-    from->bit_buffer >>= discards_left;
+        ((amount > 0) * (8 - amount)) +
+        (amount == 0) * from->bits_left;
+    from->bit_buffer >>= amount;
 }
 
 static uint32_t consume_bits(
@@ -421,6 +432,23 @@ static uint32_t hashed_huffman_decode(
     return 0;
 }
 
+static void construct_hashed_huffman(
+    HashedHuffman * to_construct)
+{
+    #ifndef INFLATE_IGNORE_ASSERTS
+    assert(to_construct != NULL);
+    #endif
+    
+    to_construct->min_code_length = 9999;
+    to_construct->max_code_length = 1;
+    
+    // init linked list sizes to 0
+    for (uint32_t i = 0; i < HUFFMAN_HASHMAP_SIZE; i++)
+    {
+        to_construct->linked_lists[i].size = 0;
+    }
+}
+
 /*
 Convert an array of huffman codes to a hashmap of huffman codes
 
@@ -431,24 +459,16 @@ static void huffman_to_hashmap(
     const uint32_t huffman_input_size,
     HashedHuffman * recipient)
 {
-    #ifndef INFLATE_IGNORE_ASSERTS 
-    assert(recipient != NULL);
-    assert(huffman_input != NULL);
+    #ifndef INFLATE_IGNORE_ASSERTS
+    assert(huffman_input  != NULL);
     assert(huffman_input_size > 0);
     #endif
     
-    recipient->min_code_length = 9999;
-    recipient->max_code_length = 1;
-    
-    // init linked list sizes to 0
-    for (uint32_t i = 0; i < HUFFMAN_HASHMAP_SIZE; i++)
-    {
-        recipient->linked_lists[i].size = 0;
-    }
+    construct_hashed_huffman(recipient);
     
     for (uint32_t i = 0; i < huffman_input_size; i++)
     {
-        if (huffman_input[i].used == 0) {
+        if (!huffman_input[i].used) {
             continue;
         }
         
@@ -467,15 +487,12 @@ static void huffman_to_hashmap(
         assert(hash >= 0);
         #endif
         
-        if (huffman_input[i].code_length
-            < recipient->min_code_length)
+        if (
+            huffman_input[i].code_length < recipient->min_code_length)
         {
-            recipient->min_code_length =
-                huffman_input[i].code_length;
-        }
-        
-        if (huffman_input[i].code_length
-            > recipient->max_code_length)
+            recipient->min_code_length = huffman_input[i].code_length;
+        } else if (
+            huffman_input[i].code_length > recipient->max_code_length)
         {
             recipient->max_code_length = huffman_input[i].code_length;
             #ifndef INFLATE_IGNORE_ASSERTS
@@ -484,8 +501,7 @@ static void huffman_to_hashmap(
         }
         
         uint32_t list_size = recipient->linked_lists[hash].size;
-        recipient->linked_lists[hash].entries[list_size].key =
-            reversed_key;
+        recipient->linked_lists[hash].entries[list_size].key = reversed_key;
         recipient->linked_lists[hash].entries[list_size].code_length =
             huffman_input[i].code_length;
         recipient->linked_lists[hash].entries[list_size].value =
@@ -499,8 +515,8 @@ static void huffman_to_hashmap(
     
     #ifndef INFLATE_IGNORE_ASSERTS 
     assert(
-           recipient->min_code_length
-           <= recipient->max_code_length);
+       recipient->min_code_length <=
+       recipient->max_code_length);
     #endif
 }
 

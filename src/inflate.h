@@ -1,9 +1,6 @@
 #ifndef INFLATE_H
 #define INFLATE_H
 
-#define INFLATE_SILENCE
-// #define INFLATE_IGNORE_ASSERTS
-
 /*
 This API offers only 1 function: inflate()
 
@@ -21,10 +18,12 @@ many others.
 #define NULL 0
 #endif 
 
+#define INFLATE_SILENCE
 #ifndef INFLATE_SILENCE
 #include "stdio.h"
 #endif
 
+#define INFLATE_IGNORE_ASSERTS
 #ifndef INFLATE_IGNORE_ASSERTS
 #include "assert.h"
 #endif
@@ -44,8 +43,8 @@ after decompressing everything.
 that are only useful while the functions runs. You can overwrite
 , free, or pass somewhere else immediately after. The function will fail when
   the working memory is insufficient. If you comment out
-  #define INFLATE_SILENCE, the function will complain about insufficient memory
-  with printf() 
+  #define INFLATE_SILENCE, the function will complain about insufficient
+  memory with printf() 
 - temp_working_memory_size: the capacity in bytes of temp_working_memory
 - compressed_input: the data to be uncompressed
 - compressed_input_size: the capacity in bytes of compressed_input

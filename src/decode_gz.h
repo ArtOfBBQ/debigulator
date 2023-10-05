@@ -4,9 +4,6 @@ This is the API for decoding a gzip (.gz) file.
 
 #ifndef DECODE_GZ
 
-#include "inttypes.h"
-#include "inflate.h"
-
 #define DECODE_GZ_IGNORE_ASSERTS
 #ifndef DECODE_GZ_IGNORE_ASSERTS
 #include "assert.h"
@@ -17,11 +14,20 @@ This is the API for decoding a gzip (.gz) file.
 #include "stdio.h"
 #endif
 
+#include <stddef.h>
+
+
+#include "inflate.h"
+
+
 typedef struct DecodedData {
     char * data;
     uint32_t data_size;
     uint32_t good;
 } DecodedData;
+
+void init_decode_gz(
+    void * (* malloc_funcptr)(size_t __size));
 
 DecodedData * decode_gz(
     uint8_t * compressed_bytes,
