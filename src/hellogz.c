@@ -60,7 +60,7 @@ int main(int argc, const char * argv[])
     printf("contents: %s\n", (char *)buffer);
     
     DecodedData * decompressed_contents = NULL;
-    for (uint32_t _ = 0; _ < 1; _++) {
+    for (uint32_t _ = 0; _ < 2000; _++) {
         
         decompressed_contents = decode_gz(
             /* buffer : */ buffer,

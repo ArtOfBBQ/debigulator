@@ -307,8 +307,10 @@ static unsigned long update_crc(
     const unsigned char * buf,
     const uint32_t len)
 {
+    #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(buf != NULL);
     assert(len > 0);
+    #endif
     
     unsigned long c = crc;
     
@@ -1471,12 +1473,17 @@ void decode_PNG(
         decoded_stream_at = (uint8_t *)(dpng_working_memory + sizeof(Palette));
         if (ihdr_body.color_type == 3) {
             for (uint32_t _ = 0; _ < pixel_count; _++) {
+                #ifndef DECODE_PNG_IGNORE_ASSERTS
                 assert(rgba_at[_] < palette->size);
+                #endif
                 decoded_stream_at[_] = rgba_at[_];
             }
             
             for (uint32_t _ = 0; _ < pixel_count; _++) {
+                #ifndef DECODE_PNG_IGNORE_ASSERTS
                 assert((_ * 4) + 3 < rgba_values_size);
+                #endif
+                
                 rgba_at[(_ * 4) + 0] = palette->red  [decoded_stream_at[_]];
                 rgba_at[(_ * 4) + 1] = palette->green[decoded_stream_at[_]];
                 rgba_at[(_ * 4) + 2] = palette->blue [decoded_stream_at[_]];

@@ -11,4 +11,9 @@ optional_xcode_project/debigulator/debigulator.xcodeproj/project.xcworkspace/xcu
 optional_xcode_project/debigulator/debigulator.xcodeproj/xcuserdata/
 optional_xcode_project/debigulator/debigulator.xcodeproj/xcshareddata/*
 
+# optional_xcode_project/hello_gzip.xcodeproj/project.xcworkspace/xcuserdata/
+optional_xcode_project/hello_gzip.xcodeproj/xcuserdata/
+optional_xcode_project/hello_gzip.xcodeproj/xcshareddata/*
+optional_xcode_project/hello_gzip.xcodeproj/project.xcworkspace
+
 build/**

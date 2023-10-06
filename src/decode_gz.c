@@ -190,14 +190,16 @@ DecodedData * decode_gz(
         printf("original filename was included, reading...\n");
         #endif
         
-        char * filename = consume_till_terminate(
-            /* uint8_t * from,: */ &compressed_bytes,
-            /* uint32_t * from_size: */ &compressed_bytes_left,
-            /* uint32_t max_size: */ compressed_bytes_left,
-            /* const char terminator: */ '\0');
+        #ifndef DECODE_GZ_SILENCE
+        char * filename =
+        #endif
+            consume_till_terminate(
+                /* uint8_t * from,: */ &compressed_bytes,
+                /* uint32_t * from_size: */ &compressed_bytes_left,
+                /* uint32_t max_size: */ compressed_bytes_left,
+                /* const char terminator: */ '\0');
         
         #ifndef DECODE_GZ_SILENCE
-        
         printf(
             "original filename: %s\n",
             filename);
@@ -284,6 +286,8 @@ DecodedData * decode_gz(
     
     printf("end of gz file...\n");
     #endif
+    
+    (void)gzip_footer;
     
     return_value->data = (char *)recipient;
     return_value->good = true;

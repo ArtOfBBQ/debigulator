@@ -5,10 +5,10 @@
 #endif
 
 #define NUM_UNIQUE_CODELENGTHS 19
-// #define HUFFMAN_HASHMAP_SIZE 2048 // 2^11
-// #define HUFFMAN_HASHMAP_SIZE 4096 // 2^12
-#define HUFFMAN_HASHMAP_SIZE 8192 // 2^13
-#define HUFFMAN_HASHMAP_LINKEDLIST_SIZE 10
+#define MAPARRAY_CODELENGTH_BITS 4 // stores up to 15, we need only 12
+#define MAPARRAY_MAP_BITS 12 // code lengths 12 or less are in the map
+#define HUFFMAN_HASHMAP_SIZE 65536 // 2^16, enough to concatenate 4 + 12
+#define HUFFMAN_LINEAR_ARRAY_SIZE 500 // for code lengths 13 or higher
 
 static void align_memory(
     uint8_t ** memory_store,
@@ -42,9 +42,9 @@ typedef struct DataStream {
 */
 typedef struct HuffmanEntry {
     uint32_t key;
-    uint32_t code_length;
     uint32_t value;
     uint32_t used;
+    uint16_t code_length;
 } HuffmanEntry;
 
 /*
@@ -52,17 +52,14 @@ We'll store our huffman codes in an improvised hashmap
 */
 typedef struct HashedHuffmanEntry {
    uint32_t key;
-   uint32_t code_length;
    uint32_t value;
+   uint16_t code_length;
 } HashedHuffmanEntry;
 
-typedef struct HashedHuffmanLinkedList {
-   HashedHuffmanEntry entries[HUFFMAN_HASHMAP_LINKEDLIST_SIZE];
-   uint32_t size;
-} HashedHuffmanLinkedList;
-
 typedef struct HashedHuffman {
-    HashedHuffmanLinkedList linked_lists[HUFFMAN_HASHMAP_SIZE];
+    HashedHuffmanEntry maparray[
+        HUFFMAN_HASHMAP_SIZE + HUFFMAN_LINEAR_ARRAY_SIZE];
+    uint32_t maparray_array_size;
     uint32_t min_code_length;
     uint32_t max_code_length;
 } HashedHuffman;
@@ -183,6 +180,7 @@ inline static uint32_t peek_bits(
     uint32_t num_to_read_from_bitbuf =
         ((bits_to_peek > from->bits_left) * from->bits_left) +
         ((bits_to_peek <= from->bits_left) * bits_to_peek);
+    
     return_value =
         mask_rightmost_bits(
             /* input: */
@@ -199,21 +197,17 @@ inline static uint32_t peek_bits(
     assert(bytes_to_peek < 4);
     #endif
     uint32_t next_bytes =
-	(uint32_t)peek_at[0]
-	| ((uint32_t)peek_at[1] << 8)
-	| ((uint32_t)peek_at[2] << 16)
-	| ((uint32_t)peek_at[3] << 24);
+        (uint32_t)peek_at[0] |
+        ((uint32_t)peek_at[1] << 8) |
+        ((uint32_t)peek_at[2] << 16) |
+        ((uint32_t)peek_at[3] << 24);
     next_bytes &= ((1 << (bytes_to_peek * 8)) - 1);
-//     uint32_t next_bytes =
-// 	*(uint32_t *)peek_at
-// 	& ((1 << (bytes_to_peek * 8)) - 1);
     
-    return_value +=
-	(next_bytes << bits_in_return);
+    return_value += (next_bytes << bits_in_return);
     
-    bits_to_peek -= bytes_to_peek * 8;
+    bits_to_peek   -= bytes_to_peek * 8;
     bits_in_return += bytes_to_peek * 8;
-    peek_at += bytes_to_peek;
+    peek_at        += bytes_to_peek;
     
     // Add bits from the final byte
     // here again, if there were bits in the return
@@ -231,89 +225,87 @@ inline static uint32_t peek_bits(
 }
 
 /*
-For our hashmaps, we need a hash function to index them
-given the key & code length we're looking for
+For our hashmaps, we need a hash function to index them given the key & code
+length (in bits) we're looking for
+
+We'll store the reversed bits of the key, not the key, since that's always what
+we'll be looking for
+
+By definition, a compression algorithm, since it's trying to make stuff smaller,
+will very rarely produce something with a code length of > 8 bits. That's why
+I want to be able to find the keys of few bits very quickly, and am OK with
+sifting through a slower list afterwards for the longer code lengths
+
+The code length itself goes from 2 to and including 19, so we can pretend it's
+1 to 18 if we wanted
+
+to store a number of to 15, we need 4 bits with some waste:
+8421
+1111
+
+so we can choose some number of bits (up to 15) + 4 to be our hashmap size
+
+I would guess 11 bits is a good number so it fits in a uint16, and that means
+our reversed key can be a uint16
+
+16-bit KEY for code lengths 11 or smaller:
+ LENGTH (4)   KEY (11 bits)
+[ . . . . ] [ . . . . . . . . . . . ]
+
+of course to store this hashmap we need 65,536 entries, and all of them will
+be about 10 bytes, so that will be 650+ kilobytes, and we'll be making multiple
+maps, so our memory use will be a couple of megabytes. I'm OK with that.
+
+This way looking up a value in the map will go like this:
+** If the value has a code length of 11 or less:
+ -> insta-lookup without any chance of conflicts (fast)
+** else:
+-> find it in a linear list (slow)
 */
-static uint32_t compute_hash(
-    uint32_t key,
-    uint32_t code_length)
+static uint32_t maparray_compute_hash(
+    HashedHuffman * in_maparray,
+    uint32_t reversed_key,
+    uint32_t code_length_bits)
 {
+    if (code_length_bits <= MAPARRAY_MAP_BITS) {
+        uint16_t concatenated_key = (code_length_bits << 12) | reversed_key;
+        #ifndef INFLATE_IGNORE_ASSERTS
+        assert(concatenated_key < HUFFMAN_HASHMAP_SIZE);
+        
+        if (in_maparray->maparray[concatenated_key].key != 0) {
+            assert(
+                in_maparray->maparray[concatenated_key].key ==
+                    reversed_key);
+        }
+        if (in_maparray->maparray[concatenated_key].code_length != 0) {
+            assert(
+                in_maparray->maparray[concatenated_key].code_length ==
+                    code_length_bits);
+        }
+        #endif
+        
+        return concatenated_key;
+    }
+    
+    // code length is greater than 12
+    for (uint32_t i = 0; i < in_maparray->maparray_array_size; i++) {
+        if (
+            in_maparray->maparray[i + HUFFMAN_HASHMAP_SIZE].key ==
+                reversed_key &&
+            in_maparray->maparray[i + HUFFMAN_HASHMAP_SIZE].code_length ==
+                code_length_bits)
+        {
+            return i + HUFFMAN_HASHMAP_SIZE;
+        }
+    }
+    
+    in_maparray->maparray_array_size += 1;
+    
     #ifndef INFLATE_IGNORE_ASSERTS
-    assert(code_length > 0);
-    assert(code_length < 19);
+    assert(in_maparray->maparray_array_size < HUFFMAN_LINEAR_ARRAY_SIZE);
     #endif
     
-    /*
-    ABANDONED IDEA:
-    code_length is between 1 and 19, so you can store it entirely
-    if you can store an 18
-    we can store almost everything with 4 bits (up to 15)
-    1111
-    8421
-    if we do so, that leaves 6 bits to store the key
-    
-    Alternatively, we can store 3 bits of it, giving
-    111
-    421
-    4 + 2 + 1 = 7 slots for the code length, and 7 bits for the value
-    
-    Note that it's better to invite conflicts for lower code lengths,
-    since small code lengths have only a small possible values and therefore
-    end up being able to store the entire key anyway.
-    
-    uint32_t code_bits = code_length < 3 ? 0 : code_length - 2;
-    assert(code_bits < 16);
-    uint32_t key_bits = key & ((1 << 6) - 1);
-    assert(key_bits < (1 << 6));
-    
-    uint32_t max_hash = (15 << 6) + ((1 << 6)-1);
-    assert(max_hash < HUFFMAN_HASHMAP_SIZE);
-    
-    uint32_t hash = ((code_bits << 6) + key_bits);
-    assert(hash < HUFFMAN_HASHMAP_SIZE);
-    */
-    
-    /*
-    ABANDONED IDEA 2:
-    Alternatively, we can store only 3 bits of the code length and leave
-    7 bits for the key
-    
-    uint32_t code_bits = code_length < 4 ? 0 : ((code_length - 3) & 7);
-    assert(code_bits < 8);
-    uint32_t key_bits = key & ((1 << 7) - 1);
-    assert(key_bits < (1 << 7));
-    
-    uint32_t max_hash = (7 << 7) + ((1 << 7)-1);
-    assert(max_hash < HUFFMAN_HASHMAP_SIZE);
-    
-    uint32_t hash = ((code_bits << 7) + key_bits);
-    assert(hash < HUFFMAN_HASHMAP_SIZE);
-    */
-    
-    /*
-    ABANDONED IDEA 3:
-    code_length is between 1 and 19, so you can store it entirely
-    if you can store an 18, so 5 bits:
-    6
-    18421
-    
-    and then it would take 19 bits for the key, so 25 in total
-    that would be 33,554,432 entries for a full hashmap
-    
-    each entry would have 12 bytes, so that would be 400MB (!) impossible.
-    */
-    
-    /*
-    This hashing function was built by simply fiddling and
-    does much better than the previous 2
-    */
-    #ifndef INFLATE_IGNORE_ASSERTS
-    assert(
-        (key + (code_length - 1)) & (HUFFMAN_HASHMAP_SIZE - 1) <
-            HUFFMAN_HASHMAP_SIZE);
-    #endif
-    
-    return (key + (code_length - 1)) & (HUFFMAN_HASHMAP_SIZE - 1);
+    return in_maparray->maparray_array_size + HUFFMAN_HASHMAP_SIZE - 1;
 }
 
 /*
@@ -402,22 +394,18 @@ static uint32_t hashed_huffman_decode(
         */
         raw = mask_rightmost_bits(upcoming_bits, bitcount);
         
-        uint32_t hash = compute_hash(
-            /* key: */ raw,
+        uint32_t hash = maparray_compute_hash(
+            /* in_maparray: */ dict,
+            /* reversed_key: */ raw,
             /* code_length: */ bitcount);
         
-        for (uint32_t l = 0; l < dict->linked_lists[hash].size; l++) {
-            #ifndef INFLATE_IGNORE_ASSERTS
-            assert(l < HUFFMAN_HASHMAP_LINKEDLIST_SIZE);
-            #endif
-            if (
-                dict->linked_lists[hash].entries[l].key == raw
-                && dict->linked_lists[hash].entries[l].code_length == bitcount)
-            {
-                discard_bits(datastream, bitcount);
-                *good = 1;
-                return dict->linked_lists[hash].entries[l].value;
-            }
+        if (
+            dict->maparray[hash].key == raw
+            && dict->maparray[hash].code_length == bitcount)
+        {
+            discard_bits(datastream, bitcount);
+            *good = 1;
+            return dict->maparray[hash].value;
         }
     }
     
@@ -442,11 +430,17 @@ static void construct_hashed_huffman(
     to_construct->min_code_length = 9999;
     to_construct->max_code_length = 1;
     
-    // init linked list sizes to 0
-    for (uint32_t i = 0; i < HUFFMAN_HASHMAP_SIZE; i++)
+    // init to 0
+    for (
+        uint32_t i = 0;
+        i < HUFFMAN_HASHMAP_SIZE + HUFFMAN_LINEAR_ARRAY_SIZE;
+        i++)
     {
-        to_construct->linked_lists[i].size = 0;
+        to_construct->maparray[i].value = 0;
+        to_construct->maparray[i].key = 0;
+        to_construct->maparray[i].code_length = 0;
     }
+    to_construct->maparray_array_size = 0;
 }
 
 /*
@@ -478,12 +472,13 @@ static void huffman_to_hashmap(
             /* raw: */ huffman_input[i].key,
             /* size: */ huffman_input[i].code_length);
         
-        uint32_t hash = compute_hash(
-            /* key: */ reversed_key,
+        uint32_t hash = maparray_compute_hash(
+            /* HashedHuffman * in_map: */ recipient,
+            /* reversed_key: */ reversed_key,
             /* code_length: */ huffman_input[i].code_length);
         
         #ifndef INFLATE_IGNORE_ASSERTS
-        assert(hash <= HUFFMAN_HASHMAP_SIZE);
+        assert(hash <= (HUFFMAN_HASHMAP_SIZE + HUFFMAN_LINEAR_ARRAY_SIZE));
         assert(hash >= 0);
         #endif
         
@@ -500,16 +495,16 @@ static void huffman_to_hashmap(
             #endif
         }
         
-        uint32_t list_size = recipient->linked_lists[hash].size;
-        recipient->linked_lists[hash].entries[list_size].key = reversed_key;
-        recipient->linked_lists[hash].entries[list_size].code_length =
+        recipient->maparray[hash].key = reversed_key;
+        recipient->maparray[hash].code_length =
             huffman_input[i].code_length;
-        recipient->linked_lists[hash].entries[list_size].value =
+        recipient->maparray[hash].value =
             huffman_input[i].value;
-        recipient->linked_lists[hash].size += 1;
+        
         #ifndef INFLATE_IGNORE_ASSERTS
-        assert(recipient->linked_lists[hash].size <
-            HUFFMAN_HASHMAP_LINKEDLIST_SIZE);
+        assert(
+            recipient->maparray_array_size <
+                HUFFMAN_HASHMAP_SIZE + HUFFMAN_LINEAR_ARRAY_SIZE);
         #endif
     }
     
@@ -1095,6 +1090,7 @@ void inflate(
                     (HashedHuffman *)working_memory_at;
                 working_memory_at += sizeof(HashedHuffman);
                 working_memory_remaining -= sizeof(HashedHuffman);
+                
                 huffman_to_hashmap(
                     /* huffman_input: */
                         literal_length_huffman,
