@@ -378,7 +378,7 @@ static uint32_t hashed_huffman_decode(
     uint32_t bitcount = dict->min_code_length - 1;
     uint32_t upcoming_bits = peek_bits(
         /* from: */ datastream,
-        /* size: */ 24);
+        /* bits_to_peek: */ 24);
     uint32_t raw = 0;
     
     while (bitcount < dict->max_code_length) {
