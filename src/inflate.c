@@ -268,7 +268,9 @@ static uint32_t maparray_compute_hash(
     uint32_t code_length_bits)
 {
     if (code_length_bits <= MAPARRAY_MAP_BITS) {
-        uint16_t concatenated_key = (code_length_bits << 12) | reversed_key;
+        uint16_t concatenated_key =
+            (uint16_t)((code_length_bits << 12) | reversed_key);
+        
         #ifndef INFLATE_IGNORE_ASSERTS
         assert(concatenated_key < HUFFMAN_HASHMAP_SIZE);
         
@@ -536,7 +538,7 @@ static void unpack_huffman(
     // initialize dict
     for (uint32_t i = 0; i < array_and_recipient_size; i++) {
         recipient[i].value = i;
-        recipient[i].code_length = array[i];
+        recipient[i].code_length = (uint16_t)array[i];
         recipient[i].key = 1234543;
         recipient[i].used = 0;
     }
