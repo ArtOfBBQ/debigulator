@@ -278,11 +278,11 @@ static unsigned long crc_table[256] = {
 };
 
 #ifndef DECODE_PNG_IGNORE_ASSERTS
-void assert_crc_table_accurate(void)
+static void assert_crc_table_accurate(void)
 {
     unsigned long c;
     int n, k;
-
+    
     for (n = 0; n < 256; n++) {
         c = (unsigned long) n;
         for (k = 0; k < 8; k++) {

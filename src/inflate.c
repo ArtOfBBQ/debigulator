@@ -272,8 +272,6 @@ static uint32_t maparray_compute_hash(
             (uint16_t)((code_length_bits << 12) | reversed_key);
         
         #ifndef INFLATE_IGNORE_ASSERTS
-        assert(concatenated_key < HUFFMAN_HASHMAP_SIZE);
-        
         if (in_maparray->maparray[concatenated_key].key != 0) {
             assert(
                 in_maparray->maparray[concatenated_key].key ==

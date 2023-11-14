@@ -18,12 +18,10 @@ many others.
 #define NULL 0
 #endif 
 
-#define INFLATE_SILENCE
 #ifndef INFLATE_SILENCE
 #include "stdio.h"
 #endif
 
-#define INFLATE_IGNORE_ASSERTS
 #ifndef INFLATE_IGNORE_ASSERTS
 #include "assert.h"
 #endif
