@@ -6,9 +6,9 @@ The 2 methods declared in this file are the API for decoding
 PNG files.
 */
 
-#define DECODE_PNG_SILENCE
+// #define DECODE_PNG_SILENCE
 // #define DECODE_PNG_IGNORE_CRC_CHECKS
-#define DECODE_PNG_IGNORE_ASSERTS
+// #define DECODE_PNG_IGNORE_ASSERTS
 
 #include "inflate.h"
 #include <stddef.h>

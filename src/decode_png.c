@@ -556,7 +556,7 @@ void init_PNG_decoder(
     
     palette = (Palette *)malloc_func(sizeof(Palette));
     
-    dpng_working_memory_size = 50000000;
+    dpng_working_memory_size = 8500000;
     dpng_working_memory = (uint8_t *)malloc_func(dpng_working_memory_size);
 }
 
