@@ -16,7 +16,7 @@ many others.
 
 #ifndef NULL
 #define NULL 0
-#endif 
+#endif
 
 #ifndef INFLATE_SILENCE
 #include "stdio.h"
