@@ -38,7 +38,10 @@ with the same signature to give the PNG decoder memory to work with.
 ** init_PNG_decoder(malloc);
 */
 void init_PNG_decoder(
-    void * (* malloc_funcptr)(size_t __size));
+    void * (* malloc_funcptr)(size_t __size),
+    void (* arg_free_funcptr)(void *));
+
+void destroy_PNG_decoder(void);
 
 /*
 You must run init_PNG_decode() first or this won't work.

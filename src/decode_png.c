@@ -539,11 +539,14 @@ static uint8_t undo_PNG_filter(
 
 static uint32_t already_initialized = 0;
 static void * (* malloc_func)(size_t __size) = NULL;
+static void (* free_func)(void *) = NULL;
+
 static uint8_t * dpng_working_memory = NULL;
 static uint32_t dpng_working_memory_size = 0;
+
 void init_PNG_decoder(
-    void * (* malloc_funcptr)(size_t __size)
-    )
+    void * (* malloc_funcptr)(size_t __size),
+    void (* arg_free_funcptr)(void *))
 {
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(malloc_func == NULL);
@@ -552,6 +555,7 @@ void init_PNG_decoder(
     #endif
     
     malloc_func = malloc_funcptr;
+    free_func = arg_free_funcptr;
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert_crc_table_accurate();
@@ -564,6 +568,18 @@ void init_PNG_decoder(
     
     dpng_working_memory_size = 12000000;
     dpng_working_memory = (uint8_t *)malloc_func(dpng_working_memory_size);
+}
+
+void destroy_PNG_decoder(void)
+{
+    already_initialized = 0;
+    
+    if (free_func != NULL) {
+        free_func(dpng_working_memory);
+        dpng_working_memory = NULL;
+        free_func(palette);
+        palette = NULL;
+    }
 }
 
 void get_PNG_width_height(
@@ -649,6 +665,7 @@ void decode_PNG(
     assert(compressed_input_size > 0);
     assert(out_rgba_values != NULL);
     assert(out_good != NULL);
+    assert(dpng_working_memory != NULL);
     #endif
     
     *out_good = 0;
