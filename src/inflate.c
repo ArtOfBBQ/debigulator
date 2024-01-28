@@ -1,5 +1,16 @@
 #include "inflate.h"
 
+#define FIXED_HCLEN_TABLE_SIZE 288
+static uint32_t * fixed_hclen_table = NULL;
+
+static uint32_t * swizzled_HCLEN_table = NULL;
+
+static const uint32_t swizzle[] = {
+16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15};
+
+static void * (* memset_func)(void * str, int c, size_t n) = NULL;
+static void * (* memcpy_func)(void * dest, const void * src, size_t n) = NULL;
+
 #ifndef NULL
 #define NULL 0
 #endif
@@ -9,6 +20,26 @@
 #define MAPARRAY_MAP_BITS 12 // code lengths 12 or less are in the map
 #define HUFFMAN_HASHMAP_SIZE 65536 // 2^16, enough to concatenate 4 + 12
 #define HUFFMAN_LINEAR_ARRAY_SIZE 500 // for code lengths 13 or higher
+
+void inflate_init(
+    void * (* malloc_funcptr)(size_t __size),
+    void * (* arg_memset_func)(void *str, int c, size_t n),
+    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n))
+{
+    #ifndef INFLATE_IGNORE_ASSERTS
+    assert(fixed_hclen_table == NULL);
+    assert(swizzled_HCLEN_table == NULL);
+    #endif
+    
+    fixed_hclen_table = malloc_funcptr(
+        sizeof(uint32_t) * FIXED_HCLEN_TABLE_SIZE);
+    
+    swizzled_HCLEN_table = malloc_funcptr(
+        sizeof(uint32_t) * NUM_UNIQUE_CODELENGTHS);
+    
+    memset_func = arg_memset_func;
+    memcpy_func = arg_memcpy_func;
+}
 
 static void align_memory(
     uint8_t ** memory_store,
@@ -178,7 +209,7 @@ inline static uint32_t peek_bits(
     
     // read from the bit buffer first (up to 7 bits)
     uint32_t num_to_read_from_bitbuf =
-        ((bits_to_peek > from->bits_left) * from->bits_left) +
+        ((bits_to_peek  > from->bits_left) * from->bits_left) +
         ((bits_to_peek <= from->bits_left) * bits_to_peek);
     
     return_value =
@@ -427,20 +458,10 @@ static void construct_hashed_huffman(
     assert(to_construct != NULL);
     #endif
     
+    memset_func(to_construct, 0, sizeof(HashedHuffman));
+    
     to_construct->min_code_length = 9999;
     to_construct->max_code_length = 1;
-    
-    // init to 0
-    for (
-        uint32_t i = 0;
-        i < HUFFMAN_HASHMAP_SIZE + HUFFMAN_LINEAR_ARRAY_SIZE;
-        i++)
-    {
-        to_construct->maparray[i].value = 0;
-        to_construct->maparray[i].key = 0;
-        to_construct->maparray[i].code_length = 0;
-    }
-    to_construct->maparray_array_size = 0;
 }
 
 /*
@@ -496,10 +517,8 @@ static void huffman_to_hashmap(
         }
         
         recipient->maparray[hash].key = reversed_key;
-        recipient->maparray[hash].code_length =
-            huffman_input[i].code_length;
-        recipient->maparray[hash].value =
-            huffman_input[i].value;
+        recipient->maparray[hash].code_length = huffman_input[i].code_length;
+        recipient->maparray[hash].value = huffman_input[i].value;
         
         #ifndef INFLATE_IGNORE_ASSERTS
         assert(
@@ -535,10 +554,10 @@ static void unpack_huffman(
     
     // initialize dict
     for (uint32_t i = 0; i < array_and_recipient_size; i++) {
-        recipient[i].value = i;
-        recipient[i].code_length = (uint16_t)array[i];
         recipient[i].key = 1234543;
+        recipient[i].value = i;
         recipient[i].used = 0;
+        recipient[i].code_length = (uint16_t)array[i];
     }
     
     // 1) Count the number of codes for each code length.  Let
@@ -546,9 +565,7 @@ static void unpack_huffman(
     uint32_t bl_count[array_and_recipient_size];
     unsigned int min_code_length = 123454321;
     unsigned int max_code_length = 0;
-    for (uint32_t i = 0; i < array_and_recipient_size; i++) {
-        bl_count[i] = 0;
-    }
+    memset_func(bl_count, 0, array_and_recipient_size * sizeof(uint32_t));
     
     for (uint32_t i = 0; i < array_and_recipient_size; i++) {
         
@@ -809,13 +826,13 @@ void inflate(
     *final_recipient_size = 0;
     
     DataStream data_stream;
-    data_stream.data = (uint8_t *)compressed_input;
-    data_stream.size_left = compressed_input_size;
-    data_stream.bits_left = 0;
+    data_stream.data       = (uint8_t *)compressed_input;
+    data_stream.size_left  = compressed_input_size;
+    data_stream.bits_left  = 0;
     data_stream.bit_buffer = 0;
     
     #ifndef INFLATE_IGNORE_ASSERTS
-    assert(data_stream.data != NULL); 
+    assert(data_stream.data      != NULL);
     assert(data_stream.size_left >= compressed_input_size);
     assert(data_stream.bits_left == 0);
     #endif
@@ -893,16 +910,14 @@ void inflate(
                 #endif
             }
             
-            uint16_t LEN =
-                (uint16_t)consume_bits(&data_stream, 16);
+            uint16_t LEN = (uint16_t)consume_bits(&data_stream, 16);
             #ifndef INFLATE_SILENCE
             printf(
                 "\t\t\tuncompr. block has LEN: %u bytes\n",
                 LEN);
             #endif
             
-            uint16_t NLEN =
-                (uint16_t)consume_bits(&data_stream, 16);
+            uint16_t NLEN = (uint16_t)consume_bits(&data_stream, 16);
             if ((uint16_t)LEN != (uint16_t)~NLEN) {
                 #ifndef INFLATE_SILENCE
                 printf(
@@ -995,19 +1010,48 @@ void inflate(
                 256 - 279     7     0000000 through 0010111
                 280 - 287     8     11000000 through 11000111
                 */
+                fixed_hclen_table[0] = 8; //  32bit
+                fixed_hclen_table[1] = 8; //  64bit
+                fixed_hclen_table[2] = 8; //
+                fixed_hclen_table[3] = 8; // 128bit
+                for (int i = 4; i < 144; i+=4) {
+                    memcpy_func(
+                        fixed_hclen_table + i,
+                        fixed_hclen_table,
+                        16);
+                }
                 
-                uint32_t fixed_hclen_table[288] = {};
-                for (int i = 0; i < 144; i++) {
-                    fixed_hclen_table[i] = 8;
+                fixed_hclen_table[144] = 9; //  32bit
+                fixed_hclen_table[145] = 9; //  64bit
+                fixed_hclen_table[146] = 9; //
+                fixed_hclen_table[147] = 9; // 128bit
+                for (int i = 148; i < 256; i+=4) {
+                    memcpy_func(
+                        fixed_hclen_table + i,
+                        fixed_hclen_table + 144,
+                        16);
                 }
-                for (int i = 144; i < 256; i++) {
-                    fixed_hclen_table[i] = 9;
+                
+                fixed_hclen_table[256] = 7; //  32bit
+                fixed_hclen_table[257] = 7; //  64bit
+                fixed_hclen_table[258] = 7; //
+                fixed_hclen_table[259] = 7; // 128bit
+                for (int i = 260; i < 280; i+=4) {
+                    memcpy_func(
+                        fixed_hclen_table + i,
+                        fixed_hclen_table + 256,
+                        16);
                 }
-                for (int i = 256; i < 280; i++) {
-                    fixed_hclen_table[i] = 7;
-                }
-                for (int i = 280; i < 288; i++) {
-                    fixed_hclen_table[i] = 8;
+                
+                fixed_hclen_table[280] = 8; //  32bit
+                fixed_hclen_table[281] = 8; //  64bit
+                fixed_hclen_table[282] = 8; //
+                fixed_hclen_table[283] = 8; // 128bit
+                for (int i = 284; i < 288; i+=4) {
+                    memcpy_func(
+                        fixed_hclen_table + i,
+                        fixed_hclen_table + 280,
+                        16);
                 }
                 
                 uint32_t ll_good = 0;
@@ -1086,8 +1130,7 @@ void inflate(
                     return;
                 }
                 align_memory(&working_memory_at, &working_memory_remaining);
-                hashed_litlen_huffman =
-                    (HashedHuffman *)working_memory_at;
+                hashed_litlen_huffman = (HashedHuffman *)working_memory_at;
                 working_memory_at += sizeof(HashedHuffman);
                 working_memory_remaining -= sizeof(HashedHuffman);
                 
@@ -1182,41 +1225,35 @@ void inflate(
                     && HCLEN <= 19);
                 #endif
                 
-                // This is a fixed swizzle (order of elements
-                // in an array) that's agreed upon in the
-                // specification.
-                // I never would have imagined people from 1996
-                // went this far to save 36 bits of disk space
-                uint32_t swizzle[] =
-                    {16, 17, 18, 0, 8, 7, 9, 6, 10, 5,
-                     11, 4, 12, 3, 13, 2, 14, 1, 15};
+                
                 
                 // read (HCLEN + 4) x 3 bits
                 // these are code lengths for the code length
                 // dictionary,
                 // and they'll come in "swizzled" order
-                
-                uint32_t HCLEN_table[
-                    NUM_UNIQUE_CODELENGTHS] = {};
-                
                 #ifndef INFLATE_SILENCE
                 printf("\t\t\tReading raw code lengths\n");
                 #endif
                 
+                // 0-init swizzled HCLEN table
+                memset_func(
+                    swizzled_HCLEN_table,
+                    0,
+                    4 * NUM_UNIQUE_CODELENGTHS);
+                
                 for (uint32_t i = 0; i < HCLEN; i++) {
                     #ifndef INFLATE_IGNORE_ASSERTS
-                    assert(swizzle[i] <
-                        NUM_UNIQUE_CODELENGTHS);
+                    assert(swizzle[i] < NUM_UNIQUE_CODELENGTHS);
                     #endif
                     
-                    HCLEN_table[swizzle[i]] =
+                    swizzled_HCLEN_table[swizzle[i]] =
                             consume_bits(
                                 /* from: */ &data_stream,
                                 /* size: */ 3);
                     
                     #ifndef INFLATE_IGNORE_ASSERTS
-                    assert(HCLEN_table[swizzle[i]] <= 7);
-                    assert(HCLEN_table[swizzle[i]] >= 0);
+                    assert(swizzled_HCLEN_table[swizzle[i]] <= 7);
+                    assert(swizzled_HCLEN_table[swizzle[i]] >= 0);
                     #endif
                 }
                 
@@ -1249,7 +1286,7 @@ void inflate(
                 
                 unpack_huffman(
                     /* array:     : */
-                        HCLEN_table,
+                        swizzled_HCLEN_table,
                     /* array_and_recipient_size : */
                         NUM_UNIQUE_CODELENGTHS,
                     /* recipient: */
@@ -1291,22 +1328,22 @@ void inflate(
                     return;
                 }
                 
+                #ifndef INFLATE_IGNORE_ASSERTS
                 for (
                     int i = 0;
                     i < NUM_UNIQUE_CODELENGTHS;
                     i++)
                 {
                     if (codelengths_huffman[i].used == 1) {
-                        #ifndef INFLATE_IGNORE_ASSERTS
                         assert(
                           codelengths_huffman[i].key >= 0);
                         assert(
                           codelengths_huffman[i].value >= 0);
                         assert(
                           codelengths_huffman[i].value < 19);
-                        #endif
                     }
                 }
+                #endif
                 
                 /*
                 Now we have an unpacked table with code
@@ -1323,12 +1360,11 @@ void inflate(
                   alphabet, encoded using the code length
                   Huffman code
                 */
-                
                 uint32_t len_i = 0;
                 uint32_t two_dicts_size = HLIT + HDIST;
                 
-                if (working_memory_remaining
-                    < sizeof(uint32_t) * two_dicts_size)
+                if (working_memory_remaining < sizeof(uint32_t) *
+                    two_dicts_size)
                 {
                     #ifndef INFLATE_SILENCE
                     printf(
@@ -1367,8 +1403,7 @@ void inflate(
                     }
                     
                     if (encoded_len <= 15) {
-                        litlendist_table[len_i] =
-                            encoded_len;
+                        litlendist_table[len_i] = encoded_len;
                         len_i++;
                     } else if (encoded_len == 16) {
                         /*
@@ -1376,14 +1411,12 @@ void inflate(
                             2 extra bits for repeat length
                             (0 = 3, ... , 3 = 6)
                         */
-                        uint32_t extra_bits_repeat =
-                            consume_bits(
-                                /* from: */ &data_stream,
-                                /* size: */ 2);
-                        uint32_t repeats =
-                            extra_bits_repeat + 3;
-                       
-                        #ifndef INFLATE_IGNORE_ASSERTS 
+                        uint32_t extra_bits_repeat = consume_bits(
+                            /* from: */ &data_stream,
+                            /* size: */ 2);
+                        uint32_t repeats = extra_bits_repeat + 3;
+                        
+                        #ifndef INFLATE_IGNORE_ASSERTS
                         assert(repeats >= 3);
                         assert(repeats <= 6);
                         assert(len_i > 0);
@@ -1394,36 +1427,34 @@ void inflate(
                             i < repeats;
                             i++)
                         {
-                            litlendist_table[len_i] =
-                                litlendist_table[len_i - 1];
-                            len_i++;
+                            memcpy_func(
+                                /* dest: */
+                                    (void *)(litlendist_table + len_i + i),
+                                /* src: */
+                                    (void *)(litlendist_table + len_i - 1),
+                                /* size_bytes: */
+                                    4);
                         }
+                        len_i += repeats;
+                        
                     } else if (encoded_len == 17) {
                         /*
                         17: Repeat a code length of 0 for 3 - 10
                             times.
                             3 extra bits for length
                         */
-                        uint32_t extra_bits_repeat =
-                            consume_bits(
-                                /* from: */ &data_stream,
-                                /* size: */ 3);
-                        uint32_t repeats =
-                            extra_bits_repeat + 3;
+                        uint32_t extra_bits_repeat = consume_bits(
+                            /* from: */ &data_stream,
+                            /* size: */ 3);
+                        uint32_t repeats = extra_bits_repeat + 3;
                        
                         #ifndef INFLATE_IGNORE_ASSERTS 
                         assert(repeats >= 3);
                         assert(repeats < 11);
                         #endif
                         
-                        for (
-                            uint32_t i = 0;
-                            i < repeats;
-                            i++)
-                        {
-                            litlendist_table[len_i] = 0;
-                            len_i++;
-                        }
+                        memset_func(litlendist_table + len_i, 0, 4 * repeats);
+                        len_i += repeats;
                         
                     } else if (encoded_len == 18) {
                         /*
@@ -1443,14 +1474,8 @@ void inflate(
                         assert(repeats < 139);
                         #endif
                         
-                        for (
-                            uint32_t i = 0;
-                            i < repeats;
-                            i++)
-                        {
-                            litlendist_table[len_i] = 0;
-                            len_i++;
-                        }
+                        memset_func(litlendist_table + len_i, 0, 4 * repeats);
+                        len_i += repeats;
                     } else {
                         #ifndef INFLATE_SILENCE
                         printf(
@@ -1530,18 +1555,19 @@ void inflate(
                     "\t\t\tunpacked lit/len dict\n");
                 #endif
                 
+                #ifndef INFLATE_IGNORE_ASSERTS
                 for (uint32_t i = 0; i < HLIT; i++) {
                     if (literal_length_huffman[i].used == 1) {
-                        #ifndef INFLATE_IGNORE_ASSERTS
+                        
                         assert(
                             literal_length_huffman[i].value
                                 == i);
                         assert(
                             literal_length_huffman[i].key
                                 < 99999);
-                        #endif
                     }
                 }
+                #endif
                 
                 uint32_t dist_good = 0;
                 if (working_memory_remaining < sizeof(HashedHuffman)) {
@@ -1599,14 +1625,14 @@ void inflate(
                 printf("\t\t\tunpacked distance dictionary\n");
                 #endif
                 
+                #ifndef INFLATE_IGNORE_ASSERTS
                 for (uint32_t i = 0; i < HDIST; i++) {
                     if (distance_huffman[i].used == 1) {
-                        #ifndef INFLATE_IGNORE_ASSERTS
                         assert(distance_huffman[i].value == i);
                         assert(distance_huffman[i].key < 99999);
-                        #endif
                     }
                 }
+                #endif
             }
             
             // the remaining part of the algorithm is mostly the
@@ -1678,8 +1704,7 @@ void inflate(
                 
                 if (litlenvalue < 256) {
                     // literal value, not a length
-                    *recipient_at =
-                        (uint8_t)(litlenvalue & 255);
+                    *recipient_at = (uint8_t)(litlenvalue & 255);
                     recipient_at++;
                     *final_recipient_size += 1;
                     
@@ -1698,9 +1723,7 @@ void inflate(
                     uint32_t i = litlenvalue - 257;
                     
                     #ifndef INFLATE_IGNORE_ASSERTS
-                    assert(
-                        length_extra_bits_table[i].value
-                            == litlenvalue);
+                    assert(length_extra_bits_table[i].value == litlenvalue);
                     #endif
                     
                     uint32_t extra_bits =
@@ -1720,8 +1743,7 @@ void inflate(
                     
                     #ifndef INFLATE_IGNORE_ASSERTS
                     assert(
-                        total_length >=
-                        length_extra_bits_table[i]
+                        total_length >= length_extra_bits_table[i]
                             .base_decoded);
                     #endif
                     
@@ -1761,9 +1783,7 @@ void inflate(
                         return;
                     }
                     
-                    if (
-                        dist_extra_bits_table[distvalue].value
-                            != distvalue)
+                    if (dist_extra_bits_table[distvalue].value != distvalue)
                     {
                         #ifndef INFLATE_SILENCE
                         printf("extra bits table != distvalue, failing...\n");
@@ -1786,8 +1806,7 @@ void inflate(
                                 /* size: */ dist_extra_bits)
                             : 0;
                     
-                    uint32_t total_dist =
-                        base_dist + dist_extra_bits_decoded;
+                    uint32_t total_dist = base_dist + dist_extra_bits_decoded;
                     
                     // go back dist bytes, then copy length bytes
                     if (recipient_at - total_dist < recipient) {
@@ -1800,28 +1819,50 @@ void inflate(
                         *out_good = 0;
                         return;
                     }
-                    uint8_t * back_dist_bytes =
-                        recipient_at - total_dist;
-                    for (uint32_t _ = 0; _ < total_length; _++) {
-                        *recipient_at = *back_dist_bytes;
-                        recipient_at++;
-                        *final_recipient_size += 1;
-                        if (recipient_at >= working_memory_at) {
-                            #ifndef INFLATE_SILENCE
-                            printf(
-                                "ERROR - recipient overflowing into working "
-                                "memory!\n");
-                            *out_good = 0;
-                            return;
+                    
+                    #ifndef INFLATE_IGNORE_ASSERTS
+                    assert(*final_recipient_size <= recipient_size);
+                    assert(
+                        (recipient_at - recipient) <
+                            (uint32_t)recipient_size);
+                    #endif
+                    
+                    if (total_length <= total_dist) {
+                        memcpy_func(
+                            /* dst: */
+                                recipient_at,
+                            /* src: */
+                                recipient_at - total_dist,
+                            /* size_bytes: */
+                                total_length * sizeof(uint32_t));
+                        *final_recipient_size += total_length;
+                        recipient_at += total_length;
+                    } else {
+                        uint8_t * back_dist_bytes = recipient_at - total_dist;
+                        for (uint32_t _ = 0; _ < total_length; _++) {
+                            *recipient_at = *back_dist_bytes;
+                            recipient_at++;
+                            *final_recipient_size += 1;
+                            if (recipient_at >= working_memory_at) {
+                                #ifndef INFLATE_SILENCE
+                                printf(
+                                    "ERROR - recipient overflowing into working "
+                                    "memory!\n");
+                                *out_good = 0;
+                                return;
+                                #endif
+                            }
+                            
+                            #ifndef INFLATE_IGNORE_ASSERTS
+                            assert(*final_recipient_size <= recipient_size);
+                            assert(
+                                (recipient_at - recipient) <
+                                    (uint32_t)recipient_size);
                             #endif
+                            
+                            back_dist_bytes++;
+                            
                         }
-                        #ifndef INFLATE_IGNORE_ASSERTS
-                        assert(*final_recipient_size <= recipient_size);
-                        assert(
-                            (recipient_at - recipient) <
-                                (uint32_t)recipient_size);
-                        #endif
-                        back_dist_bytes++;
                     }
                 } else {
                     #ifndef INFLATE_IGNORE_ASSERTS
@@ -1855,8 +1896,7 @@ void inflate(
             /* amount: */ data_stream.bits_left);
     }
     
-    uint32_t bytes_read =
-        (uint32_t)(data_stream.data - compressed_input);
+    uint32_t bytes_read = (uint32_t)(data_stream.data - compressed_input);
     #ifndef INFLATE_IGNORE_ASSERTS
     assert(bytes_read >= 0);
     #endif
@@ -1872,8 +1912,7 @@ void inflate(
         assert(compressed_input_size > bytes_read);
         #endif
         
-        uint64_t skip = compressed_input_size -
-            (uint64_t)bytes_read;
+        uint64_t skip = compressed_input_size - (uint64_t)bytes_read;
         #ifndef INFLATE_SILENCE
         printf("skipping ahead %llu bytes...\n", skip);
         #endif

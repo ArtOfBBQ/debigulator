@@ -546,7 +546,9 @@ static uint32_t dpng_working_memory_size = 0;
 
 void init_PNG_decoder(
     void * (* malloc_funcptr)(size_t __size),
-    void (* arg_free_funcptr)(void *))
+    void (* arg_free_funcptr)(void *),
+    void * (* arg_memset_funcptr)(void *str, int c, size_t n),
+    void * (* arg_memcpy_funcptr)(void * dest, const void * src, size_t n))
 {
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(malloc_func == NULL);
@@ -556,6 +558,8 @@ void init_PNG_decoder(
     
     malloc_func = malloc_funcptr;
     free_func = arg_free_funcptr;
+    
+    inflate_init(malloc_funcptr, arg_memset_funcptr, arg_memcpy_funcptr);
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert_crc_table_accurate();

@@ -39,7 +39,9 @@ with the same signature to give the PNG decoder memory to work with.
 */
 void init_PNG_decoder(
     void * (* malloc_funcptr)(size_t __size),
-    void (* arg_free_funcptr)(void *));
+    void (* arg_free_funcptr)(void *),
+    void * (* arg_memset_funcptr)(void *str, int c, size_t n),
+    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n));
 
 void destroy_PNG_decoder(void);
 
