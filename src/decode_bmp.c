@@ -285,10 +285,13 @@ void encode_BMP(
     const uint32_t width,
     const uint32_t height,
     char * recipient,
+    uint32_t * recipient_size,
     const int64_t recipient_capacity)
 {
-    // reminder: the final +1 is for a potential null terminator
-    assert((uint64_t)recipient_capacity == 14 + 40 + rgba_size + 1);
+    // reminder: the final + 1 is for a potential null terminator
+    assert((uint64_t)recipient_capacity >= 14 + 40 + rgba_size + 1);
+    *recipient_size = 14 + 40 + rgba_size + 1;
+    
     char * recipient_at = (char *)recipient;
     
     BitmapFileHeader header;

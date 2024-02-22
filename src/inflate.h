@@ -13,6 +13,7 @@ many others.
 */
 
 #include "inttypes.h"
+#include "stddef.h"
 
 #ifndef NULL
 #define NULL 0
