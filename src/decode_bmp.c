@@ -290,7 +290,7 @@ void encode_BMP(
 {
     // reminder: the final + 1 is for a potential null terminator
     assert((uint64_t)recipient_capacity >= 14 + 40 + rgba_size + 1);
-    *recipient_size = 14 + 40 + rgba_size + 1;
+    *recipient_size = 14 + 40 + (uint32_t)rgba_size + 1;
     
     char * recipient_at = (char *)recipient;
     
