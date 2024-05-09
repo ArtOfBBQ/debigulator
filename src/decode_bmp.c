@@ -50,13 +50,18 @@ void get_BMP_width_height(
     uint8_t * raw_input_at = (uint8_t *)raw_input;
     uint64_t raw_input_left = raw_input_size;
     
+    #ifndef DECODE_BMP_IGNORE_ASSERTS
     assert(raw_input_size >= sizeof(BitmapFileHeader));
+    #endif
     
     BitmapFileHeader header = *(BitmapFileHeader *)raw_input;
     raw_input_at += sizeof(BitmapFileHeader);
     raw_input_left -= sizeof(BitmapFileHeader);
     
+    #ifndef DECODE_BMP_IGNORE_ASSERTS
     assert(raw_input_left >= sizeof(DIBHeader));
+    #endif
+    
     DIBHeader dib_header = *(DIBHeader *)raw_input_at;
     
     if (
@@ -93,7 +98,10 @@ void decode_BMP(
     const int64_t out_rgba_values_size,
     uint32_t * out_good)
 {
+    #ifndef DECODE_BMP_IGNORE_ASSERTS
     assert(raw_input_size >= sizeof(BitmapFileHeader));
+    #endif
+    
     uint8_t * raw_input_at = (uint8_t *)raw_input;
     // uint64_t raw_input_left = raw_input_size;
     
@@ -130,7 +138,10 @@ void decode_BMP(
         return;
     }
     
+    #ifndef DECODE_BMP_IGNORE_ASSERTS
     assert(raw_input_size >= sizeof(DIBHeader));
+    #endif
+    
     DIBHeader dib_header = *(DIBHeader *)raw_input_at;
     // raw_input_at += sizeof(DIBHeader);
     // raw_input_left -= sizeof(DIBHeader);
@@ -139,7 +150,10 @@ void decode_BMP(
             break;
         case 108:
             // BITMAPV4HEADER
+            #ifndef DECODE_BMP_IGNORE_ASSERTS
             assert(sizeof(BitmapV4DIBHeaderAddon) == (108-40));
+            #endif
+            
             break;
         default:
             #ifndef DECODE_BMP_SILENCE
@@ -289,7 +303,11 @@ void encode_BMP(
     const int64_t recipient_capacity)
 {
     // reminder: the final + 1 is for a potential null terminator
-    assert((uint64_t)recipient_capacity >= 14 + 40 + rgba_size + 1);
+    #ifndef DECODE_BMP_IGNORE_ASSERTS
+    assert(
+        (uint64_t)recipient_capacity >= 14 + 40 + rgba_size + 1);
+    #endif
+    
     *recipient_size = 14 + 40 + (uint32_t)rgba_size + 1;
     
     char * recipient_at = (char *)recipient;
@@ -308,7 +326,9 @@ void encode_BMP(
     }
     
     DIBHeader dib_header;
+    #ifndef DECODE_BMP_IGNORE_ASSERTS
     assert(sizeof(dib_header) == 40);
+    #endif
     dib_header.size = 40;
     dib_header.width = (int32_t)width;
     dib_header.height = -1 * (int32_t)height;

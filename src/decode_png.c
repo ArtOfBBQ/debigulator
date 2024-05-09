@@ -416,7 +416,7 @@ static uint32_t flip_endian(const uint32_t to_flip) {
     return return_value;
 }
 
-static uint32_t are_equal_strings(
+static uint32_t decode_png_are_equal_strings(
     char * str1,
     char * str2,
     uint32_t len)
@@ -610,7 +610,7 @@ void get_PNG_width_height(
     PNGSignature png_signature = *(PNGSignature *)compressed_input;
     compressed_input += sizeof(PNGSignature);
     
-    if (!are_equal_strings(
+    if (!decode_png_are_equal_strings(
         /* string 1: */ png_signature.png_string,
         /* string 2: */ (char *)"PNG",
         /* string length: */ 3))
@@ -705,7 +705,7 @@ void decode_PNG(
     #endif
     
     if (
-        !are_equal_strings(
+        !decode_png_are_equal_strings(
             /* string 1: */ png_signature.png_string,
             /* string 2: */ (char *)"PNG",
             /* string length: */ 3))
@@ -738,7 +738,7 @@ void decode_PNG(
         chunk_header.length = flip_endian(chunk_header.length);
         
         if (
-            !are_equal_strings(
+            !decode_png_are_equal_strings(
                 chunk_header.type,
                 (char *)"IDAT",
                 4)
@@ -858,7 +858,7 @@ void decode_PNG(
             return;
         }
         
-        if (are_equal_strings(
+        if (decode_png_are_equal_strings(
             chunk_header.type,
             (char *)"PLTE",
             4))
@@ -910,7 +910,7 @@ void decode_PNG(
                 palette->blue[i]   = compressed_input[2];
                 compressed_input  += 3;
             }
-        } else if (are_equal_strings(
+        } else if (decode_png_are_equal_strings(
             chunk_header.type,
             (char *)"IHDR",
             4))
@@ -1096,7 +1096,7 @@ void decode_PNG(
                 return;
             }
             
-        }  else if (are_equal_strings(
+        }  else if (decode_png_are_equal_strings(
             chunk_header.type,
             (char *)"IDAT",
             4))
@@ -1250,7 +1250,7 @@ void decode_PNG(
                 compressed_input_size_left--;
             }
         }
-        else if (are_equal_strings(
+        else if (decode_png_are_equal_strings(
             chunk_header.type,
             (char *)"IEND",
             4))
