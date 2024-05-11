@@ -306,6 +306,8 @@ void encode_BMP(
     #ifndef DECODE_BMP_IGNORE_ASSERTS
     assert(
         (uint64_t)recipient_capacity >= 14 + 40 + rgba_size + 1);
+    #else
+    (void)recipient_capacity;
     #endif
     
     *recipient_size = 14 + 40 + (uint32_t)rgba_size + 1;

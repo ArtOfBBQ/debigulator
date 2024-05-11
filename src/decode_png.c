@@ -1290,7 +1290,9 @@ void decode_PNG(
             return;
         }
         
+        #ifndef DECODE_PNG_IGNORE_CRC_CHECKS
         PNGFooter block_footer = *(PNGFooter *)compressed_input;
+        #endif
         compressed_input += sizeof(PNGFooter);
         compressed_input_size_left -= sizeof(PNGFooter);
         
