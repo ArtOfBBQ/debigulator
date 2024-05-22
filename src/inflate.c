@@ -562,10 +562,16 @@ static void unpack_huffman(
     
     // 1) Count the number of codes for each code length.  Let
     // bl_count[N] be the number of codes of length N, N >= 1.
-    uint32_t bl_count[array_and_recipient_size];
+    #ifndef INFLATE_IGNORE_ASSERTS
+    assert(array_and_recipient_size <= NUM_UNIQUE_CODELENGTHS);
+    #endif
+    uint32_t bl_count[NUM_UNIQUE_CODELENGTHS];
     unsigned int min_code_length = 123454321;
     unsigned int max_code_length = 0;
-    memset_func(bl_count, 0, array_and_recipient_size * sizeof(uint32_t));
+    memset_func(
+        bl_count,
+        0,
+        array_and_recipient_size * sizeof(uint32_t));
     
     for (uint32_t i = 0; i < array_and_recipient_size; i++) {
         
@@ -590,7 +596,7 @@ static void unpack_huffman(
     // Spec: 
     // 2) "Find the numerical value of the smallest code for each
     //    code length:"
-    uint32_t smallest_code[array_and_recipient_size];
+    uint32_t smallest_code[NUM_UNIQUE_CODELENGTHS];
     
     /*
         this code is yanked straight from the spec
