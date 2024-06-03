@@ -559,7 +559,10 @@ void init_PNG_decoder(
     malloc_func = malloc_funcptr;
     free_func = arg_free_funcptr;
     
-    inflate_init(malloc_funcptr, arg_memset_funcptr, arg_memcpy_funcptr);
+    inflate_init(
+        malloc_funcptr,
+        arg_memset_funcptr,
+        arg_memcpy_funcptr);
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert_crc_table_accurate();

@@ -31,14 +31,25 @@ void inflate_init(
     assert(swizzled_HCLEN_table == NULL);
     #endif
     
-    fixed_hclen_table = malloc_funcptr(
-        sizeof(uint32_t) * FIXED_HCLEN_TABLE_SIZE);
+    if (fixed_hclen_table == NULL) {
+        fixed_hclen_table = malloc_funcptr(
+            sizeof(uint32_t) * FIXED_HCLEN_TABLE_SIZE);
+    }
     
-    swizzled_HCLEN_table = malloc_funcptr(
-        sizeof(uint32_t) * NUM_UNIQUE_CODELENGTHS);
+    if (swizzled_HCLEN_table == NULL) {
+        swizzled_HCLEN_table = malloc_funcptr(
+            sizeof(uint32_t) * NUM_UNIQUE_CODELENGTHS);
+    }
     
     memset_func = arg_memset_func;
     memcpy_func = arg_memcpy_func;
+}
+
+void inflate_destroy(
+    void (* free_funcptr)(void * to_free))
+{
+    free_funcptr(fixed_hclen_table);
+    free_funcptr(swizzled_HCLEN_table);
 }
 
 static void align_memory(

@@ -36,6 +36,9 @@ void inflate_init(
     void * (* arg_memset_func)(void *str, int c, size_t n),
     void * (* arg_memcpy_func)(void * dest, const void * src, size_t n));
 
+void inflate_destroy(
+    void (* free_funcptr)(void * to_free));
+
 /*
 This function decompresses data was compressed using the DEFLATE algorithm.
 
