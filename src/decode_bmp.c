@@ -48,7 +48,9 @@ void get_BMP_width_height(
     uint32_t * out_good)
 {
     uint8_t * raw_input_at = (uint8_t *)raw_input;
+    #ifndef DECODE_BMP_IGNORE_ASSERTS
     uint64_t raw_input_left = raw_input_size;
+    #endif
     
     #ifndef DECODE_BMP_IGNORE_ASSERTS
     assert(raw_input_size >= sizeof(BitmapFileHeader));
@@ -56,9 +58,8 @@ void get_BMP_width_height(
     
     BitmapFileHeader header = *(BitmapFileHeader *)raw_input;
     raw_input_at += sizeof(BitmapFileHeader);
-    raw_input_left -= sizeof(BitmapFileHeader);
-    
     #ifndef DECODE_BMP_IGNORE_ASSERTS
+    raw_input_left -= sizeof(BitmapFileHeader);
     assert(raw_input_left >= sizeof(DIBHeader));
     #endif
     

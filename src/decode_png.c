@@ -752,10 +752,10 @@ void decode_PNG(
             printf("so all compressed data was collected.\n");
             printf(
                 "temp recipient for decompressed data will start at: %p\n",
-                decoded_stream_start);
+                (void *)decoded_stream_start);
             printf(
                 "inflate hashmap memory will start at: %p\n",
-                dpng_working_memory + estimated_decoded_stream_size);
+                (void *)(dpng_working_memory + estimated_decoded_stream_size));
             #endif
             
             #ifndef DECODE_PNG_IGNORE_ASSERTS
@@ -1424,7 +1424,7 @@ void decode_PNG(
                     printf(
                         "Error: writing to rgba_at: %p (%ld bytes away from "
                         "out_rgba_values), but out_rgba_values_size is %llu\n",
-                        rgba_at,
+                        (void *)rgba_at,
                         rgba_at - out_rgba_values,
                         rgba_values_size);
                     #endif

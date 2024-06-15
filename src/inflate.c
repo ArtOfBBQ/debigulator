@@ -956,9 +956,10 @@ void inflate(
                     printf(
                         "ERROR - recipient overflow! recipient_at: %p - "
                         "recipient: %p = %llu, but recipient_size only: %llu\n",
-                        recipient_at,
-                        recipient,
-                        (uint64_t)(recipient_at - recipient),
+                        (void *)recipient_at,
+                        (void *)recipient,
+                        (uint64_t)((ptrdiff_t)recipient_at -
+                            (ptrdiff_t)recipient),
                         recipient_size);
                     *out_good = 0;
                     return;
