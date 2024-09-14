@@ -3,9 +3,16 @@
 static void * (* malloc_func)(size_t __size) = NULL;
 
 void init_decode_gz(
-    void * (* malloc_funcptr)(size_t __size))
+    void * (* malloc_funcptr)
+        (size_t __size),
+    void * (* arg_memset_func)
+        (void *str, int c, size_t n),
+    void * (* arg_memcpy_func)
+        (void * dest, const void * src, size_t n))
 {
     malloc_func = malloc_funcptr;
+    
+    inflate_init(malloc_funcptr, arg_memset_func, arg_memcpy_func);
 }
 
 #ifndef true
@@ -22,7 +29,7 @@ static char * consume_bytes(
     uint32_t amount_to_consume)
 {
     #ifndef DECODE_GZ_IGNORE_ASSERTS
-    assert(**buffer_size >= amount_to_consume);
+    assert(*buffer_size >= amount_to_consume);
     #endif
     
     char * return_value = (char *)*buffer;
@@ -235,7 +242,7 @@ DecodedData * decode_gz(
     #endif
     
     // TODO: figure out how much memory to assign in advance
-    uint32_t guess_decompressed_size = (compressed_bytes_left - 8) * 25;
+    uint32_t guess_decompressed_size = (compressed_bytes_left * 35) + 1000000;
     
     uint8_t * recipient = (uint8_t *)malloc_func(guess_decompressed_size);
     uint64_t recipient_size = 0;

@@ -1861,8 +1861,8 @@ void inflate(
                             if (recipient_at >= working_memory_at) {
                                 #ifndef INFLATE_SILENCE
                                 printf(
-                                    "ERROR - recipient overflowing into working "
-                                    "memory!\n");
+                                    "ERROR - recipient overflowing into "
+                                    "working memory!\n");
                                 *out_good = 0;
                                 return;
                                 #endif
