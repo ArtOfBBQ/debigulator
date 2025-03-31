@@ -62,7 +62,7 @@ void inflate(
     uint8_t const * recipient,
     const uint64_t recipient_size,
     uint64_t * final_recipient_size,
-    uint8_t const * temp_working_memory,
+    uint8_t * temp_working_memory,
     const uint64_t temp_working_memory_size,
     uint8_t const * compressed_input,
     const uint64_t compressed_input_size,
