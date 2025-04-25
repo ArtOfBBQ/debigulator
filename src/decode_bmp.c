@@ -50,6 +50,8 @@ void get_BMP_width_height(
     uint8_t * raw_input_at = (uint8_t *)raw_input;
     #ifndef DECODE_BMP_IGNORE_ASSERTS
     uint64_t raw_input_left = raw_input_size;
+    #else
+    (void)raw_input_size;
     #endif
     
     #ifndef DECODE_BMP_IGNORE_ASSERTS
