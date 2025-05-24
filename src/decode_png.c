@@ -596,9 +596,9 @@ void get_PNG_width_height(
     uint32_t * out_height,
     uint32_t * out_good)
 {
-    if (compressed_input_size < 26) {
+    if (compressed_input_size < 28) {
         #ifndef DECODE_PNG_SILENCE
-        printf("ERROR - need 26 bytes for dimension check\n");
+        printf("ERROR - need 28 bytes for dimension check\n");
         #endif
         #ifndef DECODE_PNG_IGNORE_ASSERTS
         assert(0);
