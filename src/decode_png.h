@@ -30,18 +30,28 @@ This function must be run first, or you can't use anything else in this
 header file.
 
 Pass the malloc() function from <stdlib.h> or any other allocation function
-with the same signature to give the PNG decoder memory to work with.
+with the same signature to give the PNG decoder memory to work with. Same for
+the other required C library functions.
+
+Finally, pass some working memory for the decoder to work with.
 
 ** Example:
 ** #include <stdlib.h>
 ** 
-** init_PNG_decoder(malloc);
+** init_PNG_decoder(
+    malloc,
+    free,
+    memset,
+    memcpy,
+    120000000);
+ );
 */
 void init_PNG_decoder(
     void * (* malloc_funcptr)(size_t __size),
     void (* arg_free_funcptr)(void *),
     void * (* arg_memset_funcptr)(void *str, int c, size_t n),
-    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n));
+    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n),
+    const uint32_t dpng_working_memory_size);
 
 void destroy_PNG_decoder(void);
 

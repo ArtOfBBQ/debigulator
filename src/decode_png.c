@@ -548,7 +548,8 @@ void init_PNG_decoder(
     void * (* malloc_funcptr)(size_t __size),
     void (* arg_free_funcptr)(void *),
     void * (* arg_memset_funcptr)(void *str, int c, size_t n),
-    void * (* arg_memcpy_funcptr)(void * dest, const void * src, size_t n))
+    void * (* arg_memcpy_funcptr)(void * dest, const void * src, size_t n),
+    const uint32_t arg_dpng_working_memory_size)
 {
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert(malloc_func == NULL);
@@ -573,7 +574,7 @@ void init_PNG_decoder(
     
     palette = (Palette *)malloc_func(sizeof(Palette));
     
-    dpng_working_memory_size = 12000000;
+    dpng_working_memory_size = arg_dpng_working_memory_size;
     dpng_working_memory = (uint8_t *)malloc_func(dpng_working_memory_size);
 }
 
