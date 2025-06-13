@@ -1,9 +1,14 @@
 #include "inflate.h"
 
 #define FIXED_HCLEN_TABLE_SIZE 288
-static uint32_t * fixed_hclen_table = NULL;
+#define NUM_UNIQUE_CODELENGTHS 19
+typedef struct InflateState {
+    uint32_t fixed_hclen_table[FIXED_HCLEN_TABLE_SIZE];
+    uint32_t swizzled_HCLEN_table[NUM_UNIQUE_CODELENGTHS];
+} InflateState;
 
-static uint32_t * swizzled_HCLEN_table = NULL;
+#define INFLATE_MAX_THREADS 10
+static InflateState * ifs[INFLATE_MAX_THREADS];
 
 static const uint32_t swizzle[] = {
 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15};
@@ -15,7 +20,6 @@ static void * (* memcpy_func)(void * dest, const void * src, size_t n) = NULL;
 #define NULL 0
 #endif
 
-#define NUM_UNIQUE_CODELENGTHS 19
 #define MAPARRAY_CODELENGTH_BITS 4 // stores up to 15, we need only 12
 #define MAPARRAY_MAP_BITS 12 // code lengths 12 or less are in the map
 #define HUFFMAN_HASHMAP_SIZE 65536 // 2^16, enough to concatenate 4 + 12
@@ -24,21 +28,15 @@ static void * (* memcpy_func)(void * dest, const void * src, size_t n) = NULL;
 void inflate_init(
     void * (* malloc_funcptr)(size_t __size),
     void * (* arg_memset_func)(void *str, int c, size_t n),
-    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n))
+    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n),
+    const uint32_t thread_id)
 {
     #ifndef INFLATE_IGNORE_ASSERTS
-    assert(fixed_hclen_table == NULL);
-    assert(swizzled_HCLEN_table == NULL);
+    assert(ifs[thread_id] == NULL);
     #endif
     
-    if (fixed_hclen_table == NULL) {
-        fixed_hclen_table = malloc_funcptr(
-            sizeof(uint32_t) * FIXED_HCLEN_TABLE_SIZE);
-    }
-    
-    if (swizzled_HCLEN_table == NULL) {
-        swizzled_HCLEN_table = malloc_funcptr(
-            sizeof(uint32_t) * NUM_UNIQUE_CODELENGTHS);
+    if (ifs[thread_id] == NULL) {
+        ifs[thread_id] = malloc_funcptr(sizeof(InflateState));
     }
     
     memset_func = arg_memset_func;
@@ -46,10 +44,11 @@ void inflate_init(
 }
 
 void inflate_destroy(
-    void (* free_funcptr)(void * to_free))
+    void (* free_funcptr)(void * to_free),
+    const uint32_t thread_id)
 {
-    free_funcptr(fixed_hclen_table);
-    free_funcptr(swizzled_HCLEN_table);
+    free_funcptr(ifs[thread_id]->fixed_hclen_table);
+    free_funcptr(ifs[thread_id]->swizzled_HCLEN_table);
 }
 
 static void align_memory(
@@ -780,7 +779,8 @@ void inflate(
     const uint64_t temp_working_memory_size,
     uint8_t const * compressed_input,
     const uint64_t compressed_input_size,
-    uint32_t * out_good)
+    uint32_t * out_good,
+    const uint32_t thread_id)
 {
     if (recipient == NULL) {
         #ifndef INFLATE_SILENCE
@@ -1027,47 +1027,47 @@ void inflate(
                 256 - 279     7     0000000 through 0010111
                 280 - 287     8     11000000 through 11000111
                 */
-                fixed_hclen_table[0] = 8; //  32bit
-                fixed_hclen_table[1] = 8; //  64bit
-                fixed_hclen_table[2] = 8; //
-                fixed_hclen_table[3] = 8; // 128bit
+                ifs[thread_id]->fixed_hclen_table[0] = 8; //  32bit
+                ifs[thread_id]->fixed_hclen_table[1] = 8; //  64bit
+                ifs[thread_id]->fixed_hclen_table[2] = 8; //
+                ifs[thread_id]->fixed_hclen_table[3] = 8; // 128bit
                 for (int i = 4; i < 144; i+=4) {
                     memcpy_func(
-                        fixed_hclen_table + i,
-                        fixed_hclen_table,
+                        ifs[thread_id]->fixed_hclen_table + i,
+                        ifs[thread_id]->fixed_hclen_table,
                         16);
                 }
                 
-                fixed_hclen_table[144] = 9; //  32bit
-                fixed_hclen_table[145] = 9; //  64bit
-                fixed_hclen_table[146] = 9; //
-                fixed_hclen_table[147] = 9; // 128bit
+                ifs[thread_id]->fixed_hclen_table[144] = 9; //  32bit
+                ifs[thread_id]->fixed_hclen_table[145] = 9; //  64bit
+                ifs[thread_id]->fixed_hclen_table[146] = 9; //
+                ifs[thread_id]->fixed_hclen_table[147] = 9; // 128bit
                 for (int i = 148; i < 256; i+=4) {
                     memcpy_func(
-                        fixed_hclen_table + i,
-                        fixed_hclen_table + 144,
+                        ifs[thread_id]->fixed_hclen_table + i,
+                        ifs[thread_id]->fixed_hclen_table + 144,
                         16);
                 }
                 
-                fixed_hclen_table[256] = 7; //  32bit
-                fixed_hclen_table[257] = 7; //  64bit
-                fixed_hclen_table[258] = 7; //
-                fixed_hclen_table[259] = 7; // 128bit
+                ifs[thread_id]->fixed_hclen_table[256] = 7; //  32bit
+                ifs[thread_id]->fixed_hclen_table[257] = 7; //  64bit
+                ifs[thread_id]->fixed_hclen_table[258] = 7; //
+                ifs[thread_id]->fixed_hclen_table[259] = 7; // 128bit
                 for (int i = 260; i < 280; i+=4) {
                     memcpy_func(
-                        fixed_hclen_table + i,
-                        fixed_hclen_table + 256,
+                        ifs[thread_id]->fixed_hclen_table + i,
+                        ifs[thread_id]->fixed_hclen_table + 256,
                         16);
                 }
                 
-                fixed_hclen_table[280] = 8; //  32bit
-                fixed_hclen_table[281] = 8; //  64bit
-                fixed_hclen_table[282] = 8; //
-                fixed_hclen_table[283] = 8; // 128bit
+                ifs[thread_id]->fixed_hclen_table[280] = 8; //  32bit
+                ifs[thread_id]->fixed_hclen_table[281] = 8; //  64bit
+                ifs[thread_id]->fixed_hclen_table[282] = 8; //
+                ifs[thread_id]->fixed_hclen_table[283] = 8; // 128bit
                 for (int i = 284; i < 288; i+=4) {
                     memcpy_func(
-                        fixed_hclen_table + i,
-                        fixed_hclen_table + 280,
+                        ifs[thread_id]->fixed_hclen_table + i,
+                        ifs[thread_id]->fixed_hclen_table + 280,
                         16);
                 }
                 
@@ -1086,7 +1086,7 @@ void inflate(
                 working_memory_remaining -= sizeof(HuffmanEntry) * 288;
                 unpack_huffman(
                     /* array:     : */
-                        fixed_hclen_table,
+                        ifs[thread_id]->fixed_hclen_table,
                     /* array_and_recipient_size : */
                         288,
                     /* recipient: */
@@ -1254,7 +1254,7 @@ void inflate(
                 
                 // 0-init swizzled HCLEN table
                 memset_func(
-                    swizzled_HCLEN_table,
+                    ifs[thread_id]->swizzled_HCLEN_table,
                     0,
                     4 * NUM_UNIQUE_CODELENGTHS);
                 
@@ -1263,14 +1263,16 @@ void inflate(
                     assert(swizzle[i] < NUM_UNIQUE_CODELENGTHS);
                     #endif
                     
-                    swizzled_HCLEN_table[swizzle[i]] =
+                    ifs[thread_id]->swizzled_HCLEN_table[swizzle[i]] =
                             consume_bits(
                                 /* from: */ &data_stream,
                                 /* size: */ 3);
                     
                     #ifndef INFLATE_IGNORE_ASSERTS
-                    assert(swizzled_HCLEN_table[swizzle[i]] <= 7);
-                    assert(swizzled_HCLEN_table[swizzle[i]] >= 0);
+                    assert(
+                        ifs[thread_id]->swizzled_HCLEN_table[swizzle[i]] <= 7);
+                    assert(
+                        ifs[thread_id]->swizzled_HCLEN_table[swizzle[i]] >= 0);
                     #endif
                 }
                 
@@ -1303,7 +1305,7 @@ void inflate(
                 
                 unpack_huffman(
                     /* array:     : */
-                        swizzled_HCLEN_table,
+                        ifs[thread_id]->swizzled_HCLEN_table,
                     /* array_and_recipient_size : */
                         NUM_UNIQUE_CODELENGTHS,
                     /* recipient: */

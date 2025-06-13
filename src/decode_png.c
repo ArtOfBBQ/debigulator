@@ -325,15 +325,6 @@ static unsigned long update_crc(
 }
 #endif // DECODE_PNG_IGNORE_CRC_CHECKS
 
-typedef struct Palette {
-    uint8_t red[256];
-    uint8_t green[256];
-    uint8_t blue[256];
-    uint32_t size;
-} Palette;
-
-static Palette * palette = NULL;
-
 /*
 A PNG file starts with an 8-byte signature
 All of these seem like ancient artifacts to me,
@@ -537,57 +528,79 @@ static uint8_t undo_PNG_filter(
     return 0;
 }
 
-static uint32_t already_initialized = 0;
-static void * (* malloc_func)(size_t __size) = NULL;
-static void (* free_func)(void *) = NULL;
+typedef struct Palette {
+    uint8_t red[256];
+    uint8_t green[256];
+    uint8_t blue[256];
+    uint32_t size;
+} Palette;
 
-static uint8_t * dpng_working_memory = NULL;
-static uint32_t dpng_working_memory_size = 0;
+typedef struct PNGDecoderThreadState {
+    Palette palette;
+    uint8_t * dpng_working_memory;
+    void * (* malloc)(size_t __size);
+    void (* free)(void *);
+    uint32_t dpng_working_memory_size;
+    uint32_t already_initialized;
+} PNGDecoderThreadState;
+
+#define PNG_DECODER_MAX_THREADS 10
+static PNGDecoderThreadState * states[PNG_DECODER_MAX_THREADS];
 
 void init_PNG_decoder(
-    void * (* malloc_funcptr)(size_t __size),
+    void * (* arg_malloc_funcptr)(size_t __size),
     void (* arg_free_funcptr)(void *),
     void * (* arg_memset_funcptr)(void *str, int c, size_t n),
     void * (* arg_memcpy_funcptr)(void * dest, const void * src, size_t n),
-    const uint32_t arg_dpng_working_memory_size)
+    const uint32_t arg_dpng_working_memory_size,
+    const uint32_t thread_id)
 {
     #ifndef DECODE_PNG_IGNORE_ASSERTS
-    assert(malloc_func == NULL);
-    assert(dpng_working_memory == NULL);
-    assert(!already_initialized);
+    assert(arg_malloc_funcptr != NULL);
+    assert(arg_free_funcptr != NULL);
+    assert(arg_memset_funcptr != NULL);
+    assert(arg_memcpy_funcptr != NULL);
+    assert(states[thread_id] == NULL);
     #endif
     
-    malloc_func = malloc_funcptr;
-    free_func = arg_free_funcptr;
+    
+    if (states[thread_id] == NULL) {
+        states[thread_id] = arg_malloc_funcptr(
+            sizeof(PNGDecoderThreadState));
+        arg_memset_funcptr(
+            states[thread_id],
+            0,
+            sizeof(PNGDecoderThreadState));
+        states[thread_id]->malloc = arg_malloc_funcptr;
+        states[thread_id]->free = arg_free_funcptr;
+        states[thread_id]->already_initialized = 1;
+    } else {
+        return;
+    }
     
     inflate_init(
-        malloc_funcptr,
+        arg_malloc_funcptr,
         arg_memset_funcptr,
-        arg_memcpy_funcptr);
+        arg_memcpy_funcptr,
+        thread_id);
     
     #ifndef DECODE_PNG_IGNORE_ASSERTS
     assert_crc_table_accurate();
     #endif
     
-    if (already_initialized) { return; }
-    already_initialized = 1;
-    
-    palette = (Palette *)malloc_func(sizeof(Palette));
-    
-    dpng_working_memory_size = arg_dpng_working_memory_size;
-    dpng_working_memory = (uint8_t *)malloc_func(dpng_working_memory_size);
+    states[thread_id]->dpng_working_memory_size = arg_dpng_working_memory_size;
+    states[thread_id]->dpng_working_memory =
+        (uint8_t *)arg_malloc_funcptr(
+            states[thread_id]->dpng_working_memory_size);
 }
 
-void destroy_PNG_decoder(void)
+void deinit_PNG_decoder(const uint32_t thread_id)
 {
-    already_initialized = 0;
+    states[thread_id]->already_initialized = 0;
     
-    if (free_func != NULL) {
-        free_func(dpng_working_memory);
-        dpng_working_memory = NULL;
-        free_func(palette);
-        palette = NULL;
-    }
+    states[thread_id]->free(states[thread_id]->dpng_working_memory);
+    states[thread_id]->free(states[thread_id]);
+    states[thread_id] = NULL;
 }
 
 void get_PNG_width_height(
@@ -658,11 +671,15 @@ void decode_PNG(
     const uint64_t compressed_input_size,
     const uint8_t * out_rgba_values,
     const uint64_t rgba_values_size,
-    uint32_t * out_good)
+    uint32_t * out_good,
+    const uint32_t thread_id)
 {
-    if (!already_initialized) {
+    if (!states[thread_id]) {
         #ifndef DECODE_PNG_SILENCE
-        printf("Error - decode_PNG() was called before init_png_decoder()\n");
+        printf(
+            "Error - decode_PNG() was called before init_png_decoder() "
+            "for thread_id: %u\n",
+            thread_id);
         #endif
         *out_good = 0;
         return;
@@ -673,7 +690,7 @@ void decode_PNG(
     assert(compressed_input_size > 0);
     assert(out_rgba_values != NULL);
     assert(out_good != NULL);
-    assert(dpng_working_memory != NULL);
+    assert(states[thread_id]->dpng_working_memory != NULL);
     #endif
     
     *out_good = 0;
@@ -686,7 +703,7 @@ void decode_PNG(
     uint8_t * headerless_compressed_data_begin = headerless_compressed_data;
     uint32_t headerless_compressed_data_stream_size = 0;
     uint8_t * decoded_stream_at =
-        (uint8_t *)(dpng_working_memory + sizeof(Palette));
+        (uint8_t *)(states[thread_id]->dpng_working_memory + sizeof(Palette));
     uint8_t * decoded_stream_start = decoded_stream_at;
     uint64_t actual_decoded_stream_size = 0;
     uint64_t estimated_decoded_stream_size = 0;
@@ -756,11 +773,11 @@ void decode_PNG(
                 (void *)decoded_stream_start);
             printf(
                 "inflate hashmap memory will start at: %p\n",
-                (void *)(dpng_working_memory + estimated_decoded_stream_size));
+                (void *)(states[thread_id]->dpng_working_memory + estimated_decoded_stream_size));
             #endif
             
             #ifndef DECODE_PNG_IGNORE_ASSERTS
-            assert(dpng_working_memory_size - estimated_decoded_stream_size >
+            assert(states[thread_id]->dpng_working_memory_size - estimated_decoded_stream_size >
                 INFLATE_HASHMAPS_SIZE);
             assert(headerless_compressed_data_stream_size > 4);
             #endif
@@ -774,15 +791,19 @@ void decode_PNG(
                 /* final_recipient_size: */
                     &actual_decoded_stream_size,
                 /* temp_working_memory: */
-                    dpng_working_memory + estimated_decoded_stream_size,
+                    states[thread_id]->dpng_working_memory +
+                        estimated_decoded_stream_size,
                 /* temp_working_memory_size: */
-                    dpng_working_memory_size - estimated_decoded_stream_size,
+                    states[thread_id]->dpng_working_memory_size -
+                        estimated_decoded_stream_size,
                 /* compressed_input: */
                     headerless_compressed_data_begin,
                 /* compressed_input_size: */
                     headerless_compressed_data_stream_size - 4,
                 /* good: */
-                    &inflate_result);
+                    &inflate_result,
+                /* const uint32_t thread_id: */
+                    thread_id);
             ran_inflate_algorithm = 1;
             
             if (inflate_result == 0) {
@@ -890,7 +911,6 @@ void decode_PNG(
                 return;
             }
             assert(ihdr_body.color_type == 3);
-            assert(palette != NULL);
             #endif
             
             if (chunk_header.length % 3 != 0) {
@@ -906,12 +926,12 @@ void decode_PNG(
                 return;
             }
             
-            palette->size = chunk_header.length / 3;
+            states[thread_id]->palette.size = chunk_header.length / 3;
             
-            for (uint32_t i = 0; i < palette->size; i++) {
-                palette->red[i]    = compressed_input[0];
-                palette->green[i]  = compressed_input[1];
-                palette->blue[i]   = compressed_input[2];
+            for (uint32_t i = 0; i < states[thread_id]->palette.size; i++) {
+                states[thread_id]->palette.red[i]   = compressed_input[0];
+                states[thread_id]->palette.green[i] = compressed_input[1];
+                states[thread_id]->palette.blue[i]  = compressed_input[2];
                 compressed_input  += 3;
             }
         } else if (decode_png_are_equal_strings(
@@ -1028,14 +1048,16 @@ void decode_PNG(
                     + ihdr_body.height
                     + 1
                     + INFLATE_HASHMAPS_SIZE;
-            if (required_memory_size > dpng_working_memory_size)
+            if (
+                required_memory_size >
+                    states[thread_id]->dpng_working_memory_size)
             {
                 #ifndef DECODE_PNG_SILENCE
                 printf(
                     "ERROR: this function assumes at least"
                     "(imgwidth * imgwidth * 4)+imgheight+1+hashmap memory) to "
                     "to work in and write to, got: %u, expected: %u\n",
-                    dpng_working_memory_size,
+                    states[thread_id]->dpng_working_memory_size,
                     (ihdr_body.width * ihdr_body.height * 4)
                         + ihdr_body.height
                         + INFLATE_HASHMAPS_SIZE);
@@ -1499,15 +1521,15 @@ void decode_PNG(
         }
     }
     
-    if (palette != NULL &&
-        ihdr_body.color_type == 3)
+    if (ihdr_body.color_type == 3)
     {
         rgba_at = (uint8_t *)out_rgba_values;
-        decoded_stream_at = (uint8_t *)(dpng_working_memory + sizeof(Palette));
+        decoded_stream_at = (uint8_t *)(
+            states[thread_id]->dpng_working_memory + sizeof(Palette));
         if (ihdr_body.color_type == 3) {
             for (uint32_t _ = 0; _ < pixel_count; _++) {
                 #ifndef DECODE_PNG_IGNORE_ASSERTS
-                assert(rgba_at[_] < palette->size);
+                assert(rgba_at[_] < states[thread_id]->palette.size);
                 #endif
                 decoded_stream_at[_] = rgba_at[_];
             }
@@ -1517,9 +1539,11 @@ void decode_PNG(
                 assert((_ * 4) + 3 < rgba_values_size);
                 #endif
                 
-                rgba_at[(_ * 4) + 0] = palette->red  [decoded_stream_at[_]];
-                rgba_at[(_ * 4) + 1] = palette->green[decoded_stream_at[_]];
-                rgba_at[(_ * 4) + 2] = palette->blue [decoded_stream_at[_]];
+                rgba_at[(_ * 4) + 0] =
+                    states[thread_id]->palette.red  [decoded_stream_at[_]];
+                rgba_at[(_ * 4) + 1] = states[thread_id]->palette.green[decoded_stream_at[_]];
+                rgba_at[(_ * 4) + 2] =
+                    states[thread_id]->palette.blue [decoded_stream_at[_]];
                 rgba_at[(_ * 4) + 3] = 255;
             }
         }

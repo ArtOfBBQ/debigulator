@@ -51,9 +51,10 @@ void init_PNG_decoder(
     void (* arg_free_funcptr)(void *),
     void * (* arg_memset_funcptr)(void *str, int c, size_t n),
     void * (* arg_memcpy_func)(void * dest, const void * src, size_t n),
-    const uint32_t dpng_working_memory_size);
+    const uint32_t dpng_working_memory_size,
+    const uint32_t thread_id);
 
-void destroy_PNG_decoder(void);
+void deinit_PNG_decoder(const uint32_t thread_id);
 
 /*
 You must run init_PNG_decode() first or this won't work.
@@ -100,7 +101,8 @@ void decode_PNG(
     const uint64_t compressed_input_size,
     const uint8_t * out_rgba_values,
     const uint64_t rgba_values_size,
-    uint32_t * out_good);
+    uint32_t * out_good,
+    const uint32_t thread_id);
 
 #ifdef __cplusplus
 }

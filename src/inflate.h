@@ -34,10 +34,12 @@ extern "C" {
 void inflate_init(
     void * (* malloc_funcptr)(size_t __size),
     void * (* arg_memset_func)(void *str, int c, size_t n),
-    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n));
+    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n),
+    const uint32_t thread_id);
 
 void inflate_destroy(
-    void (* free_funcptr)(void * to_free));
+    void (* free_funcptr)(void * to_free),
+    const uint32_t thread_id);
 
 /*
 This function decompresses data was compressed using the DEFLATE algorithm.
@@ -66,7 +68,8 @@ void inflate(
     const uint64_t temp_working_memory_size,
     uint8_t const * compressed_input,
     const uint64_t compressed_input_size,
-    uint32_t * out_good);
+    uint32_t * out_good,
+    const uint32_t thread_id);
 
 #ifdef __cplusplus
 }
