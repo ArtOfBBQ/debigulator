@@ -391,8 +391,9 @@ typedef struct ZLIBFooter {
 PNG files have many 4-byte big endian values
 We need to able to flip them to little endian
 */
-static uint32_t flip_endian(const uint32_t to_flip) {
-    
+static uint32_t
+flip_endian(const uint32_t to_flip)
+{
     uint32_t byte_1 = (to_flip & 255);
     uint32_t byte_2 = ((to_flip >> 8) & 255);
     uint32_t byte_3 = ((to_flip >> 16) & 255);
@@ -407,7 +408,8 @@ static uint32_t flip_endian(const uint32_t to_flip) {
     return return_value;
 }
 
-static uint32_t decode_png_are_equal_strings(
+static uint32_t
+decode_png_are_equal_strings(
     char * str1,
     char * str2,
     uint32_t len)
@@ -428,7 +430,8 @@ is a 'paeth predictor'
 The PNG specification has sample code for the paeth predictor,
 so I just copy pasted it here below.
 */
-static uint8_t compute_paeth_predictor(
+static uint8_t
+compute_paeth_predictor(
     /* a_previous_pixel */ int32_t a,
     /* b_previous_scanline */ int32_t b,
     /* c_previous_scanline_previous_pixel: */ int32_t c)
@@ -483,7 +486,8 @@ instead, and to undo these transforms you need several values
 from other pixels. You can read about this in the specification
 but it might take some struggling to understand.
 */
-static uint8_t undo_PNG_filter(
+static uint8_t
+undo_PNG_filter(
     unsigned int filter_type,
     uint8_t original_value,
     uint8_t a_previous_pixel,
@@ -528,14 +532,14 @@ static uint8_t undo_PNG_filter(
     return 0;
 }
 
-typedef struct Palette {
+typedef struct {
     uint8_t red[256];
     uint8_t green[256];
     uint8_t blue[256];
     uint32_t size;
 } Palette;
 
-typedef struct PNGDecoderThreadState {
+typedef struct {
     Palette palette;
     uint8_t * dpng_working_memory;
     void * (* malloc)(size_t __size);
@@ -547,7 +551,8 @@ typedef struct PNGDecoderThreadState {
 #define PNG_DECODER_MAX_THREADS 10
 static PNGDecoderThreadState * states[PNG_DECODER_MAX_THREADS];
 
-void init_PNG_decoder(
+void
+decode_png_init(
     void * (* arg_malloc_funcptr)(size_t __size),
     void (* arg_free_funcptr)(void *),
     void * (* arg_memset_funcptr)(void *str, int c, size_t n),
@@ -594,7 +599,7 @@ void init_PNG_decoder(
             states[thread_id]->dpng_working_memory_size);
 }
 
-void deinit_PNG_decoder(const uint32_t thread_id)
+void decode_png_deinit(const uint32_t thread_id)
 {
     states[thread_id]->already_initialized = 0;
     
@@ -603,7 +608,7 @@ void deinit_PNG_decoder(const uint32_t thread_id)
     states[thread_id] = NULL;
 }
 
-void get_PNG_width_height(
+void decode_png_get_width_height(
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
     uint32_t * out_width,
@@ -666,7 +671,7 @@ void get_PNG_width_height(
     *out_good = 1;
 }
 
-void decode_PNG(
+void decode_png(
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
     const uint8_t * out_rgba_values,

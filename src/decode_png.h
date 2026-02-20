@@ -46,7 +46,8 @@ Finally, pass some working memory for the decoder to work with.
     120000000);
  );
 */
-void init_PNG_decoder(
+void
+decode_png_init(
     void * (* malloc_funcptr)(size_t __size),
     void (* arg_free_funcptr)(void *),
     void * (* arg_memset_funcptr)(void *str, int c, size_t n),
@@ -54,7 +55,8 @@ void init_PNG_decoder(
     const uint32_t dpng_working_memory_size,
     const uint32_t thread_id);
 
-void deinit_PNG_decoder(const uint32_t thread_id);
+void
+decode_png_deinit(const uint32_t thread_id);
 
 /*
 You must run init_PNG_decode() first or this won't work.
@@ -70,7 +72,8 @@ exactly enough memory.
 Make sure to check if good is set to 1 (success) or 0 (parsing error). If the
 first 26 bytes fail, you can immediately abort. 
 */
-void get_PNG_width_height(
+void
+decode_png_get_width_height(
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
     uint32_t * out_width,
@@ -96,7 +99,8 @@ Decode the contents of a PNG file into uint8 RGBA values.
     you don't know why, comment out #define DECODE_PNG_SILENCE and you should
     see printf statements guiding you.
 */
-void decode_PNG(
+void
+decode_png(
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
     const uint8_t * out_rgba_values,
@@ -109,4 +113,3 @@ void decode_PNG(
 #endif
 
 #endif // DECODE_PNG_H
-
