@@ -613,7 +613,7 @@ void decode_png_get_width_height(
     const uint64_t compressed_input_size,
     uint32_t * out_width,
     uint32_t * out_height,
-    uint32_t * out_good)
+    uint8_t * out_good)
 {
     if (compressed_input_size < 28) {
         #ifndef DECODE_PNG_SILENCE
@@ -676,8 +676,8 @@ void decode_png(
     const uint64_t compressed_input_size,
     const uint8_t * out_rgba_values,
     const uint64_t rgba_values_size,
-    uint32_t * out_good,
-    const uint32_t thread_id)
+    const uint32_t thread_id,
+    uint8_t * out_good)
 {
     if (!states[thread_id]) {
         #ifndef DECODE_PNG_SILENCE
