@@ -1,5 +1,13 @@
 #include "decode_png.h"
 
+#ifndef DECODE_PNG_SILENCE
+#include "stdio.h"
+#endif
+
+#ifndef DECODE_PNG_IGNORE_ASSERTS
+#include "assert.h"
+#endif
+
 #ifndef NULL
 #define NULL 0
 #endif

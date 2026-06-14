@@ -13,14 +13,6 @@ PNG files.
 #include "inflate.h"
 #include <stddef.h>
 
-#ifndef DECODE_PNG_SILENCE
-#include "stdio.h"
-#endif
-
-#ifndef DECODE_PNG_IGNORE_ASSERTS
-#include "assert.h"
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif

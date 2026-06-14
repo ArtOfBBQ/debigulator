@@ -1,5 +1,13 @@
 #include "decode_bmp.h"
 
+#ifndef DECODE_BMP_SILENCE
+#include "stdio.h"
+#endif
+
+#ifndef DECODE_BMP_IGNORE_ASSERTS
+#include "assert.h"
+#endif
+
 #ifndef NULL
 #define NULL 0
 #endif

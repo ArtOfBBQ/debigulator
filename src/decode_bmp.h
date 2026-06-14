@@ -7,14 +7,6 @@ The 2 methods declared in this file are my API for decoding BMP files.
 
 #include <stdint.h>
 
-#ifndef DECODE_BMP_SILENCE
-#include "stdio.h"
-#endif
-
-#ifndef DECODE_BMP_IGNORE_ASSERTS
-#include "assert.h"
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
