@@ -550,7 +550,7 @@ typedef struct {
 typedef struct {
     Palette palette;
     uint8_t * dpng_working_memory;
-    void * (* malloc)(size_t __size);
+    void * (* malloc)(uint64_t __size);
     void (* free)(void *);
     uint32_t dpng_working_memory_size;
     uint32_t already_initialized;
@@ -561,10 +561,10 @@ static PNGDecoderThreadState * states[PNG_DECODER_MAX_THREADS];
 
 void
 decode_png_init(
-    void * (* arg_malloc_funcptr)(size_t __size),
+    void * (* arg_malloc_funcptr)(uint64_t __size),
     void (* arg_free_funcptr)(void *),
-    void * (* arg_memset_funcptr)(void *str, int c, size_t n),
-    void * (* arg_memcpy_funcptr)(void * dest, const void * src, size_t n),
+    void * (* arg_memset_funcptr)(void *str, int c, uint64_t n),
+    void * (* arg_memcpy_funcptr)(void * dest, const void * src,uint64_t n),
     const uint32_t arg_dpng_working_memory_size,
     const uint32_t thread_id)
 {
@@ -584,6 +584,7 @@ decode_png_init(
             states[thread_id],
             0,
             sizeof(PNGDecoderThreadState));
+        
         states[thread_id]->malloc = arg_malloc_funcptr;
         states[thread_id]->free = arg_free_funcptr;
         states[thread_id]->already_initialized = 1;

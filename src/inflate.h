@@ -12,29 +12,17 @@ inside a gzip (.gz) file, the IDAT (image data) chunks from a .png image, and
 many others.
 */
 
-#include "inttypes.h"
-#include "stddef.h"
-
-#ifndef NULL
-#define NULL 0
-#endif
-
-#ifndef INFLATE_SILENCE
-#include "stdio.h"
-#endif
-
-#ifndef INFLATE_IGNORE_ASSERTS
-#include "assert.h"
-#endif
+#include <inttypes.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void inflate_init(
-    void * (* malloc_funcptr)(size_t __size),
-    void * (* arg_memset_func)(void *str, int c, size_t n),
-    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n),
+    void * (* malloc_funcptr)(uint64_t __size),
+    void * (* arg_memset_func)(void *str, int c, uint64_t n),
+    void * (* arg_memcpy_func)(void * dest, const void * src, uint64_t n),
     const uint32_t thread_id);
 
 void inflate_destroy(

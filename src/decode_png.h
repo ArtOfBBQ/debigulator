@@ -1,6 +1,8 @@
 #ifndef DECODE_PNG_H
 #define DECODE_PNG_H
 
+#include <stdint.h>
+
 /*
 The 2 methods declared in this file are the API for decoding
 PNG files.
@@ -40,10 +42,10 @@ Finally, pass some working memory for the decoder to work with.
 */
 void
 decode_png_init(
-    void * (* malloc_funcptr)(size_t __size),
+    void * (* malloc_funcptr)(uint64_t __size),
     void (* arg_free_funcptr)(void *),
-    void * (* arg_memset_funcptr)(void *str, int c, size_t n),
-    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n),
+    void * (* arg_memset_funcptr)(void *str, int c, uint64_t n),
+    void * (* arg_memcpy_func)(void * dest, const void * src, uint64_t n),
     const uint32_t dpng_working_memory_size,
     const uint32_t thread_id);
 

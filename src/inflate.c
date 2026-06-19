@@ -1,5 +1,17 @@
 #include "inflate.h"
 
+#ifndef NULL
+#define NULL 0
+#endif
+
+#ifndef INFLATE_SILENCE
+#include <stdio.h>
+#endif
+
+#ifndef INFLATE_IGNORE_ASSERTS
+#include <assert.h>
+#endif
+
 #define FIXED_HCLEN_TABLE_SIZE 288
 #define NUM_UNIQUE_CODELENGTHS 19
 typedef struct InflateState {
@@ -13,8 +25,8 @@ static InflateState * ifs[INFLATE_MAX_THREADS];
 static const uint32_t swizzle[] = {
 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15};
 
-static void * (* memset_func)(void * str, int c, size_t n) = NULL;
-static void * (* memcpy_func)(void * dest, const void * src, size_t n) = NULL;
+static void * (* memset_func)(void * str, int c, uint64_t n) = NULL;
+static void * (* memcpy_func)(void * dest, const void * src, uint64_t n) = NULL;
 
 #ifndef NULL
 #define NULL 0
@@ -26,9 +38,9 @@ static void * (* memcpy_func)(void * dest, const void * src, size_t n) = NULL;
 #define HUFFMAN_LINEAR_ARRAY_SIZE 500 // for code lengths 13 or higher
 
 void inflate_init(
-    void * (* malloc_funcptr)(size_t __size),
-    void * (* arg_memset_func)(void *str, int c, size_t n),
-    void * (* arg_memcpy_func)(void * dest, const void * src, size_t n),
+    void * (* malloc_funcptr)(uint64_t __size),
+    void * (* arg_memset_func)(void *str, int c, uint64_t n),
+    void * (* arg_memcpy_func)(void * dest, const void * src, uint64_t n),
     const uint32_t thread_id)
 {
     #ifndef INFLATE_IGNORE_ASSERTS
