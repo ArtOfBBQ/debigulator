@@ -42,7 +42,7 @@ Finally, pass some working memory for the decoder to work with.
 */
 void
 decode_png_init(
-    void * (* malloc_funcptr)(uint64_t __size),
+    void * (* malloc_funcptr)(size_t __size),
     void (* arg_free_funcptr)(void *),
     void * (* arg_memset_funcptr)(void *str, int c, uint64_t n),
     void * (* arg_memcpy_func)(void * dest, const void * src, uint64_t n),

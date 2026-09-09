@@ -38,7 +38,7 @@ static void * (* memcpy_func)(void * dest, const void * src, uint64_t n) = NULL;
 #define HUFFMAN_LINEAR_ARRAY_SIZE 500 // for code lengths 13 or higher
 
 void inflate_init(
-    void * (* malloc_funcptr)(uint64_t __size),
+    void * (* malloc_funcptr)(size_t __size),
     void * (* arg_memset_func)(void *str, int c, uint64_t n),
     void * (* arg_memcpy_func)(void * dest, const void * src, uint64_t n),
     const uint32_t thread_id)
