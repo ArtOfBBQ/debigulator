@@ -4,12 +4,26 @@
 #define NULL 0
 #endif
 
-#ifndef INFLATE_SILENCE
-#include <stdio.h>
+#ifndef INFLATE_PRINTF_ACTIVE
+#define INFLATE_PRINTF_ACTIVE 2
 #endif
 
-#ifndef INFLATE_IGNORE_ASSERTS
+#ifndef INFLATE_ASSERTS_ACTIVE
+#define INFLATE_ASSERTS_ACTIVE 1
+#endif
+
+#if INFLATE_PRINTF_ACTIVE == 1
+#include <stdio.h>
+#elif INFLATE_PRINTF_ACTIVE == 2
+#else
+#error
+#endif
+
+#if INFLATE_ASSERTS_ACTIVE == 1
 #include <assert.h>
+#elif INFLATE_ASSERTS_ACTIVE == 2
+#else
+#error
 #endif
 
 #define FIXED_HCLEN_TABLE_SIZE 288
@@ -43,8 +57,11 @@ void inflate_init(
     void * (* arg_memcpy_func)(void * dest, const void * src, uint64_t n),
     const uint32_t thread_id)
 {
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(ifs[thread_id] == NULL);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     if (ifs[thread_id] == NULL) {
@@ -72,8 +89,11 @@ static void align_memory(
         *memory_store_size_remaining -= 1;
     }
     
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert((uintptr_t)(void *)*memory_store % 16 == 0);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
 }
 
@@ -183,9 +203,12 @@ static uint32_t reverse_bit_order(
     //
     // Step 6: mask the rightmost bits according to bit_count
    
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(bit_count > 0);
     assert(bit_count < 33);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     if (bit_count == 1) { return original; }
@@ -246,8 +269,11 @@ inline static uint32_t peek_bits(
     // now read from the byte buffer
     uint8_t * peek_at = from->data;
     uint32_t bytes_to_peek = bits_to_peek / 8;
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(bytes_to_peek < 4);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     uint32_t next_bytes =
         (uint32_t)peek_at[0] |
@@ -324,7 +350,7 @@ static uint32_t maparray_compute_hash(
         uint16_t concatenated_key =
             (uint16_t)((code_length_bits << 12) | reversed_key);
         
-        #ifndef INFLATE_IGNORE_ASSERTS
+        #if INFLATE_ASSERTS_ACTIVE == 1
         if (in_maparray->maparray[concatenated_key].key != 0) {
             assert(
                 in_maparray->maparray[concatenated_key].key ==
@@ -335,6 +361,8 @@ static uint32_t maparray_compute_hash(
                 in_maparray->maparray[concatenated_key].code_length ==
                     code_length_bits);
         }
+        #elif INFLATE_ASSERTS_ACTIVE == 2
+        #error
         #endif
         
         return concatenated_key;
@@ -354,8 +382,11 @@ static uint32_t maparray_compute_hash(
     
     in_maparray->maparray_array_size += 1;
     
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(in_maparray->maparray_array_size < HUFFMAN_LINEAR_ARRAY_SIZE);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     return in_maparray->maparray_array_size + HUFFMAN_HASHMAP_SIZE - 1;
@@ -395,9 +426,12 @@ static uint32_t consume_bits(
     DataStream * from,
     const uint32_t amount)
 {
-    #ifndef INFLATE_IGNORE_ASSERTS 
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(amount > 0);
     assert(amount < 33);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     uint32_t bits_to_consume = amount;
@@ -423,9 +457,12 @@ static uint32_t hashed_huffman_decode(
     DataStream * datastream,
     uint32_t * good)
 {
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(dict != NULL);
     assert(datastream != NULL);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     uint32_t bitcount = dict->min_code_length - 1;
@@ -462,11 +499,14 @@ static uint32_t hashed_huffman_decode(
         }
     }
     
-    #ifndef INFLATE_SILENCE 
+    #if INFLATE_PRINTF_ACTIVE == 1
     printf(
         "failed to find raw :%u for codelen: %u in dict\n",
         raw,
         bitcount);
+    #elif INFLATE_PRINTF_ACTIVE == 2
+    #else
+    #error
     #endif
     *good = 0;
     
@@ -476,8 +516,11 @@ static uint32_t hashed_huffman_decode(
 static void construct_hashed_huffman(
     HashedHuffman * to_construct)
 {
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(to_construct != NULL);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     memset_func(to_construct, 0, sizeof(HashedHuffman));
@@ -496,9 +539,12 @@ static void huffman_to_hashmap(
     const uint32_t huffman_input_size,
     HashedHuffman * recipient)
 {
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(huffman_input  != NULL);
     assert(huffman_input_size > 0);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     construct_hashed_huffman(recipient);
@@ -520,9 +566,12 @@ static void huffman_to_hashmap(
             /* reversed_key: */ reversed_key,
             /* code_length: */ huffman_input[i].code_length);
         
-        #ifndef INFLATE_IGNORE_ASSERTS
+        #if INFLATE_ASSERTS_ACTIVE == 1
         assert(hash <= (HUFFMAN_HASHMAP_SIZE + HUFFMAN_LINEAR_ARRAY_SIZE));
         assert(hash >= 0);
+        #elif INFLATE_ASSERTS_ACTIVE == 2
+        #else
+        #error
         #endif
         
         if (
@@ -533,8 +582,11 @@ static void huffman_to_hashmap(
             huffman_input[i].code_length > recipient->max_code_length)
         {
             recipient->max_code_length = huffman_input[i].code_length;
-            #ifndef INFLATE_IGNORE_ASSERTS
+            #if INFLATE_ASSERTS_ACTIVE == 1
             assert(recipient->max_code_length < 30);
+            #elif INFLATE_ASSERTS_ACTIVE == 2
+            #else
+            #error
             #endif
         }
         
@@ -542,17 +594,23 @@ static void huffman_to_hashmap(
         recipient->maparray[hash].code_length = huffman_input[i].code_length;
         recipient->maparray[hash].value = huffman_input[i].value;
         
-        #ifndef INFLATE_IGNORE_ASSERTS
+        #if INFLATE_ASSERTS_ACTIVE == 1
         assert(
             recipient->maparray_array_size <
                 HUFFMAN_HASHMAP_SIZE + HUFFMAN_LINEAR_ARRAY_SIZE);
+        #elif INFLATE_ASSERTS_ACTIVE == 2
+        #else
+        #error
         #endif
     }
     
-    #ifndef INFLATE_IGNORE_ASSERTS 
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(
        recipient->min_code_length <=
        recipient->max_code_length);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
 }
 
@@ -568,10 +626,13 @@ static void unpack_huffman(
     HuffmanEntry * recipient,
     uint32_t * good)
 {
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(array != NULL);
     assert(array_and_recipient_size > 0);
     assert(recipient != NULL);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     // initialize dict
@@ -629,8 +690,11 @@ static void unpack_huffman(
     unsigned int code = 0;
     bl_count[0] = 0;
     
-    #ifndef INFLATE_IGNORE_ASSERTS 
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(max_code_length < array_and_recipient_size);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     for (
@@ -657,16 +721,22 @@ static void unpack_huffman(
             }
             
             if (actually_used) {
-                #ifndef INFLATE_SILENCE 
+                #if INFLATE_PRINTF_ACTIVE == 1 
                 printf(
                     "ERROR: smallest_code[%u] was %u%s",
                     bits,
                     smallest_code[bits],
                     " - value can't fit in that few bits!\n");
+                #elif INFLATE_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(0);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
             }
         }
@@ -690,7 +760,7 @@ static void unpack_huffman(
         }
     }
     
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     uint32_t found_used = 0;
     for (uint32_t i = 0; i < array_and_recipient_size; i++) {
         
@@ -700,6 +770,9 @@ static void unpack_huffman(
         }
     }
     assert(found_used);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     *good = 1;
@@ -795,58 +868,76 @@ void inflate(
     const uint32_t thread_id)
 {
     if (recipient == NULL) {
-        #ifndef INFLATE_SILENCE
+        #if INFLATE_PRINTF_ACTIVE == 1
         printf(
             "inflate() ERROR: was passed a NULL recipient, cant write data\n");
+        #elif INFLATE_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         *out_good = 0;
         return;
     }
     
     if (final_recipient_size == NULL) {
-        #ifndef INFLATE_SILENCE
+        #if INFLATE_PRINTF_ACTIVE == 1
         printf(
             "inflate() ERROR: was passed a NULL final_recipient_size, cant "
             " store the size of the uncompressed data\n");
+        #elif INFLATE_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         *out_good = 0;
         return;
     }
     
     if (compressed_input == NULL) {
-        #ifndef INFLATE_SILENCE
+        #if INFLATE_PRINTF_ACTIVE == 1
         printf(
             "inflate() ERROR: was passed a NULL compressed_input, cant read "
             " data to uncompress\n");
+        #elif INFLATE_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         *out_good = 0;
         return;
     }
     
     if (recipient_size < compressed_input_size) {
-        #ifndef INFLATE_SILENCE
+        #if INFLATE_PRINTF_ACTIVE == 1
         printf(
             "inflate() ERROR: recipient size was smaller than input, no "
             "room to uncompress\n");
+        #elif INFLATE_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         *out_good = 0;
         return;
     }
     
     if (compressed_input_size < 5) {
-        #ifndef INFLATE_SILENCE
+        #if INFLATE_PRINTF_ACTIVE == 1
         printf(
             "inflate() ERROR: compressed_input_size was only %llu\n",
             compressed_input_size);
+        #elif INFLATE_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         *out_good = 0;
         return;
     }
     
-    #ifndef INFLATE_SILENCE
+    #if INFLATE_PRINTF_ACTIVE == 1
     printf(
         "\t\tstart INFLATE expecting %llu bytes of compressed data\n",
         compressed_input_size);
+    #elif INFLATE_PRINTF_ACTIVE == 2
+    #else
+    #error
     #endif
     uint8_t * recipient_at = (uint8_t *)recipient;
     *final_recipient_size = 0;
@@ -857,10 +948,13 @@ void inflate(
     data_stream.bits_left  = 0;
     data_stream.bit_buffer = 0;
     
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(data_stream.data      != NULL);
     assert(data_stream.size_left >= compressed_input_size);
     assert(data_stream.bits_left == 0);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     memset_func(temp_working_memory, 0, temp_working_memory_size);
@@ -872,8 +966,11 @@ void inflate(
         uint8_t * working_memory_at = (uint8_t *)temp_working_memory;
         uint64_t working_memory_remaining = temp_working_memory_size;
         
-        #ifndef INFLATE_SILENCE
+        #if INFLATE_PRINTF_ACTIVE == 1
         printf("\t\treading new DEFLATE block...\n");
+        #elif INFLATE_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         
         /*
@@ -901,14 +998,20 @@ void inflate(
         uint32_t BFINAL = consume_bits(
             /* buffer: */ &data_stream,
             /* size  : */ 1);
-        #ifndef INFLATE_IGNORE_ASSERTS
+        #if INFLATE_ASSERTS_ACTIVE == 1
         assert(BFINAL < 2);
+        #elif INFLATE_ASSERTS_ACTIVE == 2
+        #else
+        #error
         #endif
         
-        #ifndef INFLATE_SILENCE
+        #if INFLATE_PRINTF_ACTIVE == 1
         printf(
             "\t\t\tBFINAL (flag for final block): %u\n",
             BFINAL);
+        #elif INFLATE_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         if (BFINAL) { read_more_deflate_blocks = 0; }
         
@@ -917,39 +1020,39 @@ void inflate(
             /* size  : */ 2);
         
         if (BTYPE == 0) {
-            #ifndef INFLATE_SILENCE
-            printf("\t\t\tBTYPE 0 - No compression\n");
-            #endif
-            
             // spec says to ditch remaining bits
             if (data_stream.bits_left > 0) {
-                #ifndef INFLATE_SILENCE
+                #if INFLATE_PRINTF_ACTIVE == 1
                 printf(
                     "\t\t\tditching a byte with %u%s\n",
                     data_stream.bits_left,
                     " bits left...");
+                #elif INFLATE_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 discard_bits(
                     /* from: */ &data_stream,
                     /* amount: */ data_stream.bits_left);
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(data_stream.bits_left == 0);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
             }
             
             uint16_t LEN = (uint16_t)consume_bits(&data_stream, 16);
-            #ifndef INFLATE_SILENCE
-            printf(
-                "\t\t\tuncompr. block has LEN: %u bytes\n",
-                LEN);
-            #endif
             
             uint16_t NLEN = (uint16_t)consume_bits(&data_stream, 16);
             if ((uint16_t)LEN != (uint16_t)~NLEN) {
-                #ifndef INFLATE_SILENCE
+                #if INFLATE_PRINTF_ACTIVE == 1
                 printf(
                     "inflate() ERROR: LEN didn't match NLEN\n");
+                #elif INFLATE_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *out_good = 0;
                 return;
@@ -959,14 +1062,17 @@ void inflate(
                 *recipient_at = *(uint8_t *)data_stream.data;
                 recipient_at++;
                 *final_recipient_size += 1;
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(*final_recipient_size <= recipient_size);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 if ((uint64_t)(recipient_at - recipient)
                     >= recipient_size)
                 {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf(
                         "ERROR - recipient overflow! recipient_at: %p - "
                         "recipient: %p = %llu, but recipient_size only: %llu\n",
@@ -975,30 +1081,46 @@ void inflate(
                         (uint64_t)((ptrdiff_t)recipient_at -
                             (ptrdiff_t)recipient),
                         recipient_size);
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
+                    #endif
                     *out_good = 0;
                     return;
-                    #endif
                 }
                 
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(
                     (recipient_at - recipient) <= (uint32_t)recipient_size);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 data_stream.data++;
                 data_stream.size_left--;
             }
         } else if (BTYPE > 2) {
-            #ifndef INFLATE_SILENCE
+            #if INFLATE_PRINTF_ACTIVE == 1
             printf(
                 "\t\t\tERROR - unexpected deflate BTYPE %u\n",
                 BTYPE);
+            #elif INFLATE_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
-            #ifndef INFLATE_IGNORE_ASSERTS
+            
+            #if INFLATE_ASSERTS_ACTIVE == 1
             assert(0);
+            #elif INFLATE_ASSERTS_ACTIVE == 2
+            #else
+            #error
             #endif
         } else {
-            #ifndef INFLATE_IGNORE_ASSERTS
+            #if INFLATE_ASSERTS_ACTIVE == 1
             assert(BTYPE >= 1 && BTYPE <= 2);
+            #elif INFLATE_ASSERTS_ACTIVE == 2
+            #else
+            #error
             #endif
             
             // used in both dynamic & fixed huffman encoded files
@@ -1016,12 +1138,11 @@ void inflate(
             uint32_t HDIST = 0;
             
             if (BTYPE == 1) {
-                #ifndef INFLATE_SILENCE
-                printf("\t\t\tBTYPE 1 - Fixed Huffman\n");
-                #endif
-                
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(distance_huffman == NULL);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 /*
@@ -1085,8 +1206,11 @@ void inflate(
                 
                 uint32_t ll_good = 0;
                 if (working_memory_remaining < sizeof(HuffmanEntry) * 288) {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("inflate() failing - ran out of working memory\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1107,16 +1231,19 @@ void inflate(
                         &ll_good);
                 
                 if (!ll_good) {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf(
                         "INFLATE failed, "
                         "bad literal length huffman unpack\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
                 }
                
-                #ifndef INFLATE_IGNORE_ASSERTS 
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(literal_length_huffman[0].value == 0);
                 assert(
                     literal_length_huffman[0].code_length == 8);
@@ -1149,11 +1276,17 @@ void inflate(
                 assert(
                     literal_length_huffman[287].code_length == 8);
                 assert(literal_length_huffman[287].key == 199);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 if (working_memory_remaining < sizeof(HashedHuffman)) {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("inflate() failing - ran out of working memory\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1175,18 +1308,12 @@ void inflate(
                     *out_good = 0;
                     return;
                 }
-                
-                #ifndef INFLATE_SILENCE 
-                printf("\t\t\tcreated fixed huffman dict.\n");
-                #endif
             } else {
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(BTYPE == 2);
-                #endif
-                
-                #ifndef INFLATE_SILENCE
-                printf("\t\t\tBTYPE 2 - Dynamic Huffman\n");
-                printf("\t\t\tRead code trees...\n");
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 /*
@@ -1206,14 +1333,11 @@ void inflate(
                     /* size: */ 5)
                         + 257;
                 
-                #ifndef INFLATE_SILENCE
-                printf(
-                    "\t\t\tHLIT : %u (expect 257-286)\n",
-                    HLIT);
-                #endif
-                
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(HLIT >= 257 && HLIT <= 286);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 // 5 Bits: HDIST (huffman distance?)
@@ -1224,14 +1348,11 @@ void inflate(
                     /* size: */ 5)
                         + 1;
                 
-                #ifndef INFLATE_SILENCE
-                printf(
-                    "\t\t\tHDIST: %u (expect 1-32)\n",
-                    HDIST);
-                #endif
-                
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(HDIST >= 1 && HDIST <= 32);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 // 4 Bits: HCLEN (huffman code length)
@@ -1242,16 +1363,13 @@ void inflate(
                     /* size: */ 4)
                         + 4;
                 
-                #ifndef INFLATE_SILENCE
-                printf(
-                    "\t\t\tHCLEN: %u (4-19 vals of 0-6)\n",
-                     HCLEN);
-                #endif
-               
-                #ifndef INFLATE_IGNORE_ASSERTS 
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(
                     HCLEN >= 4
                     && HCLEN <= 19);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 
@@ -1260,9 +1378,6 @@ void inflate(
                 // these are code lengths for the code length
                 // dictionary,
                 // and they'll come in "swizzled" order
-                #ifndef INFLATE_SILENCE
-                printf("\t\t\tReading raw code lengths\n");
-                #endif
                 
                 // 0-init swizzled HCLEN table
                 memset_func(
@@ -1271,8 +1386,11 @@ void inflate(
                     4 * NUM_UNIQUE_CODELENGTHS);
                 
                 for (uint32_t i = 0; i < HCLEN; i++) {
-                    #ifndef INFLATE_IGNORE_ASSERTS
+                    #if INFLATE_ASSERTS_ACTIVE == 1
                     assert(swizzle[i] < NUM_UNIQUE_CODELENGTHS);
+                    #elif INFLATE_ASSERTS_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     
                     ifs[thread_id]->swizzled_HCLEN_table[swizzle[i]] =
@@ -1280,11 +1398,14 @@ void inflate(
                                 /* from: */ &data_stream,
                                 /* size: */ 3);
                     
-                    #ifndef INFLATE_IGNORE_ASSERTS
+                    #if INFLATE_ASSERTS_ACTIVE == 1
                     assert(
                         ifs[thread_id]->swizzled_HCLEN_table[swizzle[i]] <= 7);
                     assert(
                         ifs[thread_id]->swizzled_HCLEN_table[swizzle[i]] >= 0);
+                    #elif INFLATE_ASSERTS_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                 }
                 
@@ -1293,15 +1414,21 @@ void inflate(
                 but these are themselves 'compressed'
                 and need to be unpacked
                 */
-                #ifndef INFLATE_SILENCE
+                #if INFLATE_PRINTF_ACTIVE == 1
                 printf("\t\t\tUnpack codelengths table...\n");
+                #elif INFLATE_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 if (working_memory_remaining <
                     sizeof(HuffmanEntry) * NUM_UNIQUE_CODELENGTHS)
                 {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("inflate() failing - ran out of working memory\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1326,8 +1453,11 @@ void inflate(
                         &cl_good);
                 
                 if (!cl_good) {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("INFLATE failed, bad huffman unpack\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1335,8 +1465,11 @@ void inflate(
                 
                 if (working_memory_remaining < sizeof(HashedHuffman))
                 {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("inflate() failing - ran out of working memory\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1359,7 +1492,7 @@ void inflate(
                     return;
                 }
                 
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 for (
                     int i = 0;
                     i < NUM_UNIQUE_CODELENGTHS;
@@ -1374,6 +1507,9 @@ void inflate(
                           codelengths_huffman[i].value < 19);
                     }
                 }
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 /*
@@ -1397,13 +1533,16 @@ void inflate(
                 if (working_memory_remaining < sizeof(uint32_t) *
                     two_dicts_size)
                 {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf(
                         "ERROR - inflate() ran out of working memory, need %lu "
                         "for literal length distance table, but only have %llu "
                         "left.\n",
                         sizeof(uint32_t) * two_dicts_size,
-                        working_memory_remaining); 
+                        working_memory_remaining);
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1425,9 +1564,12 @@ void inflate(
                                 &clen_good);
                     
                     if (!clen_good) {
-                        #ifndef INFLATE_SILENCE
+                        #if INFLATE_PRINTF_ACTIVE == 1
                         printf(
                             "inflate() failed, bad huffman decode\n");
+                        #elif INFLATE_PRINTF_ACTIVE == 2
+                        #else
+                        #error
                         #endif
                         *out_good = 0;
                         return;
@@ -1447,10 +1589,13 @@ void inflate(
                             /* size: */ 2);
                         uint32_t repeats = extra_bits_repeat + 3;
                         
-                        #ifndef INFLATE_IGNORE_ASSERTS
+                        #if INFLATE_ASSERTS_ACTIVE == 1
                         assert(repeats >= 3);
                         assert(repeats <= 6);
                         assert(len_i > 0);
+                        #elif INFLATE_ASSERTS_ACTIVE == 2
+                        #else
+                        #error
                         #endif
                         
                         for (
@@ -1479,9 +1624,12 @@ void inflate(
                             /* size: */ 3);
                         uint32_t repeats = extra_bits_repeat + 3;
                        
-                        #ifndef INFLATE_IGNORE_ASSERTS 
+                        #if INFLATE_ASSERTS_ACTIVE == 1
                         assert(repeats >= 3);
                         assert(repeats < 11);
+                        #elif INFLATE_ASSERTS_ACTIVE == 2
+                        #else
+                        #error
                         #endif
                         
                         memset_func(litlendist_table + len_i, 0, 4 * repeats);
@@ -1500,37 +1648,54 @@ void inflate(
                         uint32_t repeats =
                             extra_bits_repeat + 11;
                         
-                        #ifndef INFLATE_IGNORE_ASSERTS
+                        #if INFLATE_ASSERTS_ACTIVE == 1
                         assert(repeats >= 11);
                         assert(repeats < 139);
+                        #elif INFLATE_ASSERTS_ACTIVE == 2
+                        #else
+                        #error
                         #endif
                         
                         memset_func(litlendist_table + len_i, 0, 4 * repeats);
                         len_i += repeats;
                     } else {
-                        #ifndef INFLATE_SILENCE
+                        #if INFLATE_PRINTF_ACTIVE == 1
                         printf(
                             "ERROR : encoded_len %u\n",
                             encoded_len);
+                        #elif INFLATE_PRINTF_ACTIVE == 2
+                        #else
+                        #error
                         #endif
-                        #ifndef INFLATE_IGNORE_ASSERTS
+                        
+                        #if INFLATE_ASSERTS_ACTIVE == 1
                         assert(0);
+                        #elif INFLATE_ASSERTS_ACTIVE == 2
+                        #else
+                        #error
                         #endif
                     }
                 }
                 
-                #ifndef INFLATE_SILENCE
+                #if INFLATE_PRINTF_ACTIVE == 1
                 printf("\t\t\tfinished reading two dicts\n");
+                #elif INFLATE_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(len_i == two_dicts_size);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 if (working_memory_remaining < sizeof(HuffmanEntry) * HLIT)
                 {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("inflate() failing - ran out of working memory\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
                     #endif
                     *out_good = 0;
                     return;
@@ -1550,8 +1715,11 @@ void inflate(
                     /* good       : */
                         &litlen_good);
                 if (!litlen_good) {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("INFLATE failed, bad huffman unpack\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1559,8 +1727,11 @@ void inflate(
                 
                 if (working_memory_remaining < sizeof(HashedHuffman))
                 {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("inflate() failing - ran out of working memory\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1581,12 +1752,15 @@ void inflate(
                     return;
                 }
                 
-                #ifndef INFLATE_SILENCE 
+                #if INFLATE_PRINTF_ACTIVE == 1
                 printf(
                     "\t\t\tunpacked lit/len dict\n");
+                #elif INFLATE_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 for (uint32_t i = 0; i < HLIT; i++) {
                     if (literal_length_huffman[i].used == 1) {
                         
@@ -1598,12 +1772,18 @@ void inflate(
                                 < 99999);
                     }
                 }
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 uint32_t dist_good = 0;
                 if (working_memory_remaining < sizeof(HashedHuffman)) {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("inflate() failing - ran out of working memory\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1622,16 +1802,22 @@ void inflate(
                     /* good       : */
                         &dist_good);
                 if (!dist_good) {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("INFLATE failed, bad huffman unpack\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
                 }
                 
                 if (working_memory_remaining < sizeof(HashedHuffman)) {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("inflate() failing - ran out of working memory\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1652,17 +1838,23 @@ void inflate(
                     return;
                 }
                 
-                #ifndef INFLATE_SILENCE
+                #if INFLATE_PRINTF_ACTIVE == 1
                 printf("\t\t\tunpacked distance dictionary\n");
+                #elif INFLATE_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 for (uint32_t i = 0; i < HDIST; i++) {
                     if (distance_huffman[i].used == 1) {
                         assert(distance_huffman[i].value == i);
                         assert(distance_huffman[i].key < 99999);
                     }
                 }
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
             }
             
@@ -1676,22 +1868,31 @@ void inflate(
             // dynamic huffman  it has to be decoded using the
             // distance dictionary we prepared
             if (BTYPE == 2) {
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(distance_huffman != NULL);
                 assert(HDIST > 0);
                 assert(HLIT > 0);
                 assert(HLIT < 300);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
             } else if (BTYPE == 1) {
-                #ifndef INFLATE_IGNORE_ASSERTS
+                #if INFLATE_ASSERTS_ACTIVE == 1
                 assert(distance_huffman == NULL);
                 assert(HDIST == 0);
                 assert(HLIT == 288);
+                #elif INFLATE_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
             }
             
-            #ifndef INFLATE_IGNORE_ASSERTS
+            #if INFLATE_ASSERTS_ACTIVE == 1
             assert(hashed_litlen_huffman != NULL);
+            #elif INFLATE_ASSERTS_ACTIVE == 2
+            #else
+            #error
             #endif
             
             while (1) {
@@ -1702,7 +1903,7 @@ void inflate(
                 if ((uint64_t)(data_stream.data - compressed_input)
                     >= compressed_input_size)
                 {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf(
                         "\t\tWarning: breaking from DEFLATE preemptively "
                         "because %li bytes were read - didn't find end of "
@@ -1711,6 +1912,9 @@ void inflate(
                     printf(
                         "\t\tcompressed_input_size was: %llu\n",
                         compressed_input_size);
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     read_more_deflate_blocks = 0;
                     break;
@@ -1725,9 +1929,12 @@ void inflate(
                     /* good: */
                         &litlen_good);
                 if (!litlen_good) {
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf(
                         "inflate() failed, bad huffman decode\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *out_good = 0;
                     return;
@@ -1739,22 +1946,31 @@ void inflate(
                     recipient_at++;
                     *final_recipient_size += 1;
                     
-                    #ifndef INFLATE_IGNORE_ASSERTS
+                    #if INFLATE_ASSERTS_ACTIVE == 1
                     assert(*final_recipient_size < recipient_size);
                     assert(
                         (uint64_t)(recipient_at - recipient)
                             <= recipient_size);
+                    #elif INFLATE_ASSERTS_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     
                 } else if (litlenvalue > 256) {
                     // length, (therefore also need distance)
-                    #ifndef INFLATE_IGNORE_ASSERTS
+                    #if INFLATE_ASSERTS_ACTIVE == 1
                     assert(litlenvalue < 286);
+                    #elif INFLATE_ASSERTS_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     uint32_t i = litlenvalue - 257;
                     
-                    #ifndef INFLATE_IGNORE_ASSERTS
+                    #if INFLATE_ASSERTS_ACTIVE == 1
                     assert(length_extra_bits_table[i].value == litlenvalue);
+                    #elif INFLATE_ASSERTS_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     
                     uint32_t extra_bits =
@@ -1772,10 +1988,13 @@ void inflate(
                     uint32_t total_length =
                         base_length + extra_length;
                     
-                    #ifndef INFLATE_IGNORE_ASSERTS
+                    #if INFLATE_ASSERTS_ACTIVE == 1
                     assert(
                         total_length >= length_extra_bits_table[i]
                             .base_decoded);
+                    #elif INFLATE_ASSERTS_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     
                     uint32_t distvalue;
@@ -1796,10 +2015,13 @@ void inflate(
                             /* good: */
                                 &hashed_dist_good);
                         if (!hashed_dist_good) {
-                            #ifndef INFLATE_SILENCE
+                            #if INFLATE_PRINTF_ACTIVE == 1
                             printf(
                                 "inflate() failed, "
                                 "bad hashed dist huffman decode\n");
+                            #elif INFLATE_PRINTF_ACTIVE == 2
+                            #else
+                            #error
                             #endif
                             *out_good = 0;
                             return;
@@ -1807,8 +2029,11 @@ void inflate(
                     }
                     
                     if (distvalue > 29) {
-                        #ifndef INFLATE_SILENCE
+                        #if INFLATE_PRINTF_ACTIVE == 1
                         printf("distvalue > 29, failing...\n");
+                        #elif INFLATE_PRINTF_ACTIVE == 2
+                        #else
+                        #error
                         #endif
                         *out_good = 0;
                         return;
@@ -1816,8 +2041,11 @@ void inflate(
                     
                     if (dist_extra_bits_table[distvalue].value != distvalue)
                     {
-                        #ifndef INFLATE_SILENCE
+                        #if INFLATE_PRINTF_ACTIVE == 1
                         printf("extra bits table != distvalue, failing...\n");
+                        #elif INFLATE_PRINTF_ACTIVE == 2
+                        #else
+                        #error
                         #endif
                         *out_good = 0;
                         return;
@@ -1841,21 +2069,27 @@ void inflate(
                     
                     // go back dist bytes, then copy length bytes
                     if (recipient_at - total_dist < recipient) {
-                        #ifndef INFLATE_SILENCE
+                        #if INFLATE_PRINTF_ACTIVE == 1
                         printf(
                             "ERROR - can't repeat data from %u bytes before, "
                             "address is out of bounds\n",
                             total_dist);
+                        #elif INFLATE_PRINTF_ACTIVE == 2
+                        #else
+                        #error
                         #endif
                         *out_good = 0;
                         return;
                     }
                     
-                    #ifndef INFLATE_IGNORE_ASSERTS
+                    #if INFLATE_ASSERTS_ACTIVE == 1
                     assert(*final_recipient_size <= recipient_size);
                     assert(
                         (recipient_at - recipient) <
                             (uint32_t)recipient_size);
+                    #elif INFLATE_ASSERTS_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     
                     if (total_length <= total_dist) {
@@ -1875,20 +2109,26 @@ void inflate(
                             recipient_at++;
                             *final_recipient_size += 1;
                             if (recipient_at >= working_memory_at) {
-                                #ifndef INFLATE_SILENCE
+                                #if INFLATE_PRINTF_ACTIVE == 1
                                 printf(
                                     "ERROR - recipient overflowing into "
                                     "working memory!\n");
+                                #elif INFLATE_PRINTF_ACTIVE == 2
+                                #else
+                                #error
+                                #endif
                                 *out_good = 0;
                                 return;
-                                #endif
                             }
                             
-                            #ifndef INFLATE_IGNORE_ASSERTS
+                            #if INFLATE_ASSERTS_ACTIVE == 1
                             assert(*final_recipient_size <= recipient_size);
                             assert(
                                 (recipient_at - recipient) <
                                     (uint32_t)recipient_size);
+                            #elif INFLATE_ASSERTS_ACTIVE == 2
+                            #else
+                            #error
                             #endif
                             
                             back_dist_bytes++;
@@ -1896,12 +2136,18 @@ void inflate(
                         }
                     }
                 } else {
-                    #ifndef INFLATE_IGNORE_ASSERTS
+                    #if INFLATE_ASSERTS_ACTIVE == 1
                     assert(litlenvalue == 256);
+                    #elif INFLATE_ASSERTS_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     
-                    #ifndef INFLATE_SILENCE
+                    #if INFLATE_PRINTF_ACTIVE == 1
                     printf("\t\tend of ltln found!\n");
+                    #elif INFLATE_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     
                     break;
@@ -1914,12 +2160,15 @@ void inflate(
     }
     
     if (data_stream.bits_left != 0) {
-        #ifndef INFLATE_SILENCE
+        #if INFLATE_PRINTF_ACTIVE == 1
         printf(
             "\t\tpartial byte left after DEFLATE\n");
         printf(
             "\t\tdiscarding: %u bits\n",
             data_stream.bits_left);
+        #elif INFLATE_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         
         discard_bits(
@@ -1928,36 +2177,41 @@ void inflate(
     }
     
     uint32_t bytes_read = (uint32_t)(data_stream.data - compressed_input);
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert(bytes_read >= 0);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     if (bytes_read != compressed_input_size) {
-        #ifndef INFLATE_SILENCE
+        #if INFLATE_PRINTF_ACTIVE == 1
         printf(
            "Warning: expected to read %llu bytes but got %u\n",
             compressed_input_size,
             bytes_read);
-        #endif
-        
-        #ifndef INFLATE_IGNORE_ASSERTS
-        assert(compressed_input_size > bytes_read);
+        #elif INFLATE_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         
         uint64_t skip = compressed_input_size - (uint64_t)bytes_read;
-        #ifndef INFLATE_SILENCE
-        printf("skipping ahead %llu bytes...\n", skip);
-        #endif
         
-        #ifndef INFLATE_IGNORE_ASSERTS
+        #if INFLATE_ASSERTS_ACTIVE == 1
         assert(data_stream.size_left >= skip);
+        #elif INFLATE_ASSERTS_ACTIVE == 2
+        #else
+        #error
         #endif
         
         data_stream.data += skip;
         data_stream.size_left -= skip;
     }
     
-    #ifndef INFLATE_SILENCE 
+    #if INFLATE_PRINTF_ACTIVE == 1
     printf("\t\tend of succesful inflate..\n");
+    #elif INFLATE_PRINTF_ACTIVE == 2
+    #else
+    #error
     #endif
     
     *out_good = 1;

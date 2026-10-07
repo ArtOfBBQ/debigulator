@@ -39,9 +39,9 @@ after decompressing everything.
 - temp_working_memory: will be used to store some hashmaps
 that are only useful while the functions runs. You can overwrite
 , free, or pass somewhere else immediately after. The function will fail when
-  the working memory is insufficient. If you comment out
-  #define INFLATE_SILENCE, the function will complain about insufficient
-  memory with printf() 
+  the working memory is insufficient. If you set INFLATE_ACTIVE to
+  2 (inactive), the function will complain about insufficient
+  memory with printf()
 - temp_working_memory_size: the capacity in bytes of temp_working_memory
 - compressed_input: the data to be uncompressed
 - compressed_input_size: the capacity in bytes of compressed_input
