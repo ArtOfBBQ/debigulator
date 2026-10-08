@@ -622,18 +622,14 @@ void decode_png_get_width_height(
     const uint64_t compressed_input_size,
     uint32_t * out_width,
     uint32_t * out_height,
-    uint8_t * out_good)
+    char ** const sticky_error)
 {
+    if (*sticky_error != 0) { return; }
+    
     if (compressed_input_size < 28) {
-        #ifndef DECODE_PNG_SILENCE
-        printf("ERROR - need 28 bytes for dimension check\n");
-        #endif
-        #ifndef DECODE_PNG_IGNORE_ASSERTS
-        assert(0);
-        #endif
+        *sticky_error = "ERROR - decode_png_get_width_height() needs to see 28 bytes for a dimension fetch";
         *out_width = 0;
         *out_height = 0;
-        *out_good = 0;
         return;
     }
     
@@ -646,12 +642,9 @@ void decode_png_get_width_height(
         /* string 2: */ (char *)"PNG",
         /* string length: */ 3))
     {
-        #ifndef DECODE_PNG_SILENCE
-        printf("aborting - not a PNG file\n");
-        #endif
+        *sticky_error = "ERROR - decode_png_get_width_height() aborting - not a PNG file";
         *out_width = 0;
         *out_height = 0;
-        *out_good = 0;
         return;
     } else {
         #ifndef DECODE_PNG_SILENCE
@@ -676,8 +669,6 @@ void decode_png_get_width_height(
         *out_width,
         *out_height);
     #endif
-    
-    *out_good = 1;
 }
 
 void decode_png(
@@ -686,8 +677,10 @@ void decode_png(
     const uint8_t * out_rgba_values,
     const uint64_t rgba_values_size,
     const uint32_t thread_id,
-    uint8_t * out_good)
+    char ** const sticky_error)
 {
+    if (*sticky_error != 0) { return; }
+    
     if (!states[thread_id]) {
         #ifndef DECODE_PNG_SILENCE
         printf(
@@ -695,7 +688,7 @@ void decode_png(
             "for thread_id: %u\n",
             thread_id);
         #endif
-        *out_good = 0;
+        *sticky_error = "Error - decode_PNG() was called before init_png_decoder() for a thread";
         return;
     }
     
@@ -706,8 +699,6 @@ void decode_png(
     assert(out_good != NULL);
     assert(states[thread_id]->dpng_working_memory != NULL);
     #endif
-    
-    *out_good = 0;
     
     uint64_t compressed_input_size_left = compressed_input_size;
     
@@ -748,7 +739,7 @@ void decode_png(
         #ifndef DECODE_PNG_SILENCE
         printf("aborting - not a PNG file\n");
         #endif
-        *out_good = 0;
+        *sticky_error = "decode_png() ERROR: not a PNG file";
         return;
     }
         
@@ -824,38 +815,41 @@ void decode_png(
                 #ifndef DECODE_PNG_SILENCE
                 printf("INFLATE algorithm failed\n");
                 #endif
-                *out_good = 0;
+                *sticky_error = "INFLATE algorithm failed";
                 return;
-            } else {
+            }
+            
+            #ifndef DECODE_PNG_SILENCE
+            printf("INFLATE succesful\n");
+            #endif
+                
+            if (
+                actual_decoded_stream_size >
+                    estimated_decoded_stream_size)
+            {
                 #ifndef DECODE_PNG_SILENCE
-                printf("INFLATE succesful\n");
+                printf(
+                    "ERROR actual_decoded_stream_size: %llu was > than "
+                    "estimated_decoded_stream_size: %llu\n",
+                    actual_decoded_stream_size,
+                    estimated_decoded_stream_size);
                 #endif
-                
-                if (
-                    actual_decoded_stream_size >
-                        estimated_decoded_stream_size)
-                {
-                    #ifndef DECODE_PNG_SILENCE
-                    printf(
-                        "ERROR actual_decoded_stream_size: %llu was > than "
-                        "estimated_decoded_stream_size: %llu\n",
-                        actual_decoded_stream_size,
-                        estimated_decoded_stream_size);
-                    #endif
-                }
-                
-                if (decoded_stream_at[0] > 4) {
-                    #ifndef DECODE_PNG_SILENCE
-                    printf(
-                        "ERROR - the first byte of the deflated stream must be "
-                        "0,1,2,3 or 4 because it's a PNG filter type for filter"
-                        "method 0. Filter types are 0 (none), 1 (sub), 2 (up), "
-                        "3 (average), 4 (paeth). Actual value was: %u\n",
-                        decoded_stream_at[0]);
-                    #endif
-                    *out_good = 0;
-                    return;
-                }
+            }
+            
+            if (decoded_stream_at[0] > 4) {
+                #ifndef DECODE_PNG_SILENCE
+                printf(
+                    "ERROR - the first byte of the deflated stream must be "
+                    "0,1,2,3 or 4 because it's a PNG filter type for filter"
+                    "method 0. Filter types are 0 (none), 1 (sub), 2 (up), "
+                    "3 (average), 4 (paeth). Actual value was: %u\n",
+                    decoded_stream_at[0]);
+                #endif
+                *sticky_error = "ERROR - the first byte of the deflated stream must be "
+                    "0,1,2,3 or 4 because it's a PNG filter type for filter"
+                    "method 0. Filter types are 0 (none), 1 (sub), 2 (up), "
+                    "3 (average), 4 (paeth).";
+                return;
             }
         }
         
@@ -893,7 +887,7 @@ void decode_png(
             chunk_header.length,
             compressed_input_size_left);
             #endif
-            *out_good = 0;
+            *sticky_error = "decode_png() ERROR - chunk length larger than remaining file size";
             return;
         }
         
@@ -910,20 +904,19 @@ void decode_png(
                     "[%s] chunk should never appear before [IHDR] chunk\n",
                     chunk_header.type);
                 #endif
-                *out_good = 0;
+                *sticky_error = "decode_png() ERROR: chunk illegally appeared before IHDR";
+                return;
+            }
+            
+            if (ihdr_body.color_type == 0) {
+                *sticky_error =
+                    "decode_png() found palette, but for "
+                    "a grayscale image (color mode 0), "
+                    "this is unsupported\n";
                 return;
             }
             
             #ifndef DECODE_PNG_IGNORE_ASSERTS
-            if (ihdr_body.color_type == 0) {
-                #ifndef DECODE_PNG_SILENCE
-                printf(
-                    "Found palette, but for a grayscale image (color mode "
-                    "0), this is not supported yet\n");
-                #endif
-                *out_good = 0;
-                return;
-            }
             assert(ihdr_body.color_type == 3);
             #endif
             
@@ -936,7 +929,10 @@ void decode_png(
                     chunk_header.type,
                     chunk_header.length);
                 #endif
-                *out_good = 0;
+                *sticky_error =
+                    "decode_png() ERROR: palette chunk "
+                    "should always have a length divisible"
+                    " by 3";
                 return;
             }
             
@@ -980,18 +976,14 @@ void decode_png(
                     ihdr_body.height,
                     ihdr_body.width * ihdr_body.height * 4);
                 #endif
-                *out_good = 0;
+                *sticky_error = "decode_png() ERROR: implausible width/height/rgba_values";
                 return;
             }
             
             switch (ihdr_body.color_type) {
                 case 0:
-                    #ifndef DECODE_PNG_SILENCE
-                    printf(
-                        "\tERROR - color type 0 (Greyscale) is not yet "
-                        "supported.\n");
-                    #endif
-                    *out_good = 0;
+                    *sticky_error = "\tERROR - color type 0 (Greyscale) is not yet "
+                        "supported.\n";
                     return;
                     break;
                 case 2:
@@ -1011,12 +1003,8 @@ void decode_png(
                     #endif
                     break;
                 case 4:
-                    #ifndef DECODE_PNG_SILENCE
-                    printf(
-                        "\tColor type 4 (greyscale with alpha) is not yet "
-                        "supported\n");
-                    #endif
-                    *out_good = 0;
+                    *sticky_error = "\tColor type 4 (greyscale with alpha) is not yet "
+                        "supported\n";
                     return;
                     break;
                 case 6:
@@ -1032,17 +1020,13 @@ void decode_png(
                         ihdr_body.color_type);
                     printf("The upported values are 0,2,3,4,6\n");
                     #endif
-                    *out_good = 0;
+                    *sticky_error = "decode_png() ERROR: Unsupported and unknown colour type";
                     return;
                     break;
             }
             
             if (ihdr_body.color_type == 0) {
-                #ifndef DECODE_PNG_SILENCE
-                printf(
-                    "ERROR - color type 0 (Greyscale) is not yet supported.\n");
-                #endif
-                *out_good = 0;
+                *sticky_error = "ERROR - color type 0 (Greyscale) is not yet supported.";
                 return;
             }
             
@@ -1053,7 +1037,7 @@ void decode_png(
                     ihdr_body.width,
                     ihdr_body.height);
                 #endif
-                *out_good = 0;
+                *sticky_error = "decode_png() ERROR: image width or height was 0";
                 return;
             }
             
@@ -1076,7 +1060,7 @@ void decode_png(
                         + ihdr_body.height
                         + INFLATE_HASHMAPS_SIZE);
                 #endif
-                *out_good = 0;
+                *sticky_error = "decode_png() ERROR: insufficient working memory";
                 return;
             }
             
@@ -1092,7 +1076,7 @@ void decode_png(
                     "unsupported PNG bit depth %u\n",
                     ihdr_body.bit_depth);
                 #endif
-                *out_good = 0;
+                *sticky_error = "unsupported PNG bit depth";
                 return;
             }
             
@@ -1116,12 +1100,9 @@ void decode_png(
             #endif
             
             if (ihdr_body.filter_method != 0) {
-                #ifndef DECODE_PNG_SILENCE 
-                printf(
-                    "failing to decode PNG - "
-                    "filter method in [IHDR] chunk must be 0\n");
-                #endif
-                *out_good = 0;
+                *sticky_error = "decode_png() ERROR - "
+                    "filter method in [IHDR] chunk must "
+                    "be 0";
                 return;
             }
             
@@ -1132,7 +1113,7 @@ void decode_png(
                    "failing to decode PNG - file size left is %llu bytes\n",
                     compressed_input_size_left);
                 #endif
-                *out_good = 0;
+                *sticky_error = "decode_png() ERROR: file abruptly ends in IHDR";
                 return;
             }
             
@@ -1143,12 +1124,7 @@ void decode_png(
         {
             if (!found_IHDR)
             {
-                #ifndef DECODE_PNG_SILENCE
-                printf(
-                    "failing to decode PNG - no [IHDR] chunk was found, "
-                    "but already encountering an [IDAT] chunk.\n");
-                #endif
-                *out_good = 0;
+                *sticky_error = "decode_png() ERROR: IDAT before IHDR";
                 return;
             }
             
@@ -1184,7 +1160,7 @@ void decode_png(
                     compression_info);
                 #endif
                 if (compression_method != 8) {
-                    *out_good = 0;
+                    *sticky_error = "decode_png() ERROR: compression method must be 8";
                     return;
                 }
                 
@@ -1215,7 +1191,7 @@ void decode_png(
                     full_check_value == 0 ||
                     full_check_value % 31 != 0)
                 {
-                    *out_good = 0;
+                    *sticky_error = "decode_png() ERROR: failed FCHECK";
                     return;
                 }
                 
@@ -1260,7 +1236,7 @@ void decode_png(
                 recompression might be worthwhile.
                 */
                 if (FDICT != 0) {
-                    *out_good = 0;
+                    *sticky_error = "decode_png() ERROR: FDICT wasn't 0";
                     return;
                 }
                 
@@ -1314,7 +1290,7 @@ void decode_png(
                 "ERROR: unhandled critical chunk header: %s\n",
                 chunk_header.type);
             #endif
-            *out_good = 0;
+            *sticky_error = "decode_png() ERROR: unrecognized chunk header";
             return;
         }
         
@@ -1326,7 +1302,7 @@ void decode_png(
                 "unexpected remaining file size of %llu\n",
                 compressed_input_size_left);
             #endif
-            *out_good = 0;
+            *sticky_error = "decode_png() ERROR: unexpected remaining file size";
             return;
         }
         
@@ -1356,13 +1332,10 @@ void decode_png(
     // end of "while size file > pngchunkheader" loop
     
     if (!ran_inflate_algorithm) {
-        #ifndef DECODE_PNG_SILENCE
-        printf(
-            "Failed to identify the last iDAT chunk, "
-            "didn't run inflate algorithm\n");
-        #endif
-        
-        *out_good = 0;
+        *sticky_error =
+            "decode_png() ERROR: failed to identify the "
+            "last iDAT chunk, didn't run inflate "
+            "algorithm";
         return;
     }
     
@@ -1465,7 +1438,7 @@ void decode_png(
                         rgba_at - out_rgba_values,
                         rgba_values_size);
                     #endif
-                    *out_good = 0;
+                    *sticky_error = "decode_png() ERROR: tried to write rgba out of bounds";
                     return;
                 }
                 
@@ -1486,7 +1459,6 @@ void decode_png(
                 c_previous_scanline_previous_pixel++;
                 
                 decoded_stream_at++;
-                #ifndef DECODE_PNG_IGNORE_ASSERTS
                 if (
                     (uint64_t)(decoded_stream_at - decoded_stream_start) >
                         actual_decoded_stream_size)
@@ -1498,11 +1470,11 @@ void decode_png(
                         "decoded_stream_at of %llu\n",
                         actual_decoded_stream_size,
                         (uint64_t)(decoded_stream_at - decoded_stream_start));
-                    *out_good = 0;
-                    return;
                     #endif
+                    *sticky_error = "decode_png() ERROR: decoded_stream_size out of bounds write";
+                    return;
+                    
                 }
-                #endif
             }
         }
         
@@ -1562,7 +1534,4 @@ void decode_png(
             }
         }
     }
-    
-    *out_good = 1;
 }
-
