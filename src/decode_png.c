@@ -1320,7 +1320,9 @@ void decode_png(
                 "ERROR: CRC checksum mismatch - "
                 " PNG file is corrupted?\n");
             #endif
-            *out_good = 0;
+            *sticky_error =
+                "decode_png(): CRC checksum mismatch - "
+                " PNG file is corrupted?\n";
             return;
         } else {
             #ifndef DECODE_PNG_SILENCE

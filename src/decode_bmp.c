@@ -53,8 +53,10 @@ void get_BMP_width_height(
     const uint64_t raw_input_size,
     uint32_t * out_width,
     uint32_t * out_height,
-    uint8_t * out_good)
+    char ** const sticky_error)
 {
+    if (*sticky_error != 0) { return; }
+    
     uint8_t * raw_input_at = (uint8_t *)raw_input;
     #ifndef DECODE_BMP_IGNORE_ASSERTS
     uint64_t raw_input_left = raw_input_size;
@@ -79,14 +81,8 @@ void get_BMP_width_height(
         header.character_header[0] != 'B' ||
         header.character_header[1] != 'M')
     {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - Bitmap header character identifiers were [%c,%c], we "
-            " only support [B,M]\n",
-            header.character_header[0],
-            header.character_header[1]);
-        #endif
-        *out_good = 0;
+        *sticky_error =
+            "Error - Bitmap header missing magic characters [B,M]";
         return;
     }
     
@@ -99,7 +95,10 @@ void get_BMP_width_height(
     
     *out_width = (uint32_t)dib_header.width;
     
-    *out_good = *out_width > 0 && *out_height > 0;
+    if (*out_width < 1 || *out_height < 1) {
+        *sticky_error = "get_BMP_width_height() returned 0 for width or height";
+        return;
+    }
 }
 
 void decode_BMP(
@@ -107,8 +106,10 @@ void decode_BMP(
     const uint64_t raw_input_size,
     uint8_t * out_rgba_values,
     const int64_t out_rgba_values_size,
-    uint8_t * out_good)
+    char ** const sticky_error)
 {
+    if (*sticky_error != 0) { return; }
+    
     #ifndef DECODE_BMP_IGNORE_ASSERTS
     assert(raw_input_size >= sizeof(BitmapFileHeader));
     #endif
@@ -123,29 +124,14 @@ void decode_BMP(
     if (header.character_header[0] != 'B' ||
         header.character_header[1] != 'M')
     {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - Bitmap header character identifiers were [%c,%c], we "
-            " only support [B,M]\n",
-            header.character_header[0],
-            header.character_header[1]);
-        #endif
-        *out_good = 0;
+        *sticky_error = "Bitmap header missing [B,M]";
         return;
     }
     
     if (header.image_offset + header.image_size + sizeof(BitmapFileHeader) <
             raw_input_size)
     {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - header says image starts at offset %u and is size %u"
-            ", but raw file size was only %llu\n",
-            header.image_offset,
-            header.image_size,
-            raw_input_size);
-        #endif
-        *out_good = 0;
+        *sticky_error = "Error - bitmap header offset is past our input size";
         return;
     }
     
@@ -167,14 +153,10 @@ void decode_BMP(
             
             break;
         default:
-            #ifndef DECODE_BMP_SILENCE
-            printf(
-                "Error - currently supporting only 40-byte or 108-byte DIB "
-                "headers. Actual value was: %u\n",
-                dib_header.size);
-            #endif
-            *out_good = 0;
-        return;
+            *sticky_error =
+                "Error - bitmap parser only supporting "
+                "40-byte or 108-byte DIB headers.";
+            return;
     }
     
     // height can be negative - it means the bitmap is stored from top to
@@ -190,77 +172,40 @@ void decode_BMP(
         (uint64_t)(dib_header.width * dib_header.height * 4) !=
             (uint64_t)out_rgba_values_size)
     {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - bitmap has dib_header.height %i * dib_header.width %i"
-            " * 4 pixels, but out_rgba_values_size is %llu\n",
-            dib_header.height,
-            dib_header.width,
-            out_rgba_values_size);
-        #endif
-        *out_good = 0;
+        *sticky_error = "Error - dib header width/height mismatches out_rgba_values_size";
+        return;
     }
     
     if (dib_header.planes != 1) {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - # of dib_header.planes was: %u, expected 1\n",
-            dib_header.planes);
-        #endif
-        *out_good = 0;
+        *sticky_error = "BMP parser: dib header planes must be 1";
         return;
     }
     
     if (dib_header.bits_per_pixel != 32) {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - # of dib_header.bits_per_pixel was: %u, expected 32\n",
-            dib_header.bits_per_pixel);
-        #endif
-        *out_good = 0;
+        *sticky_error = "BMP parser: dib header bits_per_pixel must be 32";
         return;
     }
     
     if (dib_header.compression != 0 && dib_header.compression != 3) {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "%s\n",
-            "Error - dib_header.compression was: %u, expected 0 or 3");
-        #endif
-        *out_good = 0;
+        *sticky_error = "BMP parser: dib header compression must be 0 or 3";
+        return;
     }
     
     if (dib_header.x_pixels_per_meter != 0) {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - dib_header.x_pixels_per_meter was: %u, expected 0\n",
-            dib_header.x_pixels_per_meter);
-        #endif
-        *out_good = 0;
+        *sticky_error = "BMP parser: dib header x_pixels_per_meter must be 0";
+        return;
     }
     if (dib_header.y_pixels_per_meter != 0) {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - dib_header.y_pixels_per_meter was: %u, expected 0\n",
-            dib_header.y_pixels_per_meter);
-        #endif
-        *out_good = 0;
+        *sticky_error = "BMP parser: dib header y_pixels_per_meter must be 0";
+        return;
     }
     if (dib_header.colors_used != 0) {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - dib_header.colors_used was: %u, expected 0\n",
-            dib_header.colors_used);
-        #endif
-        *out_good = 0;
+        *sticky_error = "BMP parser: dib header colors_used must not be 0";
+        return;
     }
     if (dib_header.important_colors != 0) {
-        #ifndef DECODE_BMP_SILENCE
-        printf(
-            "Error - dib_header.important_colors was: %u, expected 0\n",
-            dib_header.important_colors);
-        #endif
-        *out_good = 0;
+        *sticky_error = "BMP parser: dib header important_colors must not be 0";
+        return;
     }
     
     // copy pixel values
@@ -300,7 +245,6 @@ void decode_BMP(
         }
     }
     
-    *out_good = 1;
     return;
 }
 
