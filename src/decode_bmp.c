@@ -53,9 +53,9 @@ void get_BMP_width_height(
     const uint64_t raw_input_size,
     uint32_t * out_width,
     uint32_t * out_height,
-    char ** const sticky_error)
+    char ** const fatal_error)
 {
-    if (*sticky_error != 0) { return; }
+    if (*fatal_error != 0) { return; }
     
     uint8_t * raw_input_at = (uint8_t *)raw_input;
     #ifndef DECODE_BMP_IGNORE_ASSERTS
@@ -81,7 +81,7 @@ void get_BMP_width_height(
         header.character_header[0] != 'B' ||
         header.character_header[1] != 'M')
     {
-        *sticky_error =
+        *fatal_error =
             "Error - Bitmap header missing magic characters [B,M]";
         return;
     }
@@ -96,7 +96,7 @@ void get_BMP_width_height(
     *out_width = (uint32_t)dib_header.width;
     
     if (*out_width < 1 || *out_height < 1) {
-        *sticky_error = "get_BMP_width_height() returned 0 for width or height";
+        *fatal_error = "get_BMP_width_height() returned 0 for width or height";
         return;
     }
 }
@@ -106,9 +106,9 @@ void decode_BMP(
     const uint64_t raw_input_size,
     uint8_t * out_rgba_values,
     const int64_t out_rgba_values_size,
-    char ** const sticky_error)
+    char ** const fatal_error)
 {
-    if (*sticky_error != 0) { return; }
+    if (*fatal_error != 0) { return; }
     
     #ifndef DECODE_BMP_IGNORE_ASSERTS
     assert(raw_input_size >= sizeof(BitmapFileHeader));
@@ -124,14 +124,14 @@ void decode_BMP(
     if (header.character_header[0] != 'B' ||
         header.character_header[1] != 'M')
     {
-        *sticky_error = "Bitmap header missing [B,M]";
+        *fatal_error = "Bitmap header missing [B,M]";
         return;
     }
     
     if (header.image_offset + header.image_size + sizeof(BitmapFileHeader) <
             raw_input_size)
     {
-        *sticky_error = "Error - bitmap header offset is past our input size";
+        *fatal_error = "Error - bitmap header offset is past our input size";
         return;
     }
     
@@ -153,7 +153,7 @@ void decode_BMP(
             
             break;
         default:
-            *sticky_error =
+            *fatal_error =
                 "Error - bitmap parser only supporting "
                 "40-byte or 108-byte DIB headers.";
             return;
@@ -172,39 +172,39 @@ void decode_BMP(
         (uint64_t)(dib_header.width * dib_header.height * 4) !=
             (uint64_t)out_rgba_values_size)
     {
-        *sticky_error = "Error - dib header width/height mismatches out_rgba_values_size";
+        *fatal_error = "Error - dib header width/height mismatches out_rgba_values_size";
         return;
     }
     
     if (dib_header.planes != 1) {
-        *sticky_error = "BMP parser: dib header planes must be 1";
+        *fatal_error = "BMP parser: dib header planes must be 1";
         return;
     }
     
     if (dib_header.bits_per_pixel != 32) {
-        *sticky_error = "BMP parser: dib header bits_per_pixel must be 32";
+        *fatal_error = "BMP parser: dib header bits_per_pixel must be 32";
         return;
     }
     
     if (dib_header.compression != 0 && dib_header.compression != 3) {
-        *sticky_error = "BMP parser: dib header compression must be 0 or 3";
+        *fatal_error = "BMP parser: dib header compression must be 0 or 3";
         return;
     }
     
     if (dib_header.x_pixels_per_meter != 0) {
-        *sticky_error = "BMP parser: dib header x_pixels_per_meter must be 0";
+        *fatal_error = "BMP parser: dib header x_pixels_per_meter must be 0";
         return;
     }
     if (dib_header.y_pixels_per_meter != 0) {
-        *sticky_error = "BMP parser: dib header y_pixels_per_meter must be 0";
+        *fatal_error = "BMP parser: dib header y_pixels_per_meter must be 0";
         return;
     }
     if (dib_header.colors_used != 0) {
-        *sticky_error = "BMP parser: dib header colors_used must not be 0";
+        *fatal_error = "BMP parser: dib header colors_used must not be 0";
         return;
     }
     if (dib_header.important_colors != 0) {
-        *sticky_error = "BMP parser: dib header important_colors must not be 0";
+        *fatal_error = "BMP parser: dib header important_colors must not be 0";
         return;
     }
     

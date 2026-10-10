@@ -70,7 +70,7 @@ decode_png_get_width_height(
     const uint64_t compressed_input_size,
     uint32_t * out_width,
     uint32_t * out_height,
-    char ** const sticky_error);
+    char ** const fatal_error);
 
 /*
 You must run init_PNG_decode() first or this won't work.
@@ -98,7 +98,7 @@ decode_png(
     const uint8_t * out_rgba_values,
     const uint64_t rgba_values_size,
     const uint32_t thread_id,
-    char ** const sticky_error);
+    char ** const fatal_error);
 
 #ifdef __cplusplus
 }
