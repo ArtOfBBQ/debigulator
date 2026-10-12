@@ -7,8 +7,11 @@
 #error
 #endif
 
-#ifndef DECODE_BMP_IGNORE_ASSERTS
+#if DECODE_BMP_ASSERTS_ACTIVE == 1
 #include "assert.h"
+#elif DECODE_BMP_ASSERTS_ACTIVE == 2
+#else
+#error
 #endif
 
 #ifndef NULL
@@ -61,21 +64,29 @@ void get_BMP_width_height(
     if (*fatal_error != 0) { return; }
     
     uint8_t * raw_input_at = (uint8_t *)raw_input;
-    #ifndef DECODE_BMP_IGNORE_ASSERTS
+    #if DECODE_BMP_ASSERTS_ACTIVE == 1
     uint64_t raw_input_left = raw_input_size;
-    #else
+    #elif DECODE_BMP_ASSERTS_ACTIVE == 2
     (void)raw_input_size;
+    #else
+    #error
     #endif
     
-    #ifndef DECODE_BMP_IGNORE_ASSERTS
+    #if DECODE_BMP_ASSERTS_ACTIVE == 1
     assert(raw_input_size >= sizeof(BitmapFileHeader));
+    #elif DECODE_BMP_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     BitmapFileHeader header = *(BitmapFileHeader *)raw_input;
     raw_input_at += sizeof(BitmapFileHeader);
-    #ifndef DECODE_BMP_IGNORE_ASSERTS
+    #if DECODE_BMP_ASSERTS_ACTIVE == 1
     raw_input_left -= sizeof(BitmapFileHeader);
     assert(raw_input_left >= sizeof(DIBHeader));
+    #elif DECODE_BMP_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     DIBHeader dib_header = *(DIBHeader *)raw_input_at;
@@ -113,8 +124,11 @@ void decode_BMP(
 {
     if (*fatal_error != 0) { return; }
     
-    #ifndef DECODE_BMP_IGNORE_ASSERTS
+    #if DECODE_BMP_ASSERTS_ACTIVE == 1
     assert(raw_input_size >= sizeof(BitmapFileHeader));
+    #elif #if DECODE_BMP_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     uint8_t * raw_input_at = (uint8_t *)raw_input;
@@ -138,8 +152,11 @@ void decode_BMP(
         return;
     }
     
-    #ifndef DECODE_BMP_IGNORE_ASSERTS
+    #if DECODE_BMP_ASSERTS_ACTIVE == 1
     assert(raw_input_size >= sizeof(DIBHeader));
+    #elif DECODE_BMP_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     DIBHeader dib_header = *(DIBHeader *)raw_input_at;
@@ -150,8 +167,11 @@ void decode_BMP(
             break;
         case 108:
             // BITMAPV4HEADER
-            #ifndef DECODE_BMP_IGNORE_ASSERTS
+            #if DECODE_BMP_ASSERTS_ACTIVE == 1
             assert(sizeof(BitmapV4DIBHeaderAddon) == (108-40));
+            #elif DECODE_BMP_ASSERTS_ACTIVE == 2
+            #else
+            #error
             #endif
             
             break;
@@ -261,11 +281,13 @@ void encode_BMP(
     const int64_t recipient_capacity)
 {
     // reminder: the final + 1 is for a potential null terminator
-    #ifndef DECODE_BMP_IGNORE_ASSERTS
+    #if DECODE_BMP_ASSERTS_ACTIVE == 1
     assert(
         (uint64_t)recipient_capacity >= 14 + 40 + rgba_size + 1);
-    #else
+    #elif DECODE_BMP_ASSERTS_ACTIVE == 2
     (void)recipient_capacity;
+    #else
+    #error
     #endif
     
     *recipient_size = 14 + 40 + (uint32_t)rgba_size + 1;
@@ -286,8 +308,11 @@ void encode_BMP(
     }
     
     DIBHeader dib_header;
-    #ifndef DECODE_BMP_IGNORE_ASSERTS
+    #if DECODE_BMP_ASSERTS_ACTIVE == 1
     assert(sizeof(dib_header) == 40);
+    #elif DECODE_BMP_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     dib_header.size = 40;
     dib_header.width = (int32_t)width;

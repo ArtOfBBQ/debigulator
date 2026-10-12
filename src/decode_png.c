@@ -7,8 +7,11 @@
 #error
 #endif
 
-#ifndef DECODE_PNG_IGNORE_ASSERTS
+#if DECODE_PNG_ASSERTS_ACTIVE == 1
 #include "assert.h"
+#elif DECODE_PNG_ASSERTS_ACTIVE == 2
+#else
+#error
 #endif
 
 #ifndef NULL
@@ -288,7 +291,7 @@ static unsigned long crc_table[256] = {
     755167117
 };
 
-#ifndef DECODE_PNG_IGNORE_ASSERTS
+#if DECODE_PNG_ASSERTS_ACTIVE == 1
 static void assert_crc_table_accurate(void)
 {
     unsigned long c;
@@ -305,7 +308,11 @@ static void assert_crc_table_accurate(void)
         assert(crc_table[n] == c);
     }
 }
+#elif DECODE_PNG_ASSERTS_ACTIVE == 2
+#else
+#error
 #endif
+
 
 /*
 Update a running CRC with the bytes buf[0..len-1]--the CRC
@@ -318,16 +325,23 @@ static unsigned long update_crc(
     const unsigned char * buf,
     const uint32_t len)
 {
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    #if DECODE_PNG_ASSERTS_ACTIVE == 1
     assert(buf != NULL);
     assert(len > 0);
+    #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
+
     
     unsigned long c = crc;
     
     for (uint32_t n = 0; n < len; n++) {
-        #ifndef DECODE_PNG_IGNORE_ASSERTS
+        #if DECODE_PNG_ASSERTS_ACTIVE == 1
         assert(((c ^ buf[n]) & 0xff) < 256);
+        #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+        #else
+        #error
         #endif
         c = crc_table[(c ^ buf[n]) & 0xff] ^ (c >> 8);
     }
@@ -538,8 +552,11 @@ undo_PNG_filter(
         #error
         #endif 
         
-        #ifndef DECODE_PNG_IGNORE_ASSERTS
+        #if DECODE_PNG_ASSERTS_ACTIVE == 1
         assert(0);
+        #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+        #else
+        #error
         #endif
     }
     
@@ -574,14 +591,16 @@ decode_png_init(
     const uint32_t arg_dpng_working_memory_size,
     const uint32_t thread_id)
 {
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    #if DECODE_PNG_ASSERTS_ACTIVE == 1
     assert(arg_malloc_funcptr != NULL);
     assert(arg_free_funcptr != NULL);
     assert(arg_memset_funcptr != NULL);
     assert(arg_memcpy_funcptr != NULL);
     assert(states[thread_id] == NULL);
+    #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
-    
     
     if (states[thread_id] == NULL) {
         states[thread_id] = arg_malloc_funcptr(
@@ -604,8 +623,11 @@ decode_png_init(
         arg_memcpy_funcptr,
         thread_id);
     
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    #if DECODE_PNG_ASSERTS_ACTIVE == 1
     assert_crc_table_accurate();
+    #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     states[thread_id]->dpng_working_memory_size = arg_dpng_working_memory_size;
@@ -707,12 +729,14 @@ void decode_png(
         return;
     }
     
-    #ifndef DECODE_PNG_IGNORE_ASSERTS
+    #if DECODE_PNG_ASSERTS_ACTIVE == 1
     assert(compressed_input != NULL);
     assert(compressed_input_size > 0);
     assert(out_rgba_values != NULL);
-    assert(out_good != NULL);
     assert(states[thread_id]->dpng_working_memory != NULL);
+    #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+    #else
+    #error
     #endif
     
     uint64_t compressed_input_size_left = compressed_input_size;
@@ -808,11 +832,15 @@ void decode_png(
             #error
             #endif
             
-            #ifndef DECODE_PNG_IGNORE_ASSERTS
+            #if DECODE_PNG_ASSERTS_ACTIVE == 1
             assert(states[thread_id]->dpng_working_memory_size - estimated_decoded_stream_size >
                 INFLATE_HASHMAPS_SIZE);
             assert(headerless_compressed_data_stream_size > 4);
+            #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+            #else
+            #error
             #endif
+
             
             uint32_t inflate_result = 0;
             inflate(
@@ -964,8 +992,11 @@ void decode_png(
                 return;
             }
             
-            #ifndef DECODE_PNG_IGNORE_ASSERTS
+            #if DECODE_PNG_ASSERTS_ACTIVE == 1
             assert(ihdr_body.color_type == 3);
+            #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+            #else
+            #error
             #endif
             
             if (chunk_header.length % 3 != 0) {
@@ -1528,7 +1559,7 @@ void decode_png(
     for (uint32_t h = 0; h < ihdr_body.height; h++) {
         
         uint8_t filter_type = *decoded_stream_at++;
-        #ifndef DECODE_PNG_IGNORE_ASSERTS
+        #if DECODE_PNG_ASSERTS_ACTIVE == 1
         if (filter_type > 4) {
             #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf(
@@ -1539,9 +1570,12 @@ void decode_png(
             #else
             #error
             #endif
-            *out_good = 0;
+            *fatal_error = "ERROR - unexpected PNG filter type";
             return;
         }
+        #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+        #else
+        #error
         #endif
         
         for (uint32_t w = 0; w < ihdr_body.width; w++) {
@@ -1648,15 +1682,21 @@ void decode_png(
             states[thread_id]->dpng_working_memory + sizeof(Palette));
         if (ihdr_body.color_type == 3) {
             for (uint32_t _ = 0; _ < pixel_count; _++) {
-                #ifndef DECODE_PNG_IGNORE_ASSERTS
+                #if DECODE_PNG_ASSERTS_ACTIVE == 1
                 assert(rgba_at[_] < states[thread_id]->palette.size);
+                #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 decoded_stream_at[_] = rgba_at[_];
             }
             
             for (uint32_t _ = 0; _ < pixel_count; _++) {
-                #ifndef DECODE_PNG_IGNORE_ASSERTS
+                #if DECODE_PNG_ASSERTS_ACTIVE == 1
                 assert((_ * 4) + 3 < rgba_values_size);
+                #elif DECODE_PNG_ASSERTS_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 rgba_at[(_ * 4) + 0] =
