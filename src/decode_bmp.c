@@ -1,7 +1,10 @@
 #include "decode_bmp.h"
 
-#ifndef DECODE_BMP_SILENCE
+#if DECODE_BMP_PRINTF_ACTIVE == 1
 #include "stdio.h"
+#elif DECODE_BMP_PRINTF_ACTIVE == 2
+#else
+#error
 #endif
 
 #ifndef DECODE_BMP_IGNORE_ASSERTS

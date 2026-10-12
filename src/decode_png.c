@@ -1,7 +1,10 @@
 #include "decode_png.h"
 
-#ifndef DECODE_PNG_SILENCE
+#if DECODE_PNG_PRINTF_ACTIVE == 1
 #include "stdio.h"
+#elif DECODE_PNG_PRINTF_ACTIVE == 2
+#else
+#error
 #endif
 
 #ifndef DECODE_PNG_IGNORE_ASSERTS
@@ -342,7 +345,7 @@ also, so you can just use the whole shebang as a check
 to find out if a given file is a PNG.
 */
 #pragma pack(push, 1)
-typedef struct PNGSignature {
+typedef struct {
     uint8_t highbit_hint;             // artifact
     char png_string[3];               // Reads 'PNG'
     char dos_style_line_ending[2];    // DOS artifact
@@ -354,7 +357,7 @@ typedef struct PNGSignature {
 It's then divided into 'chunks' of data, each of which starts
 with this header.
 */
-typedef struct PNGChunkHeader {
+typedef struct {
     uint32_t length;     // big endian
     char type[4];        // 1st char uppercase = critical chunk
 } PNGChunkHeader;
@@ -363,7 +366,7 @@ typedef struct PNGChunkHeader {
 IHDR must be the first chunk type
 it contains this data (13 bytes)
 */
-typedef struct IHDRBody {
+typedef struct {
     uint32_t width;
     uint32_t height;
     uint8_t  bit_depth;
@@ -380,17 +383,17 @@ they contain the compressed image data
 the only compression method supported is 'zlib' aka 'DEFLATE',
 that's why we need our header file inflate.h to read it
 */
-typedef struct ZLIBHeader {
+typedef struct {
     uint8_t zlibmethodflags;
     uint8_t additionalflags;
 } ZLIBHeader;
 
 
-typedef struct PNGFooter {
+typedef struct {
     uint32_t CRC;
 } PNGFooter;
 
-typedef struct ZLIBFooter {
+typedef struct {
     uint32_t adler_32_checksum;
 } ZLIBFooter;
 #pragma pack(pop)
@@ -526,10 +529,13 @@ undo_PNG_filter(
         
     return return_value; 
     } else {
-        #ifndef DECODE_PNG_SILENCE
+        #if DECODE_PNG_PRINTF_ACTIVE == 1
         printf(
             "ERROR - unsupported filter type: %u. Expect 1-4\n",
             filter_type);
+        #elif DECODE_PNG_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif 
         
         #ifndef DECODE_PNG_IGNORE_ASSERTS
@@ -647,8 +653,11 @@ void decode_png_get_width_height(
         *out_height = 0;
         return;
     } else {
-        #ifndef DECODE_PNG_SILENCE
+        #if DECODE_PNG_PRINTF_ACTIVE == 1
         printf("found PNG header\n");
+        #elif DECODE_PNG_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
     }
     
@@ -663,11 +672,14 @@ void decode_png_get_width_height(
     *out_width = flip_endian(ihdr_body.width);
     *out_height = flip_endian(ihdr_body.height);
     
-    #ifndef DECODE_PNG_SILENCE
+    #if DECODE_PNG_PRINTF_ACTIVE == 1
     printf(
         "succes! width/height: [%u,%u]\n",
         *out_width,
         *out_height);
+    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+    #else
+    #error
     #endif
 }
 
@@ -682,11 +694,14 @@ void decode_png(
     if (*fatal_error != 0) { return; }
     
     if (!states[thread_id]) {
-        #ifndef DECODE_PNG_SILENCE
+        #if DECODE_PNG_PRINTF_ACTIVE == 1
         printf(
             "Error - decode_PNG() was called before init_png_decoder() "
             "for thread_id: %u\n",
             thread_id);
+        #elif DECODE_PNG_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         *fatal_error = "Error - decode_PNG() was called before init_png_decoder() for a thread";
         return;
@@ -722,12 +737,15 @@ void decode_png(
     compressed_input += sizeof(PNGSignature);
     compressed_input_size_left -= sizeof(PNGSignature);
     
-    #ifndef DECODE_PNG_SILENCE
+    #if DECODE_PNG_PRINTF_ACTIVE == 1
     printf(
         "Signature's png_string (expecting 'PNG'): %c%c%c\n",
         png_signature.png_string[0],
         png_signature.png_string[1],
         png_signature.png_string[2]);
+    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+    #else
+    #error
     #endif
     
     if (
@@ -736,8 +754,11 @@ void decode_png(
             /* string 2: */ (char *)"PNG",
             /* string length: */ 3))
     {
-        #ifndef DECODE_PNG_SILENCE
+        #if DECODE_PNG_PRINTF_ACTIVE == 1
         printf("aborting - not a PNG file\n");
+        #elif DECODE_PNG_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         *fatal_error = "decode_png() ERROR: not a PNG file";
         return;
@@ -747,10 +768,13 @@ void decode_png(
         compressed_input_size_left >= 8
         && !found_IEND)
     {
-        #ifndef DECODE_PNG_SILENCE
+        #if DECODE_PNG_PRINTF_ACTIVE == 1
         printf(
             "%llu bytes left in file, read another PNG chunk..\n",
             compressed_input_size_left);
+        #elif DECODE_PNG_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         
         #ifndef DECODE_PNG_IGNORE_CRC_CHECKS
@@ -770,7 +794,7 @@ void decode_png(
                 4)
             && found_first_IDAT)
         {
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf("next chunk is not IDAT, ");
             printf("so all compressed data was collected.\n");
             printf(
@@ -779,6 +803,9 @@ void decode_png(
             printf(
                 "inflate hashmap memory will start at: %p\n",
                 (void *)(states[thread_id]->dpng_working_memory + estimated_decoded_stream_size));
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             
             #ifndef DECODE_PNG_IGNORE_ASSERTS
@@ -812,38 +839,50 @@ void decode_png(
             ran_inflate_algorithm = 1;
             
             if (inflate_result == 0) {
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf("INFLATE algorithm failed\n");
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *fatal_error = "INFLATE algorithm failed";
                 return;
             }
             
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf("INFLATE succesful\n");
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
                 
             if (
                 actual_decoded_stream_size >
                     estimated_decoded_stream_size)
             {
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                     "ERROR actual_decoded_stream_size: %llu was > than "
                     "estimated_decoded_stream_size: %llu\n",
                     actual_decoded_stream_size,
                     estimated_decoded_stream_size);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
             }
             
             if (decoded_stream_at[0] > 4) {
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                     "ERROR - the first byte of the deflated stream must be "
                     "0,1,2,3 or 4 because it's a PNG filter type for filter"
                     "method 0. Filter types are 0 (none), 1 (sub), 2 (up), "
                     "3 (average), 4 (paeth). Actual value was: %u\n",
                     decoded_stream_at[0]);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *fatal_error = "ERROR - the first byte of the deflated stream must be "
                     "0,1,2,3 or 4 because it's a PNG filter type for filter"
@@ -867,7 +906,7 @@ void decode_png(
         running_crc = running_crc ^ 0xffffffffL;
         #endif
         
-        #ifndef DECODE_PNG_SILENCE 
+        #if DECODE_PNG_PRINTF_ACTIVE == 1
         printf(
             "[%c%c%c%c] chunk (extra %u bytes follow)\n",
             chunk_header.type[0],
@@ -875,17 +914,23 @@ void decode_png(
             chunk_header.type[2],
             chunk_header.type[3],
             chunk_header.length);
+        #elif DECODE_PNG_PRINTF_ACTIVE == 2
+        #else
+        #error
         #endif
         
         if (chunk_header.length >= compressed_input_size_left) {
             
-            #ifndef DECODE_PNG_SILENCE 
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf(
             "failing to decode PNG, [%s] chunk of length %u is larger than "
                    "remaining file size of %llu\n",
             chunk_header.type,
             chunk_header.length,
             compressed_input_size_left);
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             *fatal_error = "decode_png() ERROR - chunk length larger than remaining file size";
             return;
@@ -898,11 +943,14 @@ void decode_png(
         {
             if (!found_IHDR)
             {
-                #ifndef DECODE_PNG_SILENCE 
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                     "failing to decode PNG. "
                     "[%s] chunk should never appear before [IHDR] chunk\n",
                     chunk_header.type);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *fatal_error = "decode_png() ERROR: chunk illegally appeared before IHDR";
                 return;
@@ -921,13 +969,16 @@ void decode_png(
             #endif
             
             if (chunk_header.length % 3 != 0) {
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                     "[%s] palette chunk should always have a length divisible"
                     " by 3 or the PNG file is not legally formatted. Found: %u"
                     " entries.\n",
                     chunk_header.type,
                     chunk_header.length);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *fatal_error =
                     "decode_png() ERROR: palette chunk "
@@ -966,7 +1017,7 @@ void decode_png(
             if (ihdr_body.width * ihdr_body.height * 4
                 != rgba_values_size)
             {
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                     "ERROR - you passed rgba_values_size: %llu but the PNG "
                     "file has width %u, height %u and 4 channels so a buffer "
@@ -975,6 +1026,9 @@ void decode_png(
                     ihdr_body.width,
                     ihdr_body.height,
                     ihdr_body.width * ihdr_body.height * 4);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *fatal_error = "decode_png() ERROR: implausible width/height/rgba_values";
                 return;
@@ -987,19 +1041,25 @@ void decode_png(
                     return;
                     break;
                 case 2:
-                    #ifndef DECODE_PNG_SILENCE
+                    #if DECODE_PNG_PRINTF_ACTIVE == 1
                     printf(
                         "\tColor type 2 (truecolor with alpha) is supported"
                         ".\n");
+                    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     break;
                 case 3:
-                    #ifndef DECODE_PNG_SILENCE
+                    #if DECODE_PNG_PRINTF_ACTIVE == 1
                     printf(
                         "\tColor type 3 (indexed-color RGB)\n");
                     printf(
                         "bit depth was: %u\n",
                         ihdr_body.bit_depth);
+                    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     break;
                 case 4:
@@ -1008,17 +1068,23 @@ void decode_png(
                     return;
                     break;
                 case 6:
-                    #ifndef DECODE_PNG_SILENCE
+                    #if DECODE_PNG_PRINTF_ACTIVE == 1
                     printf(
                         "\tColor type 6 (truecolour with alpha) supported.\n");
+                    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     break;
                 default:
-                    #ifndef DECODE_PNG_SILENCE
+                    #if DECODE_PNG_PRINTF_ACTIVE == 1
                     printf(
                         "\tUnsupported and unknown colour type: %u - ",
                         ihdr_body.color_type);
                     printf("The upported values are 0,2,3,4,6\n");
+                    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *fatal_error = "decode_png() ERROR: Unsupported and unknown colour type";
                     return;
@@ -1031,11 +1097,14 @@ void decode_png(
             }
             
             if (ihdr_body.width < 1 || ihdr_body.height < 1) {
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                     "ERROR - image width/height was [%u,%u]\n",
                     ihdr_body.width,
                     ihdr_body.height);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *fatal_error = "decode_png() ERROR: image width or height was 0";
                 return;
@@ -1050,7 +1119,7 @@ void decode_png(
                 required_memory_size >
                     states[thread_id]->dpng_working_memory_size)
             {
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                     "ERROR: this function assumes at least"
                     "(imgwidth * imgwidth * 4)+imgheight+1+hashmap memory) to "
@@ -1059,6 +1128,9 @@ void decode_png(
                     (ihdr_body.width * ihdr_body.height * 4)
                         + ihdr_body.height
                         + INFLATE_HASHMAPS_SIZE);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *fatal_error = "decode_png() ERROR: insufficient working memory";
                 return;
@@ -1071,16 +1143,19 @@ void decode_png(
             // are not supporting for now. 
             if (ihdr_body.bit_depth != 8)
             {
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                     "unsupported PNG bit depth %u\n",
                     ihdr_body.bit_depth);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *fatal_error = "unsupported PNG bit depth";
                 return;
             }
             
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             if (ihdr_body.color_type != 6) {
                 printf("error - only color type 6 is supported");
             } else {
@@ -1097,6 +1172,9 @@ void decode_png(
                 "\tinterlace_method: %u\n",
                 ihdr_body.interlace_method);
             assert(ihdr_body.interlace_method == 0);
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             
             if (ihdr_body.filter_method != 0) {
@@ -1108,10 +1186,13 @@ void decode_png(
             
             if (compressed_input_size_left < 4)
             {
-                #ifndef DECODE_PNG_SILENCE 
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                    "failing to decode PNG - file size left is %llu bytes\n",
                     compressed_input_size_left);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 *fatal_error = "decode_png() ERROR: file abruptly ends in IHDR";
                 return;
@@ -1131,8 +1212,11 @@ void decode_png(
             uint32_t chunk_data_length = chunk_header.length;
             
             if (!found_first_IDAT) {
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf("\t1st IDAT chunk, read zlib headers..\n");
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 found_first_IDAT = 1;
                 
@@ -1149,7 +1233,7 @@ void decode_png(
                 // are 0 by default)
                 uint8_t compression_method =
                     zlib_header.zlibmethodflags & 15;
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 uint8_t compression_info =
                     zlib_header.zlibmethodflags >> 4;
                 printf(
@@ -1158,6 +1242,9 @@ void decode_png(
                 printf(
                     "\t\tcompression info: %u\n",
                     compression_info);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 if (compression_method != 8) {
                     *fatal_error = "decode_png() ERROR: compression method must be 8";
@@ -1179,12 +1266,15 @@ void decode_png(
                     |
                     (uint16_t)
                         (zlib_header.zlibmethodflags << 8));
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 printf(
                     "\t\tfull 16-bit check val (use FCHECK): %u - ",
                     full_check_value);
                 printf(
                     full_check_value % 31 == 0 ? "OK\n" : "ERR\n");
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
                 
                 if (
@@ -1212,8 +1302,11 @@ void decode_png(
                     zlib_header.additionalflags >> 5 & 1;
                 
                 if (FDICT) {
-                    #ifndef DECODE_PNG_SILENCE
+                    #if DECODE_PNG_PRINTF_ACTIVE == 1
                     printf("\t\tdiscarding FDICT... (4 bytes)\n");
+                    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     compressed_input += 4;
                     compressed_input_size_left -= 4;
@@ -1240,7 +1333,7 @@ void decode_png(
                     return;
                 }
                 
-                #ifndef DECODE_PNG_SILENCE
+                #if DECODE_PNG_PRINTF_ACTIVE == 1
                 uint8_t FLEVEL =
                     zlib_header.additionalflags >> 6 & 3;
                 printf("\t\tFDICT: %u\n", FDICT);
@@ -1249,13 +1342,19 @@ void decode_png(
                 printf(
                     "\t\treserved recipient of estimated %llu bytes...\n",
                     estimated_decoded_stream_size);
+                #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                #else
+                #error
                 #endif
             }
             
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf(
                 "\t\tcopying %u bytes to compressed stream...\n",
                 chunk_data_length);
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             
             for (uint32_t _ = 0; _ < chunk_data_length; _++)
@@ -1272,23 +1371,32 @@ void decode_png(
             4))
         {
             // handle image end header
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf("found IEND header\n");
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             found_IEND = 1;
         } else if ((char)chunk_header.type[0] > 'Z')
         {
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf(
                 "\tskipping unhandled non-critical chunk...\n");
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             compressed_input += chunk_header.length;
             compressed_input_size_left -= chunk_header.length;
         } else {
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf(
                 "ERROR: unhandled critical chunk header: %s\n",
                 chunk_header.type);
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             *fatal_error = "decode_png() ERROR: unrecognized chunk header";
             return;
@@ -1296,11 +1404,14 @@ void decode_png(
         
         if (compressed_input_size_left < 4)
         {
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf(
                 "failed to decode PNG - "
                 "unexpected remaining file size of %llu\n",
                 compressed_input_size_left);
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             *fatal_error = "decode_png() ERROR: unexpected remaining file size";
             return;
@@ -1315,18 +1426,24 @@ void decode_png(
         #ifndef DECODE_PNG_IGNORE_CRC_CHECKS
         block_footer.CRC = flip_endian(block_footer.CRC);
         if (running_crc != block_footer.CRC) {
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf(
                 "ERROR: CRC checksum mismatch - "
                 " PNG file is corrupted?\n");
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             *fatal_error =
                 "decode_png(): CRC checksum mismatch - "
                 " PNG file is corrupted?\n";
             return;
         } else {
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf("CRC checksum match: OK\n");
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
         }
         #endif
@@ -1348,9 +1465,12 @@ void decode_png(
     // filter_type is something else and the first byte
     // in the uncompressed datastream
     
-    #ifndef DECODE_PNG_SILENCE
+    #if DECODE_PNG_PRINTF_ACTIVE == 1
     printf(
         "\n\nreconstructing (un-doing PNG filters)...\n");
+    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+    #else
+    #error
     #endif
     
     uint32_t pixel_count = (ihdr_body.width) * (ihdr_body.height);
@@ -1388,11 +1508,14 @@ void decode_png(
         }
     }
     
-    #ifndef DECODE_PNG_SILENCE
+    #if DECODE_PNG_PRINTF_ACTIVE == 1
     printf(
         "bytes per channel: %u because ihdr_body.color_type was: %u\n",
         bytes_per_channel,
         ihdr_body.color_type);
+    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+    #else
+    #error
     #endif
     uint8_t * a_previous_pixel =
         (uint8_t *)out_rgba_values - bytes_per_channel;
@@ -1407,11 +1530,14 @@ void decode_png(
         uint8_t filter_type = *decoded_stream_at++;
         #ifndef DECODE_PNG_IGNORE_ASSERTS
         if (filter_type > 4) {
-            #ifndef DECODE_PNG_SILENCE
+            #if DECODE_PNG_PRINTF_ACTIVE == 1
             printf(
                 "ERROR - unexpected PNG filter type of %u in row %u\n",
                 filter_type,
                 h);
+            #elif DECODE_PNG_PRINTF_ACTIVE == 2
+            #else
+            #error
             #endif
             *out_good = 0;
             return;
@@ -1432,13 +1558,16 @@ void decode_png(
                     *c_previous_scanline_previous_pixel : 0;
                 
                 if (rgba_at >= out_rgba_values + rgba_values_size) {
-                    #ifndef DECODE_PNG_SILENCE
+                    #if DECODE_PNG_PRINTF_ACTIVE == 1
                     printf(
                         "Error: writing to rgba_at: %p (%ld bytes away from "
                         "out_rgba_values), but out_rgba_values_size is %llu\n",
                         (void *)rgba_at,
                         rgba_at - out_rgba_values,
                         rgba_values_size);
+                    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *fatal_error = "decode_png() ERROR: tried to write rgba out of bounds";
                     return;
@@ -1465,13 +1594,16 @@ void decode_png(
                     (uint64_t)(decoded_stream_at - decoded_stream_start) >
                         actual_decoded_stream_size)
                 {
-                    #ifndef DECODE_PNG_SILENCE
+                    #if DECODE_PNG_PRINTF_ACTIVE == 1
                     printf(
                         "ERROR - actual_decoded_stream_size was only %llu, but "
                         "we're writing to (uint64_t)(decoded_stream_at - "
                         "decoded_stream_at of %llu\n",
                         actual_decoded_stream_size,
                         (uint64_t)(decoded_stream_at - decoded_stream_start));
+                    #elif DECODE_PNG_PRINTF_ACTIVE == 2
+                    #else
+                    #error
                     #endif
                     *fatal_error = "decode_png() ERROR: decoded_stream_size out of bounds write";
                     return;

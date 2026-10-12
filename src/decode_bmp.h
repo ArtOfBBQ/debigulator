@@ -1,7 +1,6 @@
 /*
 The 2 methods declared in this file are my API for decoding BMP files.
 */
-
 #ifndef DECODE_BMP_H
 #define DECODE_BMP_H
 

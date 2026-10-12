@@ -88,11 +88,10 @@ Decode the contents of a PNG file into uint8 RGBA values.
     the output will be because you've used get_PNG_width_height().
 - out_good:
     will be set to 1 on success and 0 on failure. If your decoding fails but
-    you don't know why, comment out #define DECODE_PNG_SILENCE and you should
-    see printf statements guiding you.
+    you don't know why, set #define DECODE_PNG_PRINT_ACTIVE to 1 and you
+    should get printf statements guiding you.
 */
-void
-decode_png(
+void decode_png(
     const uint8_t * compressed_input,
     const uint64_t compressed_input_size,
     const uint8_t * out_rgba_values,
