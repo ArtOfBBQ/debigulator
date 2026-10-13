@@ -4,14 +4,14 @@
 #include "stdio.h"
 #elif DECODE_PNG_PRINTF_ACTIVE == 2
 #else
-#error
+#error "DECODE_PNG_PRINTF_ACTIVE undefined"
 #endif
 
 #if DECODE_PNG_ASSERTS_ACTIVE == 1
 #include "assert.h"
 #elif DECODE_PNG_ASSERTS_ACTIVE == 2
 #else
-#error
+#error "DECODE_PNG_ASSERTS_ACTIVE undefined"
 #endif
 
 #ifndef NULL
@@ -310,7 +310,7 @@ static void assert_crc_table_accurate(void)
 }
 #elif DECODE_PNG_ASSERTS_ACTIVE == 2
 #else
-#error
+#error "DECODE_PNG_ASSERTS_ACTIVE undefined"
 #endif
 
 
@@ -330,9 +330,8 @@ static unsigned long update_crc(
     assert(len > 0);
     #elif DECODE_PNG_ASSERTS_ACTIVE == 2
     #else
-    #error
+    #error "DECODE_PNG_ASSERTS_ACTIVE undefined"
     #endif
-
     
     unsigned long c = crc;
     
@@ -341,7 +340,7 @@ static unsigned long update_crc(
         assert(((c ^ buf[n]) & 0xff) < 256);
         #elif DECODE_PNG_ASSERTS_ACTIVE == 2
         #else
-        #error
+        #error "DECODE_PNG_ASSERTS_ACTIVE undefined"
         #endif
         c = crc_table[(c ^ buf[n]) & 0xff] ^ (c >> 8);
     }
@@ -549,14 +548,14 @@ undo_PNG_filter(
             filter_type);
         #elif DECODE_PNG_PRINTF_ACTIVE == 2
         #else
-        #error
+        #error "DECODE_PNG_PRINTF_ACTIVE undefined"
         #endif 
         
         #if DECODE_PNG_ASSERTS_ACTIVE == 1
         assert(0);
         #elif DECODE_PNG_ASSERTS_ACTIVE == 2
         #else
-        #error
+        #error "DECODE_PNG_ASSERTS_ACTIVE undefined"
         #endif
     }
     
@@ -599,7 +598,7 @@ decode_png_init(
     assert(states[thread_id] == NULL);
     #elif DECODE_PNG_ASSERTS_ACTIVE == 2
     #else
-    #error
+    #error "DECODE_PNG_ASSERTS_ACTIVE undefined"
     #endif
     
     if (states[thread_id] == NULL) {
@@ -627,7 +626,7 @@ decode_png_init(
     assert_crc_table_accurate();
     #elif DECODE_PNG_ASSERTS_ACTIVE == 2
     #else
-    #error
+    #error "DECODE_PNG_ASSERTS_ACTIVE undefined"
     #endif
     
     states[thread_id]->dpng_working_memory_size = arg_dpng_working_memory_size;
@@ -679,7 +678,7 @@ void decode_png_get_width_height(
         printf("found PNG header\n");
         #elif DECODE_PNG_PRINTF_ACTIVE == 2
         #else
-        #error
+        #error "DECODE_PNG_PRINTF_ACTIVE undefined"
         #endif
     }
     
@@ -701,7 +700,7 @@ void decode_png_get_width_height(
         *out_height);
     #elif DECODE_PNG_PRINTF_ACTIVE == 2
     #else
-    #error
+    #error "DECODE_PNG_PRINTF_ACTIVE undefined"
     #endif
 }
 
@@ -723,7 +722,7 @@ void decode_png(
             thread_id);
         #elif DECODE_PNG_PRINTF_ACTIVE == 2
         #else
-        #error
+        #error "DECODE_PNG_PRINTF_ACTIVE undefined"
         #endif
         *fatal_error = "Error - decode_PNG() was called before init_png_decoder() for a thread";
         return;
@@ -736,7 +735,7 @@ void decode_png(
     assert(states[thread_id]->dpng_working_memory != NULL);
     #elif DECODE_PNG_ASSERTS_ACTIVE == 2
     #else
-    #error
+    #error "DECODE_PNG_ASSERTS_ACTIVE undefined"
     #endif
     
     uint64_t compressed_input_size_left = compressed_input_size;
@@ -769,7 +768,7 @@ void decode_png(
         png_signature.png_string[2]);
     #elif DECODE_PNG_PRINTF_ACTIVE == 2
     #else
-    #error
+    #error "DECODE_PNG_PRINTF_ACTIVE undefined"
     #endif
     
     if (
@@ -782,7 +781,7 @@ void decode_png(
         printf("aborting - not a PNG file\n");
         #elif DECODE_PNG_PRINTF_ACTIVE == 2
         #else
-        #error
+        #error "DECODE_PNG_PRINTF_ACTIVE undefined"
         #endif
         *fatal_error = "decode_png() ERROR: not a PNG file";
         return;
@@ -798,7 +797,7 @@ void decode_png(
             compressed_input_size_left);
         #elif DECODE_PNG_PRINTF_ACTIVE == 2
         #else
-        #error
+        #error "DECODE_PNG_PRINTF_ACTIVE undefined"
         #endif
         
         #ifndef DECODE_PNG_IGNORE_CRC_CHECKS
@@ -829,7 +828,7 @@ void decode_png(
                 (void *)(states[thread_id]->dpng_working_memory + estimated_decoded_stream_size));
             #elif DECODE_PNG_PRINTF_ACTIVE == 2
             #else
-            #error
+            #error "DECODE_PNG_PRINTF_ACTIVE undefined"
             #endif
             
             #if DECODE_PNG_ASSERTS_ACTIVE == 1
@@ -838,7 +837,7 @@ void decode_png(
             assert(headerless_compressed_data_stream_size > 4);
             #elif DECODE_PNG_ASSERTS_ACTIVE == 2
             #else
-            #error
+            #error "DECODE_PNG_ASSERTS_ACTIVE undefined"
             #endif
 
             
@@ -871,7 +870,7 @@ void decode_png(
                 printf("INFLATE algorithm failed\n");
                 #elif DECODE_PNG_PRINTF_ACTIVE == 2
                 #else
-                #error
+                #error "DECODE_PNG_PRINTF_ACTIVE undefined"
                 #endif
                 *fatal_error = "INFLATE algorithm failed";
                 return;
@@ -881,7 +880,7 @@ void decode_png(
             printf("INFLATE succesful\n");
             #elif DECODE_PNG_PRINTF_ACTIVE == 2
             #else
-            #error
+            #error "DECODE_PNG_PRINTF_ACTIVE undefined"
             #endif
                 
             if (

@@ -4,14 +4,14 @@
 #include "stdio.h"
 #elif DECODE_BMP_PRINTF_ACTIVE == 2
 #else
-#error
+#error "DECODE_BMP_PRINTF_ACTIVE"
 #endif
 
 #if DECODE_BMP_ASSERTS_ACTIVE == 1
 #include "assert.h"
 #elif DECODE_BMP_ASSERTS_ACTIVE == 2
 #else
-#error
+#error "DECODE_BMP_ASSERTS_ACTIVE"
 #endif
 
 #ifndef NULL
@@ -126,9 +126,9 @@ void decode_BMP(
     
     #if DECODE_BMP_ASSERTS_ACTIVE == 1
     assert(raw_input_size >= sizeof(BitmapFileHeader));
-    #elif #if DECODE_BMP_ASSERTS_ACTIVE == 2
+    #elif DECODE_BMP_ASSERTS_ACTIVE == 2
     #else
-    #error
+    #error "DECODE_BMP_ASSERTS_ACTIVE"
     #endif
     
     uint8_t * raw_input_at = (uint8_t *)raw_input;
@@ -287,7 +287,7 @@ void encode_BMP(
     #elif DECODE_BMP_ASSERTS_ACTIVE == 2
     (void)recipient_capacity;
     #else
-    #error
+    #error "DECODE_BMP_ASSERTS_ACTIVE"
     #endif
     
     *recipient_size = 14 + 40 + (uint32_t)rgba_size + 1;

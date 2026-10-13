@@ -3,6 +3,13 @@ This file is meant as an example of how to use the "bmp.h"
 header to read pixels from a .bmp file.
 */
 
+#if INFLATE_ASSERTS_ACTIVE == 1
+#include <assert.h>
+#elif INFLATE_ASSERTS_ACTIVE == 2
+#else
+#error "INFLATE_ASSERTS_ACTIVE"
+#endif
+
 #include "decode_bmp.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -17,15 +24,23 @@ header to read pixels from a .bmp file.
 static uint8_t * memory_store;
 static uint64_t memory_store_remaining = APPLICATION_MEMORY_SIZE;
 
-static void align_memory() {
+static void align_memory(void) {
     while ((uintptr_t)(void *)memory_store % 16 != 0) {
+        #if INFLATE_ASSERTS_ACTIVE == 1
         assert(memory_store_remaining >= 1);
+        #elif INFLATE_ASSERTS_ACTIVE == 2
+        #else
+        #error "INFLATE_ASSERTS_ACTIVE"
+        #endif
         memory_store += 1;
         memory_store_remaining -= 1;
     }
     
-    #ifndef INFLATE_IGNORE_ASSERTS
+    #if INFLATE_ASSERTS_ACTIVE == 1
     assert((uintptr_t)(void *)memory_store % 16 == 0);
+    #elif INFLATE_ASSERTS_ACTIVE == 2
+    #else
+    #error "INFLATE_ASSERTS_ACTIVE"
     #endif
 }
 
